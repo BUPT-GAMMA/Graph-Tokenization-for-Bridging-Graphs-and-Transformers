@@ -32,6 +32,9 @@ from __future__ import annotations
 
 import argparse
 import sys
+import os
+import re
+import io
 from pathlib import Path
 
 # 设置项目路径
@@ -39,10 +42,10 @@ ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from config import ProjectConfig
-from src.data.unified_data_interface import UnifiedDataInterface
-from src.training.finetune_pipeline import run_finetune
-from src.utils.config_override import (
+from config import ProjectConfig  # noqa: E402
+from src.data.unified_data_interface import UnifiedDataInterface  # noqa: E402
+from src.training.finetune_pipeline import run_finetune  # noqa: E402
+from src.utils.config_override import (  # noqa: E402
     add_all_args,
     apply_args_to_config,
     create_experiment_name,
@@ -50,6 +53,79 @@ from src.utils.config_override import (
     show_full_config
 )
 
+
+_ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+
+
+def _strip_ansi(text: str) -> str:
+    return _ANSI_RE.sub('', text)
+
+
+class _AnsiStrippingWriter:
+    """包装标准输出/错误，移除ANSI颜色控制符，并确保UTF-8."""
+    def __init__(self, underlying):
+        self._u = underlying
+        self.encoding = 'utf-8'
+
+    def write(self, s):
+        try:
+            if isinstance(s, bytes):
+                s = s.decode('utf-8', errors='replace')
+        except Exception:
+            pass
+        s = _strip_ansi(str(s))
+        return self._u.write(s)
+
+    def flush(self):
+        return self._u.flush()
+
+    def isatty(self):
+        return False
+
+    def readable(self):
+        return False
+
+    def writable(self):
+        return True
+
+    def fileno(self):
+        try:
+            return self._u.fileno()
+        except Exception:
+            raise
+
+
+def _ensure_utf8_streams():
+    """确保标准输出/错误为UTF-8并可替换编码。"""
+    os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+    os.environ.setdefault("LANG", "C.UTF-8")
+    os.environ.setdefault("LC_ALL", "C.UTF-8")
+
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name)
+        try:
+            stream.reconfigure(encoding='utf-8')  # type: ignore[attr-defined]
+        except Exception:
+            try:
+                wrapped = io.TextIOWrapper(stream.buffer, encoding='utf-8', errors='replace')  # type: ignore[attr-defined]
+                setattr(sys, stream_name, wrapped)
+            except Exception:
+                pass
+
+
+def _configure_output_mode(offline: bool):
+    """根据 offline 模式配置输出：禁用颜色、去除ANSI、确保UTF-8。"""
+    _ensure_utf8_streams()
+    if offline:
+        os.environ["NO_COLOR"] = "1"
+        os.environ["CLICOLOR"] = "0"
+        os.environ["FORCE_COLOR"] = "0"
+        os.environ["TERM"] = "dumb"
+        os.environ.setdefault("TQDM_DISABLE", "1")
+        if not isinstance(sys.stdout, _AnsiStrippingWriter):
+            sys.stdout = _AnsiStrippingWriter(sys.stdout)
+        if not isinstance(sys.stderr, _AnsiStrippingWriter):
+            sys.stderr = _AnsiStrippingWriter(sys.stderr)
 
 def infer_task_and_targets(config: ProjectConfig, udi: UnifiedDataInterface, 
                           task_cli: str | None, num_classes_cli: int | None) -> tuple[str, int | None]:
@@ -214,6 +290,8 @@ def main():
     
     # 添加所有参数（包含微调参数）
     add_all_args(parser, include_finetune=True)
+    # 输出控制：plain_logs
+    parser.add_argument("--plain_logs", action="store_true", help="启用无颜色、无控制符的离线输出（兼容重定向/日志文件，解决乱码）")
 
     # 增加TTA聚合模式参数
     parser.add_argument(
@@ -237,6 +315,11 @@ def main():
     args = parser.parse_args()
     
     print("🔧 初始化配置...")
+    # 提前配置输出模式
+    try:
+        _configure_output_mode(bool(getattr(args, 'plain_logs', False)))
+    except Exception:
+        pass
     
     # 创建基础配置
     config = ProjectConfig()

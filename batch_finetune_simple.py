@@ -201,6 +201,10 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
     if combined_config_json:
         cmd.extend(["--config_json", combined_config_json])
 
+    # 将 plain_logs 传递给下层 run_finetune.py，以启用UTF-8与去色包装
+    if plain_logs:
+        cmd.append("--plain_logs")
+
     # 目标日志文件（也用于 commands_only 记录）
     stdout_dest = subprocess.PIPE
     log_path = None
