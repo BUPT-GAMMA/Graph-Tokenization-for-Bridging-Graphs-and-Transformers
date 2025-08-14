@@ -100,7 +100,7 @@ def main():
     parser = argparse.ArgumentParser(description="按任务文件逐条提交单卡 sbatch 作业（不扫描资源不指定节点）")
     parser.add_argument("--tasks-file", "-f", default="commands.list", type=str, help="包含任务指令的文本文件（每行一个）")
     parser.add_argument("--cpus-per-task", type=int, default=2, help="每个任务申请的 CPU 数（默认 2）")
-    parser.add_argument("--job-name-prefix", type=str, default="gzy_task", help="作业名前缀（默认 gzy_task）")
+    parser.add_argument("--job-name-prefix", type=str, default="gzy", help="作业名前缀（默认 gzy_task）")
     parser.add_argument("--partition", "-p", type=str, default='a01', help="Slurm 分区名（如 a01）。若集群无默认分区，则必须指定")
     parser.add_argument("--dry-run", action="store_true", help="仅显示将要提交的任务，不真正提交")
     args = parser.parse_args()
@@ -116,7 +116,7 @@ def main():
     print("=" * 40 + "\n")
 
     if args.dry_run:
-        for i, task in enumerate(tasks, start=1):
+        for i, task in enumerate(tasks, start=25):
             job_name = f"{args.job_name_prefix}_{i}"
             batch_content = generate_single_task_sbatch_script(task, args.cpus_per_task, job_name, partition=args.partition)
             print(f"[{i}] {job_name}: {batch_content}")
