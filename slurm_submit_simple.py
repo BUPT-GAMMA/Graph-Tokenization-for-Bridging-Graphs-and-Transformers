@@ -18,6 +18,7 @@ import os
 import re
 import subprocess
 import sys
+import math
 
 
 SBATCH_SCRIPT_DIR = "sbatch_scripts"
@@ -103,6 +104,11 @@ def main():
     parser.add_argument("--job-name-prefix", type=str, default="gzy_task", help="作业名前缀（默认 gzy_task）")
     parser.add_argument("--partition", "-p", type=str, default='a01', help="Slurm 分区名（如 a01）。若集群无默认分区，则必须指定")
     parser.add_argument("--dry-run", action="store_true", help="仅显示将要提交的任务，不真正提交")
+    # 两阶段依赖：将任务分为前后两批，后半批依赖前半批完成
+    parser.add_argument("--phase-split", type=str, default=None,
+                        help="两阶段拆分：整数=前一阶段任务数量；0-1小数=比例。示例: 10 或 0.5")
+    parser.add_argument("--dependency-type", type=str, default="afterok", choices=["afterok", "afterany"],
+                        help="第二阶段依赖类型：afterok=仅前一阶段全部成功后启动；afterany=前一阶段全部结束(含失败)后启动")
     args = parser.parse_args()
 
     tasks = read_tasks_from_file(args.tasks_file)
@@ -115,11 +121,38 @@ def main():
     print("每个任务固定申请 1 GPU")
     print("=" * 40 + "\n")
 
+    # 计算两阶段拆分索引
+    split_idx = None
+    if args.phase_split is not None:
+        try:
+            val = float(args.phase_split)
+            if 0 < val < 1:
+                split_idx = max(1, min(len(tasks) - 1, math.floor(len(tasks) * val)))
+            else:
+                split_idx = int(val)
+                split_idx = max(1, min(len(tasks) - 1, split_idx))
+        except ValueError:
+            print(f"FATAL: --phase-split 参数无效: {args.phase_split}", file=sys.stderr)
+            sys.exit(1)
+
     if args.dry_run:
-        for i, task in enumerate(tasks, start=1):
-            job_name = f"{args.job_name_prefix}_{i}"
-            batch_content = generate_single_task_sbatch_script(task, args.cpus_per_task, job_name, partition=args.partition)
-            print(f"[{i}] {job_name}: {batch_content}")
+        if split_idx is None:
+            for i, task in enumerate(tasks, start=1):
+                job_name = f"{args.job_name_prefix}_{i}"
+                batch_content = generate_single_task_sbatch_script(task, args.cpus_per_task, job_name, partition=args.partition)
+                print(f"[{i}] {job_name}: {batch_content}")
+        else:
+            print(f"[Phase 1] 任务数: {split_idx}")
+            for i, task in enumerate(tasks[:split_idx], start=1):
+                job_name = f"{args.job_name_prefix}_{i}"
+                batch_content = generate_single_task_sbatch_script(task, args.cpus_per_task, job_name, partition=args.partition)
+                print(f"[{i}] {job_name}: {batch_content}")
+            print(f"\n[Phase 2] 任务数: {len(tasks) - split_idx}")
+            dep_placeholder = f"{args.dependency_type}:<PHASE1_JOB_IDS_COLON_SEPARATED>"
+            for j, task in enumerate(tasks[split_idx:], start=split_idx + 1):
+                job_name = f"{args.job_name_prefix}_{j}"
+                batch_content = generate_single_task_sbatch_script(task, args.cpus_per_task, job_name, partition=args.partition)
+                print(f"[{j}] {job_name} (依赖: {dep_placeholder}): {batch_content}")
         print("\nDRY RUN: 未提交任何作业。")
         return
 
@@ -127,28 +160,65 @@ def main():
         os.makedirs(SBATCH_SCRIPT_DIR)
 
     submitted = 0
-    for i, task in enumerate(tasks, start=1):
-        job_name = f"{args.job_name_prefix}-{i}"
-        script_content = generate_single_task_sbatch_script(task, args.cpus_per_task, job_name, partition=args.partition)
-        script_path = os.path.join(SBATCH_SCRIPT_DIR, f"submit_{job_name}.sh")
-
+    phase1_job_ids = []
+    def _submit_one(script_path: str, job_name: str, dependency_expr: str | None = None) -> str | None:
         try:
-            with open(script_path, "w", encoding="utf-8") as f:
-                f.write(script_content)
-        except OSError as e:
-            print(f"FATAL: 写入 sbatch 脚本失败: {script_path}", file=sys.stderr)
-            print(f"错误详情: {e}", file=sys.stderr)
-            sys.exit(1)
-
-        try:
-            proc = subprocess.run(["sbatch", script_path], check=True, capture_output=True, text=True)
+            cmd = ["sbatch"]
+            if dependency_expr:
+                cmd.append(f"--dependency={dependency_expr}")
+            cmd.append(script_path)
+            proc = subprocess.run(cmd, check=True, capture_output=True, text=True)
             job_id = parse_sbatch_job_id(proc.stdout)
-            print(f"-> Submitted {job_name}  JobID={job_id if job_id else 'UNKNOWN'}")
-            submitted += 1
+            print(f"-> Submitted {job_name}  JobID={job_id if job_id else 'UNKNOWN'}{('  DEP='+dependency_expr) if dependency_expr else ''}")
+            return job_id
         except subprocess.CalledProcessError as e:
             print(f"FATAL: 提交 {job_name} 失败。", file=sys.stderr)
             print(f"stderr: {e.stderr}", file=sys.stderr)
             sys.exit(1)
+
+    # 写文件+提交 的小工具
+    def _write_script(job_name: str, content: str) -> str:
+        script_path = os.path.join(SBATCH_SCRIPT_DIR, f"submit_{job_name}.sh")
+        try:
+            with open(script_path, "w", encoding="utf-8") as f:
+                f.write(content)
+        except OSError as e:
+            print(f"FATAL: 写入 sbatch 脚本失败: {script_path}", file=sys.stderr)
+            print(f"错误详情: {e}", file=sys.stderr)
+            sys.exit(1)
+        return script_path
+
+    if split_idx is None:
+        for i, task in enumerate(tasks, start=1):
+            job_name = f"{args.job_name_prefix}-{i}"
+            content = generate_single_task_sbatch_script(task, args.cpus_per_task, job_name, partition=args.partition)
+            path = _write_script(job_name, content)
+            _ = _submit_one(path, job_name)
+            submitted += 1
+    else:
+        # Phase 1
+        for i, task in enumerate(tasks[:split_idx], start=1):
+            job_name = f"{args.job_name_prefix}-{i}"
+            content = generate_single_task_sbatch_script(task, args.cpus_per_task, job_name, partition=args.partition)
+            path = _write_script(job_name, content)
+            jid = _submit_one(path, job_name)
+            if jid:
+                phase1_job_ids.append(jid)
+            submitted += 1
+
+        # Phase 2 依赖 Phase 1 完成
+        if not phase1_job_ids:
+            print("WARNING: 第一阶段未获得有效 JobID，第二阶段将不设置依赖直接提交。")
+            dep_expr = None
+        else:
+            dep_expr = f"{args.dependency_type}:{':'.join(phase1_job_ids)}"
+
+        for j, task in enumerate(tasks[split_idx:], start=split_idx + 1):
+            job_name = f"{args.job_name_prefix}-{j}"
+            content = generate_single_task_sbatch_script(task, args.cpus_per_task, job_name, partition=args.partition)
+            path = _write_script(job_name, content)
+            _ = _submit_one(path, job_name, dependency_expr=dep_expr)
+            submitted += 1
 
     print(f"完成：成功提交 {submitted}/{len(tasks)} 个任务。")
 

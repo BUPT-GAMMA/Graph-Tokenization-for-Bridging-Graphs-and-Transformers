@@ -16,5 +16,5 @@ echo "INFO: Using Python at $(which python)"
 
 mkdir -p logs
 echo "INFO: Starting gzy_task-1..."
-srun --exclusive -n1 python run_pretrain.py --dataset zinc --method feuler --experiment_group test_aug --experiment_name zinc_pre_zinc_feuler_raw_noaug_e1 --device auto --bpe_encode_rank_mode none --epochs 1 --batch_size 1024 --learning_rate 0.0005 --config_json '{"bert": {"pretraining": {"mlm_augmentation_methods": []}}, "system": {"log_style": "offline"}}' --plain_logs
+srun --exclusive -n1 python run_pretrain.py --dataset zinc --method feuler --experiment_group test_aug --experiment_name zinc_pre_zinc_feuler_raw_noaug_e1 --device auto --bpe_encode_rank_mode none --epochs 1 --batch_size 128 --learning_rate 0.0005 --config_json '{"bert": {"pretraining": {"mlm_augmentation_methods": []}}, "system": {"log_style": "offline"}}' --plain_logs
 echo "INFO: Finished gzy_task-1."
