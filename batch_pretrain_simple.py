@@ -128,7 +128,8 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
                     for params in hyperparams_list:
                         bpe_suffix = bpe_config["config_name"]
                         aug_part = f"_{aug_label}" if aug_label else ""
-                        exp_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}_e{params['epochs']}"
+                        # 删除 epoch 标记，确保与微调阶段的实验名一致
+                        exp_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}"
                         experiment_name = f"{exp_prefix}{exp_core}{('_' + tag) if tag else ''}"
                         tasks.append({
                             "dataset": dataset,

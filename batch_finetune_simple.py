@@ -31,7 +31,7 @@ DEFAULT_DATASETS = ["zinc"]
 DEFAULT_METHODS = ["feuler", "eulerian", "cpp", "fcpp", "topo", "smiles"]
 DEFAULT_GPUS = [0,1,2,3]
 DEFAULT_BPE_SCENARIOS = ["raw", "all", "random", "gaussian"]
-DEFAULT_FT_HYPERPARAMS = [{"finetune_epochs": 1, "finetune_batch_size": 1024, "finetune_learning_rate": 5e-5}]
+DEFAULT_FT_HYPERPARAMS = [{"finetune_epochs": 30, "finetune_batch_size": 1024, "finetune_learning_rate": 5e-5}]
 DEFAULT_AGGREGATION_MODE = "best"  # or "best"
 DEFAULT_LOG_DIR = "logs/batch_finetune"
 
@@ -137,7 +137,8 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
                     for params in hyperparams_list:
                         bpe_suffix = bpe_config["config_name"]
                         aug_part = f"_{aug_label}" if aug_label else ""
-                        exp_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}_ft_e{params['finetune_epochs']}"
+                        # 删除 _ft_ 和 epoch 标记，确保与预训练阶段的实验名一致
+                        exp_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}"
                         experiment_name = f"{exp_prefix}{exp_core}{('_' + tag) if tag else ''}"
                         tasks.append({
                             "dataset": dataset,
@@ -149,7 +150,7 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
                 else:
                     bpe_suffix = bpe_config["config_name"]
                     aug_part = f"_{aug_label}" if aug_label else ""
-                    exp_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}_ft_default"
+                    exp_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}_default"
                     experiment_name = f"{exp_prefix}{exp_core}{('_' + tag) if tag else ''}"
                     tasks.append({
                         "dataset": dataset,
@@ -174,17 +175,20 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
         "--experiment_group", experiment_group,
         "--experiment_name", task["experiment_name"],
         "--device", "auto",
-        "--aggregation_mode", aggregation_mode,
+        # "--aggregation_mode", aggregation_mode,
     ]
     if os.environ.get("TG_LOG_STYLE", "").lower() in {"online", "offline"}:
         cmd.extend(["--log_style", os.environ["TG_LOG_STYLE"].lower()])
 
+    # 收集微调特有参数，稍后统一追加到末尾，确保前半段与预训练一致
+    finetune_extras: list[str] = []
+    finetune_extras.extend(["--aggregation_mode", aggregation_mode])
     if task_type:
-        cmd.extend(["--task", task_type])
+        finetune_extras.extend(["--task", task_type])
     if target_property:
-        cmd.extend(["--target_property", target_property])
+        finetune_extras.extend(["--target_property", target_property])
     if num_classes is not None:
-        cmd.extend(["--num_classes", str(num_classes)])
+        finetune_extras.extend(["--num_classes", str(num_classes)])
 
     bpe_config = task["bpe_config"]
     if "bpe_encode_rank_mode" in bpe_config and bpe_config["bpe_encode_rank_mode"]:
@@ -193,11 +197,11 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
     if task["hyperparams"]:
         params = task["hyperparams"]
         cmd.extend([
-            "--finetune_epochs", str(params["finetune_epochs"]),
-            "--finetune_batch_size", str(params["finetune_batch_size"]),
-            "--finetune_learning_rate", str(params["finetune_learning_rate"])
+            "--epochs", str(params["finetune_epochs"]),
+            "--batch_size", str(params["finetune_batch_size"]),
+            "--learning_rate", str(params["finetune_learning_rate"])
         ])
-
+    
     if combined_config_json:
         cmd.extend(["--config_json", combined_config_json])
 
@@ -213,7 +217,9 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
         Path(log_dir).mkdir(parents=True, exist_ok=True)
         log_path = os.path.join(log_dir, f"{task['experiment_name']}.log")
 
-    safe_cmd_str = ' '.join(shlex.quote(part) for part in cmd)
+    # 末尾追加微调特有参数，确保命令公共部分与预训练一致
+    final_cmd = cmd + finetune_extras
+    safe_cmd_str = ' '.join(shlex.quote(part) for part in final_cmd)
 
     if commands_only:
         record_line = f"CUDA_VISIBLE_DEVICES={gpu_id} {safe_cmd_str}\n"
@@ -249,7 +255,7 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
     if plain_logs and log_path:
         # 用管道读取并写入纯净日志
         process = subprocess.Popen(
-            cmd,
+            final_cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
@@ -262,7 +268,7 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
         t.start()
     else:
         process = subprocess.Popen(
-            cmd,
+            final_cmd,
             stdout=stdout_dest,
             stderr=subprocess.STDOUT,
             text=True,

@@ -80,6 +80,18 @@ class WandbLogger:
                         print(f"📴 W&B离线模式初始化成功: 项目={self._project}")
                     except Exception as offline_error:
                         raise RuntimeError(f"W&B初始化失败（在线和离线模式均失败）: 在线错误={online_error}, 离线错误={offline_error}")
+
+            # 统一定义不同系列的横轴：
+            # - train/*        使用 global_step（批级）
+            # - train_epoch/*  使用 epoch      （epoch级）
+            # - val/* 与 test/* 使用 epoch
+            try:
+                self._wandb.define_metric("train/*", step_metric="global_step")
+                self._wandb.define_metric("train_epoch/*", step_metric="epoch")
+                self._wandb.define_metric("val/*", step_metric="epoch")
+                self._wandb.define_metric("test/*", step_metric="epoch")
+            except Exception:
+                pass
                         
         except Exception as meta_error:
             # 如果元数据构建失败，使用更简单的配置尝试初始化
