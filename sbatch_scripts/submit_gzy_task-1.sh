@@ -7,6 +7,7 @@
 #SBATCH --partition=a01
 #SBATCH --output=logs/gzy_task-1_%j.out
 #SBATCH --error=logs/gzy_task-1_%j.err
+#SBATCH --time=04:00:00
 
 
 export NCCL_IB_HCA=mlx5_0,mlx5_1,mlx5_2,mlx5_3,mlx5_4,mlx5_6,mlx5_7,mlx5_8
