@@ -1,0 +1,36 @@
+.DS_Store
+.idea
+.vscode
+.history
+.claude
+.cursor
+/.pytest_cache/
+
+/data/
+/local/
+/cache
+/model/
+/processed/
+/prepare_results/
+/wandb/
+/log/
+/logs/
+/backup_log/
+/backup/
+/foreign_dataset_files_to_convert/
+
+__pycache__/
+*.pt
+*.pkl
+# keep notebooks and markdown even if large
+/comparison_results/**/*.json
+/comparison_results/**/*.md
+# 三级里面的是子方法，删除
+/comparison_results/*/*/* 
+
+*.out*
+nohup.out
+*.log*
+*.tar.gz
+
+/tests/

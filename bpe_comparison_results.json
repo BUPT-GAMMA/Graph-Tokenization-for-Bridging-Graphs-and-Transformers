@@ -1,0 +1,1728 @@
+{
+  "synthetic_simple": {
+    "test_name": "synthetic_simple",
+    "data_info": {
+      "num_sequences": 4,
+      "total_tokens": 29,
+      "unique_tokens": 6
+    },
+    "training_comparison": {
+      "success": true,
+      "num_merges": 3,
+      "rule_details": [
+        {
+          "step": 1,
+          "minbpe_pair": [
+            1,
+            2
+          ],
+          "minbpe_new_id": 8,
+          "our_pair": [
+            1,
+            2
+          ],
+          "our_new_id": 8,
+          "match": true
+        },
+        {
+          "step": 2,
+          "minbpe_pair": [
+            3,
+            4
+          ],
+          "minbpe_new_id": 9,
+          "our_pair": [
+            3,
+            4
+          ],
+          "our_new_id": 9,
+          "match": true
+        },
+        {
+          "step": 3,
+          "minbpe_pair": [
+            9,
+            8
+          ],
+          "minbpe_new_id": 10,
+          "our_pair": [
+            9,
+            8
+          ],
+          "our_new_id": 10,
+          "match": true
+        }
+      ],
+      "minbpe_stats": {
+        "training_log": [
+          {
+            "step": 1,
+            "pair": [
+              1,
+              2
+            ],
+            "new_id": 8,
+            "frequency": 7,
+            "remaining_tokens": 25
+          },
+          {
+            "step": 2,
+            "pair": [
+              3,
+              4
+            ],
+            "new_id": 9,
+            "frequency": 5,
+            "remaining_tokens": 20
+          },
+          {
+            "step": 3,
+            "pair": [
+              9,
+              8
+            ],
+            "new_id": 10,
+            "frequency": 2,
+            "remaining_tokens": 18
+          }
+        ],
+        "num_merges_performed": 3,
+        "final_vocab_size": 10,
+        "base_vocab_size": 6
+      },
+      "our_stats": {
+        "num_merges_performed": 3,
+        "final_vocab_size": 9
+      }
+    },
+    "encoding_comparison": {
+      "success": true,
+      "encoding_results": [
+        {
+          "sequence_id": 0,
+          "original": [
+            1,
+            2,
+            3,
+            1,
+            2,
+            4,
+            1,
+            2
+          ],
+          "minbpe_encoded": [
+            8,
+            3,
+            8,
+            4,
+            8
+          ],
+          "our_encoded": [
+            8,
+            3,
+            8,
+            4,
+            8
+          ],
+          "match": true
+        },
+        {
+          "sequence_id": 1,
+          "original": [
+            1,
+            2,
+            5,
+            3,
+            4,
+            1,
+            2
+          ],
+          "minbpe_encoded": [
+            8,
+            5,
+            10
+          ],
+          "our_encoded": [
+            8,
+            5,
+            10
+          ],
+          "match": true
+        },
+        {
+          "sequence_id": 2,
+          "original": [
+            3,
+            4,
+            3,
+            4,
+            5,
+            6
+          ],
+          "minbpe_encoded": [
+            9,
+            9,
+            5,
+            6
+          ],
+          "our_encoded": [
+            9,
+            9,
+            5,
+            6
+          ],
+          "match": true
+        },
+        {
+          "sequence_id": 3,
+          "original": [
+            1,
+            2,
+            3,
+            4,
+            1,
+            2,
+            3,
+            4
+          ],
+          "minbpe_encoded": [
+            8,
+            10,
+            9
+          ],
+          "our_encoded": [
+            8,
+            10,
+            9
+          ],
+          "match": true
+        }
+      ]
+    },
+    "overall_success": true
+  },
+  "synthetic_complex": {
+    "test_name": "synthetic_complex",
+    "data_info": {
+      "num_sequences": 5,
+      "total_tokens": 38,
+      "unique_tokens": 12
+    },
+    "training_comparison": {
+      "success": true,
+      "num_merges": 5,
+      "rule_details": [
+        {
+          "step": 1,
+          "minbpe_pair": [
+            1,
+            2
+          ],
+          "minbpe_new_id": 14,
+          "our_pair": [
+            1,
+            2
+          ],
+          "our_new_id": 14,
+          "match": true
+        },
+        {
+          "step": 2,
+          "minbpe_pair": [
+            5,
+            6
+          ],
+          "minbpe_new_id": 15,
+          "our_pair": [
+            5,
+            6
+          ],
+          "our_new_id": 15,
+          "match": true
+        },
+        {
+          "step": 3,
+          "minbpe_pair": [
+            3,
+            4
+          ],
+          "minbpe_new_id": 16,
+          "our_pair": [
+            3,
+            4
+          ],
+          "our_new_id": 16,
+          "match": true
+        },
+        {
+          "step": 4,
+          "minbpe_pair": [
+            7,
+            8
+          ],
+          "minbpe_new_id": 17,
+          "our_pair": [
+            7,
+            8
+          ],
+          "our_new_id": 17,
+          "match": true
+        },
+        {
+          "step": 5,
+          "minbpe_pair": [
+            9,
+            10
+          ],
+          "minbpe_new_id": 18,
+          "our_pair": [
+            9,
+            10
+          ],
+          "our_new_id": 18,
+          "match": true
+        }
+      ],
+      "minbpe_stats": {
+        "training_log": [
+          {
+            "step": 1,
+            "pair": [
+              1,
+              2
+            ],
+            "new_id": 14,
+            "frequency": 5,
+            "remaining_tokens": 37
+          },
+          {
+            "step": 2,
+            "pair": [
+              5,
+              6
+            ],
+            "new_id": 15,
+            "frequency": 4,
+            "remaining_tokens": 33
+          },
+          {
+            "step": 3,
+            "pair": [
+              3,
+              4
+            ],
+            "new_id": 16,
+            "frequency": 3,
+            "remaining_tokens": 30
+          },
+          {
+            "step": 4,
+            "pair": [
+              7,
+              8
+            ],
+            "new_id": 17,
+            "frequency": 3,
+            "remaining_tokens": 27
+          },
+          {
+            "step": 5,
+            "pair": [
+              9,
+              10
+            ],
+            "new_id": 18,
+            "frequency": 3,
+            "remaining_tokens": 24
+          }
+        ],
+        "num_merges_performed": 5,
+        "final_vocab_size": 18,
+        "base_vocab_size": 12
+      },
+      "our_stats": {
+        "num_merges_performed": 5,
+        "final_vocab_size": 17
+      }
+    },
+    "encoding_comparison": {
+      "success": true,
+      "encoding_results": [
+        {
+          "sequence_id": 0,
+          "original": [
+            1,
+            2,
+            1,
+            2,
+            1,
+            2,
+            3,
+            4,
+            3,
+            4
+          ],
+          "minbpe_encoded": [
+            14,
+            14,
+            14,
+            16,
+            16
+          ],
+          "our_encoded": [
+            14,
+            14,
+            14,
+            16,
+            16
+          ],
+          "match": true
+        },
+        {
+          "sequence_id": 1,
+          "original": [
+            5,
+            6,
+            5,
+            6,
+            7,
+            8,
+            7,
+            8
+          ],
+          "minbpe_encoded": [
+            15,
+            15,
+            17,
+            17
+          ],
+          "our_encoded": [
+            15,
+            15,
+            17,
+            17
+          ],
+          "match": true
+        },
+        {
+          "sequence_id": 2,
+          "original": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "minbpe_encoded": [
+            14,
+            16,
+            15,
+            17
+          ],
+          "our_encoded": [
+            14,
+            16,
+            15,
+            17
+          ],
+          "match": true
+        },
+        {
+          "sequence_id": 3,
+          "original": [
+            9,
+            10,
+            9,
+            10,
+            11,
+            12
+          ],
+          "minbpe_encoded": [
+            18,
+            18,
+            11,
+            12
+          ],
+          "our_encoded": [
+            18,
+            18,
+            11,
+            12
+          ],
+          "match": true
+        },
+        {
+          "sequence_id": 4,
+          "original": [
+            1,
+            2,
+            5,
+            6,
+            9,
+            10
+          ],
+          "minbpe_encoded": [
+            14,
+            15,
+            18
+          ],
+          "our_encoded": [
+            14,
+            15,
+            18
+          ],
+          "match": true
+        }
+      ]
+    },
+    "overall_success": true
+  },
+  "synthetic_edge_cases": {
+    "test_name": "synthetic_edge_cases",
+    "data_info": {
+      "num_sequences": 4,
+      "total_tokens": 17,
+      "unique_tokens": 10
+    },
+    "training_comparison": {
+      "success": true,
+      "num_merges": 2,
+      "rule_details": [
+        {
+          "step": 1,
+          "minbpe_pair": [
+            1,
+            1
+          ],
+          "minbpe_new_id": 12,
+          "our_pair": [
+            1,
+            1
+          ],
+          "our_new_id": 12,
+          "match": true
+        },
+        {
+          "step": 2,
+          "minbpe_pair": [
+            1,
+            2
+          ],
+          "minbpe_new_id": 13,
+          "our_pair": [
+            1,
+            2
+          ],
+          "our_new_id": 13,
+          "match": true
+        }
+      ],
+      "minbpe_stats": {
+        "training_log": [
+          {
+            "step": 1,
+            "pair": [
+              1,
+              1
+            ],
+            "new_id": 12,
+            "frequency": 3,
+            "remaining_tokens": 18
+          },
+          {
+            "step": 2,
+            "pair": [
+              1,
+              2
+            ],
+            "new_id": 13,
+            "frequency": 2,
+            "remaining_tokens": 16
+          }
+        ],
+        "num_merges_performed": 2,
+        "final_vocab_size": 13,
+        "base_vocab_size": 10
+      },
+      "our_stats": {
+        "num_merges_performed": 2,
+        "final_vocab_size": 12
+      }
+    },
+    "encoding_comparison": {
+      "success": true,
+      "encoding_results": [
+        {
+          "sequence_id": 0,
+          "original": [
+            1
+          ],
+          "minbpe_encoded": [
+            1
+          ],
+          "our_encoded": [
+            1
+          ],
+          "match": true
+        },
+        {
+          "sequence_id": 1,
+          "original": [
+            1,
+            2
+          ],
+          "minbpe_encoded": [
+            13
+          ],
+          "our_encoded": [
+            13
+          ],
+          "match": true
+        },
+        {
+          "sequence_id": 2,
+          "original": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "minbpe_encoded": [
+            12,
+            12
+          ],
+          "our_encoded": [
+            12,
+            12
+          ],
+          "match": true
+        },
+        {
+          "sequence_id": 3,
+          "original": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "minbpe_encoded": [
+            13,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "our_encoded": [
+            13,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10
+          ],
+          "match": true
+        }
+      ]
+    },
+    "overall_success": true
+  },
+  "real_qm9test": {
+    "test_name": "real_qm9test",
+    "data_info": {
+      "num_sequences": 20,
+      "total_tokens": 360,
+      "unique_tokens": 3
+    },
+    "training_comparison": {
+      "success": true,
+      "num_merges": 10,
+      "rule_details": [
+        {
+          "step": 1,
+          "minbpe_pair": [
+            3,
+            3
+          ],
+          "minbpe_new_id": 19,
+          "our_pair": [
+            3,
+            3
+          ],
+          "our_new_id": 19,
+          "match": true
+        },
+        {
+          "step": 2,
+          "minbpe_pair": [
+            13,
+            13
+          ],
+          "minbpe_new_id": 20,
+          "our_pair": [
+            13,
+            13
+          ],
+          "our_new_id": 20,
+          "match": true
+        },
+        {
+          "step": 3,
+          "minbpe_pair": [
+            3,
+            20
+          ],
+          "minbpe_new_id": 21,
+          "our_pair": [
+            3,
+            20
+          ],
+          "our_new_id": 21,
+          "match": true
+        },
+        {
+          "step": 4,
+          "minbpe_pair": [
+            17,
+            19
+          ],
+          "minbpe_new_id": 22,
+          "our_pair": [
+            17,
+            19
+          ],
+          "our_new_id": 22,
+          "match": true
+        },
+        {
+          "step": 5,
+          "minbpe_pair": [
+            17,
+            21
+          ],
+          "minbpe_new_id": 23,
+          "our_pair": [
+            17,
+            21
+          ],
+          "our_new_id": 23,
+          "match": true
+        },
+        {
+          "step": 6,
+          "minbpe_pair": [
+            22,
+            19
+          ],
+          "minbpe_new_id": 24,
+          "our_pair": [
+            22,
+            19
+          ],
+          "our_new_id": 24,
+          "match": true
+        },
+        {
+          "step": 7,
+          "minbpe_pair": [
+            22,
+            3
+          ],
+          "minbpe_new_id": 25,
+          "our_pair": [
+            22,
+            3
+          ],
+          "our_new_id": 25,
+          "match": true
+        },
+        {
+          "step": 8,
+          "minbpe_pair": [
+            20,
+            13
+          ],
+          "minbpe_new_id": 26,
+          "our_pair": [
+            20,
+            13
+          ],
+          "our_new_id": 26,
+          "match": true
+        },
+        {
+          "step": 9,
+          "minbpe_pair": [
+            19,
+            21
+          ],
+          "minbpe_new_id": 27,
+          "our_pair": [
+            19,
+            21
+          ],
+          "our_new_id": 27,
+          "match": true
+        },
+        {
+          "step": 10,
+          "minbpe_pair": [
+            24,
+            19
+          ],
+          "minbpe_new_id": 28,
+          "our_pair": [
+            24,
+            19
+          ],
+          "our_new_id": 28,
+          "match": true
+        }
+      ],
+      "minbpe_stats": {
+        "training_log": [
+          {
+            "step": 1,
+            "pair": [
+              3,
+              3
+            ],
+            "new_id": 19,
+            "frequency": 112,
+            "remaining_tokens": 316
+          },
+          {
+            "step": 2,
+            "pair": [
+              13,
+              13
+            ],
+            "new_id": 20,
+            "frequency": 76,
+            "remaining_tokens": 261
+          },
+          {
+            "step": 3,
+            "pair": [
+              3,
+              20
+            ],
+            "new_id": 21,
+            "frequency": 28,
+            "remaining_tokens": 233
+          },
+          {
+            "step": 4,
+            "pair": [
+              17,
+              19
+            ],
+            "new_id": 22,
+            "frequency": 28,
+            "remaining_tokens": 205
+          },
+          {
+            "step": 5,
+            "pair": [
+              17,
+              21
+            ],
+            "new_id": 23,
+            "frequency": 13,
+            "remaining_tokens": 192
+          },
+          {
+            "step": 6,
+            "pair": [
+              22,
+              19
+            ],
+            "new_id": 24,
+            "frequency": 13,
+            "remaining_tokens": 179
+          },
+          {
+            "step": 7,
+            "pair": [
+              22,
+              3
+            ],
+            "new_id": 25,
+            "frequency": 12,
+            "remaining_tokens": 167
+          },
+          {
+            "step": 8,
+            "pair": [
+              20,
+              13
+            ],
+            "new_id": 26,
+            "frequency": 8,
+            "remaining_tokens": 159
+          },
+          {
+            "step": 9,
+            "pair": [
+              19,
+              21
+            ],
+            "new_id": 27,
+            "frequency": 8,
+            "remaining_tokens": 151
+          },
+          {
+            "step": 10,
+            "pair": [
+              24,
+              19
+            ],
+            "new_id": 28,
+            "frequency": 6,
+            "remaining_tokens": 145
+          }
+        ],
+        "num_merges_performed": 10,
+        "final_vocab_size": 14,
+        "base_vocab_size": 3
+      },
+      "our_stats": {
+        "num_merges_performed": 10,
+        "final_vocab_size": 13
+      }
+    },
+    "encoding_comparison": {
+      "success": true,
+      "encoding_results": [
+        {
+          "sequence_id": 0,
+          "original": [
+            17,
+            13,
+            13,
+            17,
+            3,
+            13,
+            13,
+            3,
+            13,
+            13,
+            17,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3
+          ],
+          "minbpe_encoded": [
+            17,
+            20,
+            23,
+            21,
+            28
+          ],
+          "our_encoded": [
+            17,
+            20,
+            23,
+            21,
+            28
+          ],
+          "match": true
+        },
+        {
+          "sequence_id": 1,
+          "original": [
+            13,
+            17,
+            3,
+            13,
+            17,
+            3,
+            13,
+            13,
+            3,
+            13,
+            13,
+            17,
+            3,
+            3,
+            3,
+            3,
+            3
+          ],
+          "minbpe_encoded": [
+            13,
+            17,
+            3,
+            13,
+            23,
+            21,
+            24,
+            3
+          ],
+          "our_encoded": [
+            13,
+            17,
+            3,
+            13,
+            23,
+            21,
+            24,
+            3
+          ],
+          "match": true
+        },
+        {
+          "sequence_id": 2,
+          "original": [
+            13,
+            13,
+            17,
+            3,
+            3,
+            3,
+            17,
+            3,
+            13,
+            13,
+            3,
+            13,
+            13,
+            17,
+            3,
+            3,
+            3
+          ],
+          "minbpe_encoded": [
+            20,
+            25,
+            23,
+            21,
+            25
+          ],
+          "our_encoded": [
+            20,
+            25,
+            23,
+            21,
+            25
+          ],
+          "match": true
+        },
+        {
+          "sequence_id": 3,
+          "original": [
+            17,
+            13,
+            13,
+            17,
+            3,
+            3,
+            3,
+            13,
+            13,
+            3,
+            13,
+            13,
+            17,
+            3,
+            3,
+            3,
+            3
+          ],
+          "minbpe_encoded": [
+            17,
+            20,
+            22,
+            21,
+            21,
+            24
+          ],
+          "our_encoded": [
+            17,
+            20,
+            22,
+            21,
+            21,
+            24
+          ],
+          "match": true
+        },
+        {
+          "sequence_id": 4,
+          "original": [
+            13,
+            13,
+            13,
+            17,
+            3,
+            3,
+            3,
+            17,
+            3,
+            13,
+            13,
+            17,
+            3,
+            3,
+            3,
+            13,
+            3
+          ],
+          "minbpe_encoded": [
+            26,
+            25,
+            23,
+            25,
+            13,
+            3
+          ],
+          "our_encoded": [
+            26,
+            25,
+            23,
+            25,
+            13,
+            3
+          ],
+          "match": true
+        },
+        {
+          "sequence_id": 5,
+          "original": [
+            13,
+            13,
+            13,
+            13,
+            17,
+            3,
+            3,
+            3,
+            17,
+            3,
+            13,
+            13,
+            17,
+            3,
+            3,
+            3,
+            3
+          ],
+          "minbpe_encoded": [
+            20,
+            20,
+            25,
+            23,
+            24
+          ],
+          "our_encoded": [
+            20,
+            20,
+            25,
+            23,
+            24
+          ],
+          "match": true
+        },
+        {
+          "sequence_id": 6,
+          "original": [
+            13,
+            13,
+            13,
+            17,
+            3,
+            3,
+            3,
+            17,
+            3,
+            13,
+            13,
+            3,
+            13,
+            17,
+            3,
+            3,
+            3
+          ],
+          "minbpe_encoded": [
+            26,
+            25,
+            23,
+            3,
+            13,
+            25
+          ],
+          "our_encoded": [
+            26,
+            25,
+            23,
+            3,
+            13,
+            25
+          ],
+          "match": true
+        },
+        {
+          "sequence_id": 7,
+          "original": [
+            13,
+            13,
+            13,
+            13,
+            17,
+            3,
+            3,
+            3,
+            17,
+            3,
+            13,
+            13,
+            3,
+            17,
+            3,
+            3,
+            3
+          ],
+          "minbpe_encoded": [
+            20,
+            20,
+            25,
+            23,
+            3,
+            25
+          ],
+          "our_encoded": [
+            20,
+            20,
+            25,
+            23,
+            3,
+            25
+          ],
+          "match": true
+        },
+        {
+          "sequence_id": 8,
+          "original": [
+            17,
+            13,
+            13,
+            13,
+            17,
+            3,
+            3,
+            3,
+            17,
+            3,
+            13,
+            13,
+            3,
+            13,
+            3,
+            3,
+            3
+          ],
+          "minbpe_encoded": [
+            17,
+            26,
+            25,
+            23,
+            3,
+            13,
+            19,
+            3
+          ],
+          "our_encoded": [
+            17,
+            26,
+            25,
+            23,
+            3,
+            13,
+            19,
+            3
+          ],
+          "match": true
+        },
+        {
+          "sequence_id": 9,
+          "original": [
+            3,
+            17,
+            13,
+            13,
+            17,
+            3,
+            13,
+            13,
+            3,
+            13,
+            13,
+            17,
+            3,
+            3,
+            3,
+            3,
+            3
+          ],
+          "minbpe_encoded": [
+            3,
+            17,
+            20,
+            23,
+            21,
+            24,
+            3
+          ],
+          "our_encoded": [
+            3,
+            17,
+            20,
+            23,
+            21,
+            24,
+            3
+          ],
+          "match": true
+        },
+        {
+          "sequence_id": 10,
+          "original": [
+            13,
+            13,
+            13,
+            13,
+            13,
+            17,
+            3,
+            13,
+            13,
+            17,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3
+          ],
+          "minbpe_encoded": [
+            20,
+            26,
+            23,
+            28,
+            19,
+            3
+          ],
+          "our_encoded": [
+            20,
+            26,
+            23,
+            28,
+            19,
+            3
+          ],
+          "match": true
+        },
+        {
+          "sequence_id": 11,
+          "original": [
+            13,
+            13,
+            3,
+            3,
+            3,
+            13,
+            13,
+            13,
+            17,
+            3,
+            13,
+            13,
+            17,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3
+          ],
+          "minbpe_encoded": [
+            20,
+            27,
+            13,
+            23,
+            28
+          ],
+          "our_encoded": [
+            20,
+            27,
+            13,
+            23,
+            28
+          ],
+          "match": true
+        },
+        {
+          "sequence_id": 12,
+          "original": [
+            13,
+            13,
+            13,
+            3,
+            3,
+            3,
+            13,
+            13,
+            17,
+            3,
+            13,
+            13,
+            17,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3
+          ],
+          "minbpe_encoded": [
+            26,
+            27,
+            23,
+            28
+          ],
+          "our_encoded": [
+            26,
+            27,
+            23,
+            28
+          ],
+          "match": true
+        },
+        {
+          "sequence_id": 13,
+          "original": [
+            13,
+            13,
+            13,
+            3,
+            3,
+            3,
+            13,
+            13,
+            13,
+            13,
+            17,
+            3,
+            3,
+            3,
+            17,
+            3,
+            3,
+            3,
+            3
+          ],
+          "minbpe_encoded": [
+            26,
+            27,
+            20,
+            25,
+            24
+          ],
+          "our_encoded": [
+            26,
+            27,
+            20,
+            25,
+            24
+          ],
+          "match": true
+        },
+        {
+          "sequence_id": 14,
+          "original": [
+            13,
+            13,
+            13,
+            13,
+            3,
+            3,
+            3,
+            13,
+            13,
+            13,
+            3,
+            17,
+            3,
+            3,
+            3,
+            3,
+            17,
+            3,
+            3
+          ],
+          "minbpe_encoded": [
+            20,
+            20,
+            27,
+            13,
+            3,
+            24,
+            22
+          ],
+          "our_encoded": [
+            20,
+            20,
+            27,
+            13,
+            3,
+            24,
+            22
+          ],
+          "match": true
+        },
+        {
+          "sequence_id": 15,
+          "original": [
+            17,
+            13,
+            13,
+            13,
+            13,
+            3,
+            3,
+            3,
+            13,
+            13,
+            13,
+            3,
+            17,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3
+          ],
+          "minbpe_encoded": [
+            17,
+            20,
+            20,
+            27,
+            13,
+            3,
+            28
+          ],
+          "our_encoded": [
+            17,
+            20,
+            20,
+            27,
+            13,
+            3,
+            28
+          ],
+          "match": true
+        },
+        {
+          "sequence_id": 16,
+          "original": [
+            13,
+            13,
+            13,
+            3,
+            3,
+            3,
+            13,
+            13,
+            13,
+            17,
+            3,
+            3,
+            3,
+            13,
+            17,
+            3,
+            3,
+            3,
+            3
+          ],
+          "minbpe_encoded": [
+            26,
+            27,
+            13,
+            25,
+            13,
+            24
+          ],
+          "our_encoded": [
+            26,
+            27,
+            13,
+            25,
+            13,
+            24
+          ],
+          "match": true
+        },
+        {
+          "sequence_id": 17,
+          "original": [
+            13,
+            13,
+            13,
+            13,
+            3,
+            3,
+            3,
+            13,
+            13,
+            17,
+            3,
+            13,
+            3,
+            3,
+            3,
+            3,
+            17,
+            3,
+            3
+          ],
+          "minbpe_encoded": [
+            20,
+            20,
+            27,
+            17,
+            3,
+            13,
+            19,
+            19,
+            22
+          ],
+          "our_encoded": [
+            20,
+            20,
+            27,
+            17,
+            3,
+            13,
+            19,
+            19,
+            22
+          ],
+          "match": true
+        },
+        {
+          "sequence_id": 18,
+          "original": [
+            17,
+            13,
+            13,
+            13,
+            13,
+            3,
+            3,
+            3,
+            13,
+            13,
+            17,
+            3,
+            13,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3
+          ],
+          "minbpe_encoded": [
+            17,
+            20,
+            20,
+            27,
+            17,
+            3,
+            13,
+            19,
+            19,
+            19
+          ],
+          "our_encoded": [
+            17,
+            20,
+            20,
+            27,
+            17,
+            3,
+            13,
+            19,
+            19,
+            19
+          ],
+          "match": true
+        },
+        {
+          "sequence_id": 19,
+          "original": [
+            3,
+            13,
+            13,
+            13,
+            13,
+            13,
+            17,
+            3,
+            13,
+            13,
+            17,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3,
+            3
+          ],
+          "minbpe_encoded": [
+            21,
+            26,
+            23,
+            28,
+            19
+          ],
+          "our_encoded": [
+            21,
+            26,
+            23,
+            28,
+            19
+          ],
+          "match": true
+        }
+      ]
+    },
+    "overall_success": true
+  }
+}

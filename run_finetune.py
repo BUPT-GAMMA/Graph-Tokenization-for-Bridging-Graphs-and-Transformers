@@ -1,0 +1,306 @@
+#!/usr/bin/env python3
+"""
+单个方法BERT微调脚本
+==================
+
+支持对指定数据集和序列化方法进行BERT微调，具备灵活的配置参数覆盖功能。
+
+使用示例:
+  # 基本回归任务
+  python run_finetune.py --dataset qm9test --method feuler --task regression
+  
+  # 指定目标属性
+  python run_finetune.py --dataset qm9test --method feuler --task regression --target_property homo
+  
+  # 分类任务
+  python run_finetune.py --dataset mnist --method feuler --task classification --num_classes 10
+  
+  # 自定义微调参数
+  python run_finetune.py --dataset qm9test --method feuler --task regression \\
+    --finetune_epochs 20 --finetune_batch_size 16 --finetune_learning_rate 2e-5
+  
+  # 自定义数据处理
+  python run_finetune.py --dataset qm9test --method feuler --task regression \\
+    --normalization standard --pooling_method mean
+  
+  # 高级配置覆盖
+  python run_finetune.py --dataset qm9test --method feuler --task regression \\
+    --config_override bert.finetuning.warmup_ratio=0.1 system.device=cuda:1
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+# 设置项目路径
+ROOT = Path(__file__).resolve().parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from config import ProjectConfig
+from src.data.unified_data_interface import UnifiedDataInterface
+from src.training.finetune_pipeline import run_finetune
+from src.utils.config_override import (
+    add_all_args,
+    apply_args_to_config,
+    create_experiment_name,
+    print_config_summary,
+    show_full_config
+)
+
+
+def infer_task_and_targets(config: ProjectConfig, udi: UnifiedDataInterface, 
+                          task_cli: str | None, num_classes_cli: int | None) -> tuple[str, int | None]:
+    """
+    推断任务类型和目标信息
+    
+    Args:
+        config: 项目配置
+        udi: 统一数据接口
+        task_cli: 命令行指定的任务类型
+        num_classes_cli: 命令行指定的类别数
+        
+    Returns:
+        (task_type, num_classes) 元组
+    """
+    meta = udi.get_downstream_metadata()
+    
+    # 推断任务类型
+    if task_cli:
+        task = task_cli
+    else:
+        assert 'dataset_task_type' in meta, "数据集元数据中缺少必需字段 'dataset_task_type'"
+        task = meta['dataset_task_type']
+    
+    # 处理回归任务的目标属性
+    if task == 'regression' and not config.task.target_property:
+        # QM9数据集默认使用homo属性
+        if config.dataset.name.lower().startswith('qm9'):
+            config.task.target_property = 'homo'
+        else:
+            # 其他数据集使用默认属性
+            if 'default_target_property' in meta and meta['default_target_property']:
+                config.task.target_property = meta['default_target_property']
+        
+        if config.task.target_property:
+            print(f"🎯 自动设置回归目标属性: {config.task.target_property}")
+    
+    # 推断分类类别数
+    num_classes = num_classes_cli
+    if task == 'classification' and num_classes is None:
+        assert 'num_classes' in meta, "分类任务需要 num_classes，但数据集元数据中未找到此字段"
+        n = meta['num_classes']
+        assert isinstance(n, int) and n > 1, f"数据集元数据中 num_classes 应为大于1的整数，实际值: {n}"
+        num_classes = n
+        print(f"🏷️ 自动设置分类类别数: {num_classes}")
+    
+    return task, num_classes
+
+
+def check_pretrained_model(config: ProjectConfig) -> bool:
+    """
+    检查预训练模型是否存在
+    
+    Args:
+        config: 项目配置
+        
+    Returns:
+        是否存在可用的预训练模型
+    """
+    print("🔍 检查预训练模型...")
+    
+    # 检查标准路径
+    model_base = config.get_model_dir()
+    best_dir = model_base / "best"
+    final_dir = model_base / "final"
+    
+    def _has_model(d: Path) -> bool:
+        return (d / 'config.bin').exists() and (d / 'pytorch_model.bin').exists()
+    
+    if _has_model(best_dir):
+        print(f"✅ 找到预训练模型: {best_dir}")
+        return True
+    elif _has_model(final_dir):
+        print(f"✅ 找到预训练模型: {final_dir}")
+        return True
+    else:
+        # 检查兼容路径
+        compat_dir = config.get_bert_model_path("pretrained").parent
+        if Path(compat_dir, 'config.bin').exists() and Path(compat_dir, 'pytorch_model.bin').exists():
+            print(f"✅ 找到兼容预训练模型: {compat_dir}")
+            return True
+        
+        print("❌ 未找到预训练模型")
+        print(f"   已检查路径: {best_dir}, {final_dir}, {compat_dir}")
+        return False
+
+
+def run_finetuning(config: ProjectConfig, task: str, num_classes: int | None = None, aggregation_mode: str = "avg") -> dict:
+    """
+    运行BERT微调
+    
+    Args:
+        config: 项目配置
+        task: 任务类型
+        num_classes: 分类类别数（仅分类任务需要）
+        aggregation_mode: 测试时增强的聚合模式
+        
+    Returns:
+        微调结果字典
+    """
+    print("🚀 开始BERT微调...")
+    print(f"📋 任务类型: {task}")
+    
+    if task == "regression" and config.task.target_property:
+        print(f"📋 回归目标: {config.task.target_property}")
+    elif task == "classification" and num_classes:
+        print(f"📋 分类类别数: {num_classes}")
+    
+    # 检查预训练模型
+    # if not check_pretrained_model(config):
+    #     print("\n💡 请先运行预训练:")
+    #     print(f"python run_pretrain.py --dataset {config.dataset.name} --method {config.serialization.method}")
+    #     assert False, "预训练模型不存在"
+    
+    # 运行微调
+    print("🎓 开始微调...")
+    try:
+        result = run_finetune(config, task=task, num_classes=num_classes, aggregation_mode=aggregation_mode)
+        print("✅ 微调完成!")
+        print(f"📊 最优验证损失: {result['best_val_loss']:.4f}")
+        
+        return result
+        
+    except Exception as e:
+        print(f"❌ 微调失败: {e}")
+        raise
+
+
+def main():
+    """主函数"""
+    parser = argparse.ArgumentParser(
+        description="单个方法BERT微调脚本",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+使用示例:
+  # 基本回归任务（默认BPE all模式）
+  python run_finetune.py --dataset qm9test --method feuler --task regression
+  
+  # 无BPE压缩微调（使用原始序列）
+  python run_finetune.py --dataset qm9test --method feuler --task regression --bpe_encode_rank_mode none
+  
+  # BPE Top-K压缩微调
+  python run_finetune.py --dataset qm9test --method feuler --task regression \\
+    --bpe_encode_rank_mode topk --bpe_encode_rank_k 1000
+  
+  # BPE随机压缩微调（训练时随机，评估时确定性）
+  python run_finetune.py --dataset qm9test --method feuler --task regression \\
+    --bpe_encode_rank_mode random --bpe_eval_mode all
+  
+  # 指定回归目标属性
+  python run_finetune.py --dataset qm9test --method feuler --task regression --target_property homo
+  
+  # 分类任务（自动推断类别数）
+  python run_finetune.py --dataset mnist --method feuler --task classification
+  
+  # JSON配置覆盖
+  python run_finetune.py --dataset qm9test --method feuler --task regression \\
+    --config_json '{"bert": {"finetuning": {"epochs": 30, "learning_rate": 1e-5}},
+                    "serialization": {"bpe": {"engine": {"encode_rank_mode": "topk", "encode_rank_k": 1000}}}}'
+        """
+    )
+    
+    # 添加所有参数（包含微调参数）
+    add_all_args(parser, include_finetune=True)
+
+    # 增加TTA聚合模式参数
+    parser.add_argument(
+        "--aggregation_mode",
+        type=str,
+        default="avg",
+        choices=["avg", "best"],
+        help="测试时增强（TTA）的聚合模式: "
+             "'avg' - 对多重采样结果取平均 (用于报告); "
+             "'best' - 选择最优结果 (用于分析模型上限)。"
+    )
+    
+    # 可选：分类任务显式指定类别数（否则从数据集元信息自动推断）
+    parser.add_argument(
+        "--num_classes",
+        type=int,
+        help="分类类别数（可选；若不提供则从数据集元信息自动推断）",
+    )
+    
+    # 解析参数
+    args = parser.parse_args()
+    
+    print("🔧 初始化配置...")
+    
+    # 创建基础配置
+    config = ProjectConfig()
+    
+    # 如果用户要求显示配置，先显示然后退出
+    if args.show_config:
+        show_full_config(config)
+        return 0
+    
+    # 应用命令行参数到配置（统一将通用训练参数映射到微调命名空间）
+    apply_args_to_config(config, args, common_to="finetune")
+    
+    # 自动生成实验名称（如果未指定）
+    create_experiment_name(config)
+    
+    # 创建UDI并推断任务信息
+    udi = UnifiedDataInterface(config, config.dataset.name)
+    task = args.task
+    num_classes = args.num_classes
+    task, num_classes = infer_task_and_targets(config, udi, task, num_classes)
+    
+    # 更新配置中的任务类型
+    config.task.type = task
+    
+    # 验证配置
+    try:
+        config.validate()
+    except Exception as e:
+        print(f"❌ 配置验证失败: {e}")
+        return 1
+    
+    # 打印配置摘要
+    print_config_summary(config)
+    
+    # 运行微调
+    try:
+        result = run_finetuning(config, task, num_classes, aggregation_mode=args.aggregation_mode)
+        
+        print("\n" + "="*60)
+        print("🎉 微调完成!")
+        print("="*60)
+        
+        print(f"📁 最优模型路径: {result['best_dir']}")
+        print(f"📁 最终模型路径: {result['final_dir']}")
+        print(f"📊 最优验证损失: {result['best_val_loss']:.4f}")
+        
+        # 显示测试结果
+        test_metrics = result['test_metrics']
+        print("\n📈 测试集性能:")
+        for metric, value in test_metrics.items():
+            if isinstance(value, (int, float)):
+                print(f"  {metric}: {value:.4f}")
+        
+        return 0
+        
+    except KeyboardInterrupt:
+        print("\n⚠️ 用户中断训练")
+        return 130
+    except Exception as e:
+        print(f"\n❌ 微调失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return 1
+
+
+if __name__ == "__main__":
+    exit(main())
