@@ -31,8 +31,11 @@ from src.models.bert.vocab_manager import VocabManager
 from src.training.loops import train_epoch, evaluate_epoch
 from src.training.optim import build_from_config
 from src.training.callbacks import update_and_check
+from src.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger('tokenizerGraph.training.pretrain_pipeline')
+logger.propagate = False
+
 
 
 def train_bert_mlm(
@@ -241,15 +244,15 @@ def train_bert_mlm(
                     writer.add_scalar('Train/Batch_Loss', float(batch_loss), global_step)
                 except Exception:
                     pass
-                # W&B: 记录batch级loss与学习率
+                # W&B: 仅记录 train/*（step轴）
                 if wandb_logger is not None:
                     payload = {
-                        'train_loss_step': float(batch_loss),
-                        'epoch': epoch,
-                        'step': int(step_idx),
+                        'train/batch_loss': float(batch_loss),
+                        'global_step': int(global_step),
+                        'epoch': int(epoch),
                     }
                     if current_lr is not None:
-                        payload['learning_rate'] = float(current_lr)
+                        payload['train/learning_rate_step'] = float(current_lr)
                     try:
                         wandb_logger.log(payload, step=global_step)
                     except Exception:
@@ -295,15 +298,16 @@ def train_bert_mlm(
             writer.add_scalar('Train/Learning_Rate', current_lr, epoch)
             writer.add_scalar('Train/Epoch_Time', epoch_time, epoch)
             
-            # W&B记录
+            # W&B记录：epoch级（train_epoch/*与val/*，epoch轴）
             if wandb_logger is not None:
+                _epoch_end_global_step = int(epoch * steps_per_epoch)
                 wandb_logger.log({
-                    "train/loss": train_loss,
-                    "val/loss": val_loss,
-                    "train/learning_rate": current_lr,
-                    "train/epoch_time": epoch_time,
-                    "epoch": epoch
-                }, step=epoch)
+                    "train_epoch/loss": float(train_loss),
+                    "train_epoch/learning_rate": float(current_lr),
+                    "train_epoch/epoch_time": float(epoch_time),
+                    "val/loss": float(val_loss),
+                    "epoch": int(epoch)
+                }, step=_epoch_end_global_step)
             
             # 早停检查和最佳模型保存
             new_best_val_loss, patience_counter, should_stop = update_and_check(
@@ -339,11 +343,12 @@ def train_bert_mlm(
             writer.add_scalar('Final/Total_Train_Time', float(total_time), 0)
             writer.add_scalar('Final/Best_Val_Loss', float(best_val_loss), 0)
             if wandb_logger is not None:
+                _final_step = int(config.bert.pretraining.epochs * len(train_dataloader)) + 1
                 wandb_logger.log({
                     'final_avg_epoch_time': float(avg_epoch_time),
                     'final_total_train_time': float(total_time),
                     'final_best_val_loss': float(best_val_loss),
-                })
+                }, step=_final_step)
         except Exception:
             pass
 

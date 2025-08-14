@@ -13,6 +13,11 @@ from src.training.loops import train_epoch
 from src.training.evaluate import evaluate_model
 from src.training.model_builder import build_task_model
 from src.training.tasks import build_regression_loaders, build_classification_loaders
+from src.utils.logger import get_logger
+
+logger = get_logger('tokenizerGraph.training.finetune_pipeline')
+logger.propagate = False
+
 
 def load_pretrained_backbone(config: ProjectConfig):
     from src.models.bert.model import BertMLM, create_bert_mlm
@@ -117,8 +122,11 @@ def run_finetune(
     best_val = float('inf')
     patience = config.bert.finetuning.early_stopping_patience
     patience_ctr = 0
-    best_dir = config.get_model_dir() / "best"
-    final_dir = config.get_model_dir() / "final"
+    # 为避免覆盖预训练权重，微调阶段统一保存到 finetune 子目录
+    _save_root = config.get_model_dir() / "finetune"
+    _save_root.mkdir(parents=True, exist_ok=True)
+    best_dir = _save_root / "best"
+    final_dir = _save_root / "final"
 
     # 训练时长统计与步级日志间隔
     epoch_times = []
@@ -140,12 +148,12 @@ def run_finetune(
                 pass
             if wandb_logger is not None:
                 payload = {
-                    'train_loss_step': float(batch_loss),
-                    'epoch': epoch + 1,
-                    'step': int(step_idx),
+                    'train/batch_loss': float(batch_loss),
+                    'global_step': int(global_step),
+                    'epoch': int(epoch + 1),
                 }
                 if current_lr is not None:
-                    payload['learning_rate'] = float(current_lr)
+                    payload['train/learning_rate_step'] = float(current_lr)
                 try:
                     wandb_logger.log(payload, step=global_step)
                 except Exception:
@@ -181,22 +189,22 @@ def run_finetune(
         # 回归任务：计算训练集上的MAE等指标（用于日志记录）
         train_metrics_eval = None
         if task == "regression":
-            train_metrics_eval = evaluate_model(
-                model,
-                train_dl,
-                device,
-                task,
-                label_normalizer=normalizer,
-                aggregation_mode=aggregation_mode,
-                epoch_num=epoch + 1,
-                total_epochs=config.bert.finetuning.epochs,
-                log_style=getattr(config.system, 'log_style', 'online'),
-            )
+            # train_metrics_eval = evaluate_model(
+            #     model,
+            #     train_dl,
+            #     device,
+            #     task,
+            #     label_normalizer=normalizer,
+            #     aggregation_mode=aggregation_mode,
+            #     epoch_num=epoch + 1,
+            #     total_epochs=config.bert.finetuning.epochs,
+            #     log_style=getattr(config.system, 'log_style', 'online'),
+            # )
+            train_metrics_eval = None
 
         # 记录每个 epoch 的关键日志
         try:
-            import logging
-            logger = logging.getLogger(__name__)
+
             assert isinstance(train_stats, dict) and "loss" in train_stats, "训练统计数据格式错误，期望包含 'loss' 字段的字典"
             train_loss = train_stats["loss"]
             logger.info(
@@ -226,18 +234,18 @@ def run_finetune(
                 writer.add_scalar('Classification/Val_Recall', float(val_metrics['recall']), epoch + 1)
                 writer.add_scalar('Classification/Val_F1', float(val_metrics['f1']), epoch + 1)
 
-            # W&B（与上面完全一致的两类分支）
+            # W&B：epoch级（train_epoch/* 与 val/*，epoch 轴）
             if wandb_logger is not None:
                 payload = {
-                    "train/loss": float(train_loss),
+                    "train_epoch/loss": float(train_loss),
+                    "train_epoch/learning_rate": float(current_lr),
+                    "train_epoch/epoch_time": float(epoch_time),
                     "val/loss": float(val_metrics['val_loss']),
-                    "train/learning_rate": float(current_lr),
-                    "train/epoch_time": float(epoch_time),
-                    "epoch": epoch + 1,
+                    "epoch": int(epoch + 1),
                 }
                 if task == "regression":
                     if train_metrics_eval is not None:
-                        payload['train/mae'] = float(train_metrics_eval['mae'])
+                        payload['train_epoch/mae'] = float(train_metrics_eval['mae'])
                     payload.update({
                         'val/mae': float(val_metrics['mae']),
                         'val/mse': float(val_metrics['mse']),
@@ -252,7 +260,8 @@ def run_finetune(
                         'val/recall': float(val_metrics['recall']),
                         'val/f1': float(val_metrics['f1']),
                     })
-                wandb_logger.log(payload, step=epoch + 1)
+                _epoch_end_global_step = int((epoch + 1) * steps_per_epoch)
+                wandb_logger.log(payload, step=_epoch_end_global_step)
 
         except Exception:
             pass
@@ -349,7 +358,8 @@ def run_finetune(
             }
             if task == "regression" and best_val_mae != float('inf'):
                 final_payload['final/best_val_mae'] = float(best_val_mae)
-            wandb_logger.log(final_payload)
+            _final_step = int(config.bert.finetuning.epochs * steps_per_epoch) + 1
+            wandb_logger.log(final_payload, step=_final_step)
         writer.close()
         if wandb_logger is not None:
             wandb_logger.finish()
