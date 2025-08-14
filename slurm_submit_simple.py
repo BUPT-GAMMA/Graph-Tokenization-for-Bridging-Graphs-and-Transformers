@@ -91,7 +91,7 @@ def parse_sbatch_job_id(sbatch_stdout: str):
 
 def main():
     parser = argparse.ArgumentParser(description="按任务文件逐条提交单卡 sbatch 作业（不扫描资源不指定节点）")
-    parser.add_argument("--tasks-file", "-f", required=True, type=str, help="包含任务指令的文本文件（每行一个）")
+    parser.add_argument("--tasks-file", "-f", default="commands.list", type=str, help="包含任务指令的文本文件（每行一个）")
     parser.add_argument("--cpus-per-task", type=int, default=2, help="每个任务申请的 CPU 数（默认 2）")
     parser.add_argument("--job-name-prefix", type=str, default="gzy_task", help="作业名前缀（默认 gzy_task）")
     parser.add_argument("--dry-run", action="store_true", help="仅显示将要提交的任务，不真正提交")
