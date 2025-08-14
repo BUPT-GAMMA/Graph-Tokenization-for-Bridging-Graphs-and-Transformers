@@ -31,7 +31,7 @@ DEFAULT_DATASETS = ["zinc"]
 DEFAULT_METHODS = ["feuler", "eulerian", "cpp", "fcpp", "topo", "smiles"]
 DEFAULT_GPUS = [0,1,2,3]
 DEFAULT_BPE_SCENARIOS = ["raw", "all", "random", "gaussian"]
-DEFAULT_FT_HYPERPARAMS = [{"finetune_epochs": 1, "finetune_batch_size": 1024, "finetune_learning_rate": 2e-5}]
+DEFAULT_FT_HYPERPARAMS = [{"finetune_epochs": 1, "finetune_batch_size": 1024, "finetune_learning_rate": 5e-5}]
 DEFAULT_AGGREGATION_MODE = "best"  # or "best"
 DEFAULT_LOG_DIR = "logs/batch_finetune"
 

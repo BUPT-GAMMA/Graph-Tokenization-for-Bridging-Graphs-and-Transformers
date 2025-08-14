@@ -24,9 +24,9 @@ import shlex
 DEFAULT_EXPERIMENT_GROUP = "test_zinc_10multi_4bpe-way"
 DEFAULT_DATASETS = ["zinc"]
 DEFAULT_METHODS = ["feuler", "eulerian", "cpp", "fcpp", "topo", "smiles"]
-DEFAULT_GPUS = [0, 1, 2, 3]
+DEFAULT_GPUS = [0]
 DEFAULT_BPE_SCENARIOS = ["raw", "all", "random", "gaussian"]
-DEFAULT_HYPERPARAMS = [{"epochs": 1, "batch_size": 1024, "learning_rate": 2e-4}]
+DEFAULT_HYPERPARAMS = [{"epochs": 1, "batch_size": 1024, "learning_rate": 5e-4}]
 DEFAULT_MLM_AUG_METHODS = [
     "random_deletion",
     "random_insertion",
