@@ -61,17 +61,23 @@ def sanitize_task_command(task: str) -> str:
     return sanitized
 
 
-def generate_single_task_sbatch_script(task: str, cpus_per_task: int, job_name: str) -> str:
+def generate_single_task_sbatch_script(task: str, cpus_per_task: int, job_name: str, partition: str = None) -> str:
     """生成单个任务的 sbatch 脚本内容。"""
     sanitized_task = sanitize_task_command(task)
+    extra_directives = f"#SBATCH --partition={partition}\n" if partition else ""
     script_content = f"""#!/bin/bash
 #SBATCH --job-name={job_name}
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task={cpus_per_task}
-#SBATCH --output=logs/{job_name}_%j.out
+{extra_directives}#SBATCH --output=logs/{job_name}_%j.out
 #SBATCH --error=logs/{job_name}_%j.err
+
+
+export NCCL_IB_HCA=mlx5_0,mlx5_1,mlx5_2,mlx5_3,mlx5_4,mlx5_6,mlx5_7,mlx5_8
+source /home/fit/shichuan/WORK/miniconda3/envs/pthgnn/bin/activate
+echo "INFO: Using Python at $(which python)"
 
 mkdir -p logs
 echo "INFO: Starting {job_name}..."
@@ -94,6 +100,7 @@ def main():
     parser.add_argument("--tasks-file", "-f", default="commands.list", type=str, help="包含任务指令的文本文件（每行一个）")
     parser.add_argument("--cpus-per-task", type=int, default=2, help="每个任务申请的 CPU 数（默认 2）")
     parser.add_argument("--job-name-prefix", type=str, default="gzy_task", help="作业名前缀（默认 gzy_task）")
+    parser.add_argument("--partition", "-p", type=str, default='a01', help="Slurm 分区名（如 a01）。若集群无默认分区，则必须指定")
     parser.add_argument("--dry-run", action="store_true", help="仅显示将要提交的任务，不真正提交")
     args = parser.parse_args()
 
@@ -109,8 +116,8 @@ def main():
 
     if args.dry_run:
         for i, task in enumerate(tasks, start=1):
-            job_name = f"{args.job_name_prefix}-{i}"
-            batch_content = generate_single_task_sbatch_script(task, args.cpus_per_task, job_name)
+            job_name = f"{args.job_name_prefix}_{i}"
+            batch_content = generate_single_task_sbatch_script(task, args.cpus_per_task, job_name, partition=args.partition)
             print(f"[{i}] {job_name}: {batch_content}")
         print("\nDRY RUN: 未提交任何作业。")
         return
@@ -121,7 +128,7 @@ def main():
     submitted = 0
     for i, task in enumerate(tasks, start=1):
         job_name = f"{args.job_name_prefix}-{i}"
-        script_content = generate_single_task_sbatch_script(task, args.cpus_per_task, job_name)
+        script_content = generate_single_task_sbatch_script(task, args.cpus_per_task, job_name, partition=args.partition)
         script_path = os.path.join(SBATCH_SCRIPT_DIR, f"submit_{job_name}.sh")
 
         try:
