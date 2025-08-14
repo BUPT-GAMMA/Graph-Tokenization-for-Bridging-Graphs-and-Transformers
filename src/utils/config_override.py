@@ -31,6 +31,7 @@ def add_basic_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--experiment_group", type=str, help="实验分组")
     parser.add_argument("--experiment_name", type=str, help="实验名称")
     parser.add_argument("--device", type=str, help="设备 (cuda:0, cpu, auto)")
+    parser.add_argument("--log_style", type=str, choices=["online", "offline"], help="日志样式：online=使用tqdm；offline=每个epoch按10%输出摘要")
 
 
 def add_common_args(parser: argparse.ArgumentParser) -> None:
@@ -85,7 +86,30 @@ def add_json_override_args(parser: argparse.ArgumentParser) -> None:
 
 def apply_args_to_config(config: ProjectConfig, args: argparse.Namespace, *, common_to: str = "pretrain") -> None:
     """应用命令行参数到配置对象"""
+    import json as _json_internal
     
+    # 预读取 JSON（若提供），用于后续判断覆盖优先级（JSON > 常用CLI）
+    json_dict_for_presence = None
+    if hasattr(args, 'config_json') and args.config_json:
+        try:
+            if args.config_json.strip().startswith('{'):
+                json_dict_for_presence = _json_internal.loads(args.config_json)
+            else:
+                with open(args.config_json, 'r', encoding='utf-8') as _fh:
+                    json_dict_for_presence = _json_internal.load(_fh)
+        except Exception:
+            json_dict_for_presence = None  # 解析失败则放弃 presence 保护
+
+    def _json_has_path(d: dict | None, dotted: str) -> bool:
+        if not isinstance(d, dict):
+            return False
+        cur = d
+        for key in dotted.split('.'):
+            if not isinstance(cur, dict) or key not in cur:
+                return False
+            cur = cur[key]
+        return True
+
     # === 1. 基础参数（总是生效） ===
     if args.dataset:
         config.dataset.name = args.dataset
@@ -106,6 +130,9 @@ def apply_args_to_config(config: ProjectConfig, args: argparse.Namespace, *, com
     if hasattr(args, 'device') and args.device:
         config.system.device = args.device
         print(f"🎯 system.device = {args.device}")
+    if hasattr(args, 'log_style') and args.log_style:
+        config.system.log_style = args.log_style
+        print(f"🎯 system.log_style = {args.log_style}")
     
     # BPE参数
     if hasattr(args, 'bpe_num_merges') and args.bpe_num_merges is not None:
@@ -130,13 +157,12 @@ def apply_args_to_config(config: ProjectConfig, args: argparse.Namespace, *, com
             setattr(current, keys[-1], value)
             print(f"🎯 {config_path} = {value}")
     
-    # === 2. JSON配置覆盖（优先级最高） ===
+    # === 2. JSON配置覆盖（优先级最高，但仅覆盖其声明的字段） ===
     if hasattr(args, 'config_json') and args.config_json:
         print("📝 应用JSON配置覆盖...")
         apply_json_config(config, args.config_json)
-        return  # JSON覆盖后，跳过常用参数
     
-    # === 3. 常用参数覆盖（仅在没有JSON时生效） ===
+    # === 3. 常用参数覆盖（当提供JSON时，仅覆盖JSON未声明的字段） ===
     print("🔧 应用常用参数覆盖...")
     
     # BERT架构参数
@@ -154,28 +180,34 @@ def apply_args_to_config(config: ProjectConfig, args: argparse.Namespace, *, com
     
     # 通用训练参数（根据 common_to 映射到对应阶段）
     if hasattr(args, 'epochs') and args.epochs:
-        if common_to == "finetune":
-            config.bert.finetuning.epochs = args.epochs
-            print(f"🎯 bert.finetuning.epochs = {args.epochs}")
-        else:
-            config.bert.pretraining.epochs = args.epochs
-            print(f"🎯 bert.pretraining.epochs = {args.epochs}")
+        target_path = 'bert.finetuning.epochs' if common_to == 'finetune' else 'bert.pretraining.epochs'
+        if not _json_has_path(json_dict_for_presence, target_path):
+            if common_to == "finetune":
+                config.bert.finetuning.epochs = args.epochs
+                print(f"🎯 bert.finetuning.epochs = {args.epochs}")
+            else:
+                config.bert.pretraining.epochs = args.epochs
+                print(f"🎯 bert.pretraining.epochs = {args.epochs}")
     
     if hasattr(args, 'batch_size') and args.batch_size:
-        if common_to == "finetune":
-            config.bert.finetuning.batch_size = args.batch_size
-            print(f"🎯 bert.finetuning.batch_size = {args.batch_size}")
-        else:
-            config.bert.pretraining.batch_size = args.batch_size
-            print(f"🎯 bert.pretraining.batch_size = {args.batch_size}")
+        target_path = 'bert.finetuning.batch_size' if common_to == 'finetune' else 'bert.pretraining.batch_size'
+        if not _json_has_path(json_dict_for_presence, target_path):
+            if common_to == "finetune":
+                config.bert.finetuning.batch_size = args.batch_size
+                print(f"🎯 bert.finetuning.batch_size = {args.batch_size}")
+            else:
+                config.bert.pretraining.batch_size = args.batch_size
+                print(f"🎯 bert.pretraining.batch_size = {args.batch_size}")
     
     if hasattr(args, 'learning_rate') and args.learning_rate:
-        if common_to == "finetune":
-            config.bert.finetuning.learning_rate = args.learning_rate
-            print(f"🎯 bert.finetuning.learning_rate = {args.learning_rate}")
-        else:
-            config.bert.pretraining.learning_rate = args.learning_rate
-            print(f"🎯 bert.pretraining.learning_rate = {args.learning_rate}")
+        target_path = 'bert.finetuning.learning_rate' if common_to == 'finetune' else 'bert.pretraining.learning_rate'
+        if not _json_has_path(json_dict_for_presence, target_path):
+            if common_to == "finetune":
+                config.bert.finetuning.learning_rate = args.learning_rate
+                print(f"🎯 bert.finetuning.learning_rate = {args.learning_rate}")
+            else:
+                config.bert.pretraining.learning_rate = args.learning_rate
+                print(f"🎯 bert.pretraining.learning_rate = {args.learning_rate}")
     
     # 任务参数
     if hasattr(args, 'task') and args.task:

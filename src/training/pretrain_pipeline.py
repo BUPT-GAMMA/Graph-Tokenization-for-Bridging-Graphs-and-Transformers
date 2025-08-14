@@ -229,7 +229,8 @@ def train_bert_mlm(
             
             # 训练一个epoch
             steps_per_epoch = len(train_dataloader)
-            log_interval = int(getattr(config.bert.pretraining, 'log_interval', 100))
+            log_interval = steps_per_epoch//10
+            print(f"log_interval: {log_interval}, steps_per_epoch: {steps_per_epoch}")
 
             def _on_step(step_idx: int, batch_loss: float, current_lr: float | None):
                 global_step = (epoch - 1) * steps_per_epoch + step_idx
@@ -264,7 +265,8 @@ def train_bert_mlm(
                 on_step=_on_step,
                 log_interval=log_interval,
                 epoch_num=epoch,
-                total_epochs=config.bert.pretraining.epochs
+                total_epochs=config.bert.pretraining.epochs,
+                log_style=getattr(config.system, 'log_style', 'online')
             )
             
             # 验证
@@ -272,7 +274,9 @@ def train_bert_mlm(
                 model=mlm_model,
                 dataloader=val_dataloader,
                 device=device,
-                desc=f"Epoch {epoch}/{config.bert.pretraining.epochs} - Validation"
+                epoch_num=epoch,
+                desc="Validation",
+                log_style=getattr(config.system, 'log_style', 'online')
             )
             
             epoch_time = time.time() - epoch_start_time

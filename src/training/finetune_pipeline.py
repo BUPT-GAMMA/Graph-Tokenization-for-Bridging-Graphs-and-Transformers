@@ -123,8 +123,8 @@ def run_finetune(
     # 训练时长统计与步级日志间隔
     epoch_times = []
     train_start_time = time.time()
-    log_interval = int(getattr(config.bert.finetuning, 'log_interval', 100))
     steps_per_epoch = len(train_dl)
+    log_interval = steps_per_epoch//10
     best_val_mae = float('inf')  # 仅用于回归任务的最佳MAE记录
 
     for epoch in range(config.bert.finetuning.epochs):
@@ -162,6 +162,7 @@ def run_finetune(
             log_interval=log_interval,
             epoch_num=epoch + 1,
             total_epochs=config.bert.finetuning.epochs,
+            log_style=getattr(config.system, 'log_style', 'online'),
         )
         val_metrics = evaluate_model(
             model,
@@ -170,6 +171,9 @@ def run_finetune(
             task,
             label_normalizer=normalizer if task == "regression" else None,
             aggregation_mode=aggregation_mode,
+            epoch_num=epoch + 1,
+            total_epochs=config.bert.finetuning.epochs,
+            log_style=getattr(config.system, 'log_style', 'online'),
         )
         epoch_time = time.time() - epoch_start
         epoch_times.append(epoch_time)
@@ -184,6 +188,9 @@ def run_finetune(
                 task,
                 label_normalizer=normalizer,
                 aggregation_mode=aggregation_mode,
+                epoch_num=epoch + 1,
+                total_epochs=config.bert.finetuning.epochs,
+                log_style=getattr(config.system, 'log_style', 'online'),
             )
 
         # 记录每个 epoch 的关键日志
@@ -283,6 +290,9 @@ def run_finetune(
         task, 
         label_normalizer=normalizer if task=="regression" else None,
         aggregation_mode=aggregation_mode,
+        epoch_num=None,
+        total_epochs=None,
+        log_style=getattr(config.system, 'log_style', 'online'),
     )
 
     # 记录测试指标（仅两种分支：回归/分类）

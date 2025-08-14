@@ -7,6 +7,7 @@ system:
   device: auto  # auto=自动选择GPU/CPU
   num_workers: 4  # 数据加载器线程数
   persistent_workers: true  # DataLoader常驻worker，利于后端实例常驻
+  log_style: online  # online=使用tqdm进度条; offline=每个epoch按10%输出摘要
 
 # 路径配置
 paths:

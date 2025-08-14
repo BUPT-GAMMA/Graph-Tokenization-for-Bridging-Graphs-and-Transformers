@@ -31,7 +31,7 @@ DEFAULT_DATASETS = ["zinc"]
 DEFAULT_METHODS = ["feuler", "eulerian", "cpp", "fcpp", "topo", "smiles"]
 DEFAULT_GPUS = [0,1,2,3]
 DEFAULT_BPE_SCENARIOS = ["raw", "all", "random", "gaussian"]
-DEFAULT_FT_HYPERPARAMS = [{"finetune_epochs": 60, "finetune_batch_size": 128, "finetune_learning_rate": 2e-5}]
+DEFAULT_FT_HYPERPARAMS = [{"finetune_epochs": 1, "finetune_batch_size": 1024, "finetune_learning_rate": 2e-5}]
 DEFAULT_AGGREGATION_MODE = "best"  # or "best"
 DEFAULT_LOG_DIR = "logs/batch_finetune"
 
@@ -176,6 +176,8 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
         "--device", "auto",
         "--aggregation_mode", aggregation_mode,
     ]
+    if os.environ.get("TG_LOG_STYLE", "").lower() in {"online", "offline"}:
+        cmd.extend(["--log_style", os.environ["TG_LOG_STYLE"].lower()])
 
     if task_type:
         cmd.extend(["--task", task_type])
@@ -314,6 +316,7 @@ def main():
     # JSON覆盖
     parser.add_argument("--config_json", type=str, default=None, help="JSON覆盖（字符串或文件路径）。会与增强开关合并")
     parser.add_argument("--log_dir", type=str, default=DEFAULT_LOG_DIR, help="子任务日志目录（每个任务单独一个文件）")
+    parser.add_argument("--log_style", type=str, choices=["online", "offline"], default=None, help="日志样式：online=使用tqdm；offline=每个epoch按10%输出摘要")
     parser.add_argument("--commands_only", action="store_true", help="仅记录将要运行的命令到统一文件（append），不实际执行")
     parser.add_argument("--commands_file", type=str, default=None, help="commands_only 模式下的统一命令文件（默认 ./commands.list）")
     parser.add_argument("--plain_logs", action="store_true", help="将子任务输出写入无ANSI/emoji的纯文本日志，解决乱码问题")
@@ -374,6 +377,10 @@ def main():
         print(f"🏷️ 实验名前缀: {args.exp_prefix}")
     if args.tag:
         print(f"🏷️ 实验名附加标识: {args.tag}")
+
+    if args.log_style:
+        combined_json_obj = merge_dicts(combined_json_obj, {"system": {"log_style": args.log_style}})
+        combined_config_json = json.dumps(combined_json_obj, ensure_ascii=False)
 
     tasks = create_task_list(
         datasets=datasets,
