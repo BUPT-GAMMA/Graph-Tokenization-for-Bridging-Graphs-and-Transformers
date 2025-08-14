@@ -5,12 +5,12 @@
 slurm_submit_simple.py — 为任务列表逐条提交单卡 sbatch 作业
 
 用法示例：
-  python slurm_submit_simple.py -t tasks.txt
+  python slurm_submit_simple.py -f tasks.txt
 
 特点：
 - 不扫描资源，不指定节点
 - 对于任务文件中的每一行（忽略空行与#注释），各自创建一个 sbatch 并提交
-- 每个任务固定申请 1 GPU 和指定数量 CPU（默认 1）
+- 每个任务固定申请 1 GPU 和指定数量 CPU（默认 2）
 """
 
 import argparse
@@ -53,8 +53,17 @@ def read_tasks_from_file(tasks_file_path: str):
     return tasks
 
 
+def sanitize_task_command(task: str) -> str:
+    """移除命令中显式设置的 CUDA_VISIBLE_DEVICES，以避免与 Slurm 分配冲突。"""
+    tokens = task.strip().split()
+    filtered_tokens = [t for t in tokens if not t.startswith("CUDA_VISIBLE_DEVICES=")]
+    sanitized = " ".join(filtered_tokens).strip()
+    return sanitized
+
+
 def generate_single_task_sbatch_script(task: str, cpus_per_task: int, job_name: str) -> str:
     """生成单个任务的 sbatch 脚本内容。"""
+    sanitized_task = sanitize_task_command(task)
     script_content = f"""#!/bin/bash
 #SBATCH --job-name={job_name}
 #SBATCH --nodes=1
@@ -66,7 +75,7 @@ def generate_single_task_sbatch_script(task: str, cpus_per_task: int, job_name: 
 
 mkdir -p logs
 echo "INFO: Starting {job_name}..."
-srun --exclusive -n1 --gres=gpu:1 {task}
+srun --exclusive -n1 {sanitized_task}
 echo "INFO: Finished {job_name}."
 """
     return script_content
@@ -82,7 +91,7 @@ def parse_sbatch_job_id(sbatch_stdout: str):
 
 def main():
     parser = argparse.ArgumentParser(description="按任务文件逐条提交单卡 sbatch 作业（不扫描资源不指定节点）")
-    parser.add_argument("--tasks-file", "-t", required=True, type=str, help="包含任务指令的文本文件（每行一个）")
+    parser.add_argument("--tasks-file", "-f", required=True, type=str, help="包含任务指令的文本文件（每行一个）")
     parser.add_argument("--cpus-per-task", type=int, default=2, help="每个任务申请的 CPU 数（默认 2）")
     parser.add_argument("--job-name-prefix", type=str, default="gzy_task", help="作业名前缀（默认 gzy_task）")
     parser.add_argument("--dry-run", action="store_true", help="仅显示将要提交的任务，不真正提交")
@@ -101,7 +110,8 @@ def main():
     if args.dry_run:
         for i, task in enumerate(tasks, start=1):
             job_name = f"{args.job_name_prefix}-{i}"
-            print(f"[{i}] {job_name}: {task}")
+            batch_content = generate_single_task_sbatch_script(task, args.cpus_per_task, job_name)
+            print(f"[{i}] {job_name}: {batch_content}")
         print("\nDRY RUN: 未提交任何作业。")
         return
 
@@ -137,6 +147,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 

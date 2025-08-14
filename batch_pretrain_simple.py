@@ -26,7 +26,7 @@ DEFAULT_DATASETS = ["zinc"]
 DEFAULT_METHODS = ["feuler", "eulerian", "cpp", "fcpp", "topo", "smiles"]
 DEFAULT_GPUS = [0, 1, 2, 3]
 DEFAULT_BPE_SCENARIOS = ["raw", "all", "random", "gaussian"]
-DEFAULT_HYPERPARAMS = [{"epochs": 10, "batch_size": 64, "learning_rate": 2e-4}]
+DEFAULT_HYPERPARAMS = [{"epochs": 1, "batch_size": 1024, "learning_rate": 2e-4}]
 DEFAULT_MLM_AUG_METHODS = [
     "random_deletion",
     "random_insertion",
@@ -165,6 +165,9 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
         "--experiment_name", task["experiment_name"],
         "--device", "auto"
     ]
+    # 透传离线日志样式：批量脚本通常倾向 offline 以减少tqdm
+    if os.environ.get("TG_LOG_STYLE", "").lower() in {"online", "offline"}:
+        cmd.extend(["--log_style", os.environ["TG_LOG_STYLE"].lower()])
 
     bpe_config = task["bpe_config"]
     if "bpe_encode_rank_mode" in bpe_config and bpe_config["bpe_encode_rank_mode"]:
@@ -288,6 +291,7 @@ def main():
     parser.add_argument("--config_json", type=str, default=None,
                         help="JSON覆盖（字符串或文件路径）。会与增强开关产生的覆盖合并")
     parser.add_argument("--log_dir", type=str, default=DEFAULT_LOG_DIR, help="子任务日志目录（每个任务单独一个文件）")
+    parser.add_argument("--log_style", type=str, choices=["online", "offline"], default=None, help="日志样式：online=使用tqdm；offline=每个epoch按10%输出摘要")
     parser.add_argument("--commands_only", action="store_true", help="仅记录将要运行的命令到统一文件（append），不实际执行")
     parser.add_argument("--commands_file", type=str, default=None, help="commands_only 模式下的统一命令文件；未指定则写入 <log_dir>/commands.list")
     parser.add_argument("--plain_logs", action="store_true", help="将子任务输出写入无ANSI/emoji的纯文本日志，解决乱码问题")
@@ -346,6 +350,11 @@ def main():
         print(f"🏷️ 实验名前缀: {args.exp_prefix}")
     if args.tag:
         print(f"🏷️ 实验名附加标识: {args.tag}")
+
+    # 如果提供了 --log_style，则以 JSON 覆盖传递给子进程（与直接 --log_style 二选一都可生效）
+    if args.log_style:
+        combined_json_obj = merge_dicts(combined_json_obj, {"system": {"log_style": args.log_style}})
+        combined_config_json = json.dumps(combined_json_obj, ensure_ascii=False)
 
     tasks = create_task_list(
         datasets=datasets,

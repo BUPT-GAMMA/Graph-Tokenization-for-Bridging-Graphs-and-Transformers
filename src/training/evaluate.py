@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from typing import Dict, Literal
+from src.utils.logger import get_logger
+import time
 import numpy as np
 import torch
 
 from src.utils.metrics import compute_regression_metrics, compute_classification_metrics
+logger = get_logger('tokenizerGraph.training.evaluate')
 
 
 @torch.no_grad()
@@ -16,10 +19,17 @@ def evaluate_model(
     *,
     label_normalizer=None,
     aggregation_mode: Literal["avg", "best"] = "avg",
+    epoch_num: int | None = None,
+    total_epochs: int | None = None,
+    log_style: Literal["online", "offline"] = "online",
 ) -> Dict[str, float]:
     model.eval()
     total_loss = 0.0
     steps = 0
+    # 统一到 tokenizerGraph 命名空间的 logger
+    start = time.time()
+    steps_per_epoch = len(dataloader) if hasattr(dataloader, "__len__") else None
+    next_percent_checkpoint = 10 if log_style == "offline" else None
     
     # 收集扁平化的所有预测、真实值和图ID
     all_preds, all_trues, all_gids = [], [], []
@@ -36,6 +46,21 @@ def evaluate_model(
         loss = outputs['loss']
         total_loss += loss.item()
         steps += 1
+
+        # offline 验证分段输出（online 由上层控制台/外部工具处理，这里不做 tqdm）
+        if log_style == "offline" and steps_per_epoch:
+            progress_pct = int(steps * 100 / max(1, steps_per_epoch))
+            if next_percent_checkpoint is not None and progress_pct >= next_percent_checkpoint:
+                avg_loss = total_loss / steps
+                elapsed = time.time() - start
+                est_total = (elapsed / max(1, steps)) * steps_per_epoch
+                eta = max(0.0, est_total - elapsed)
+                epoch_prefix = f"Epoch {epoch_num}/{total_epochs} - " if epoch_num and total_epochs else ""
+                logger.info(
+                    f"[Offline] {epoch_prefix}Validation {progress_pct}% | loss={avg_loss:.4f} | elapsed={elapsed:.1f}s | eta={eta:.1f}s"
+                )
+                while next_percent_checkpoint is not None and progress_pct >= next_percent_checkpoint:
+                    next_percent_checkpoint += 10
 
         if task == "regression":
             # 预测值是标准化的，在聚合前不要反向转换
