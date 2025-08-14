@@ -3,11 +3,11 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:1
+#SBATCH --time=12:00:00 
 #SBATCH --cpus-per-task=2
 #SBATCH --partition=a01
 #SBATCH --output=logs/gzy_task-1_%j.out
 #SBATCH --error=logs/gzy_task-1_%j.err
-#SBATCH --time=04:00:00
 
 
 export NCCL_IB_HCA=mlx5_0,mlx5_1,mlx5_2,mlx5_3,mlx5_4,mlx5_6,mlx5_7,mlx5_8
@@ -16,5 +16,5 @@ echo "INFO: Using Python at $(which python)"
 
 mkdir -p logs
 echo "INFO: Starting gzy_task-1..."
-srun --exclusive -n1 python run_pretrain.py --dataset zinc --method feuler --experiment_group test_aug --experiment_name zinc_pre_zinc_feuler_raw_noaug_e1 --device auto --bpe_encode_rank_mode none --epochs 1 --batch_size 1024 --learning_rate 0.0005 --config_json '{"bert": {"pretraining": {"mlm_augmentation_methods": []}}, "system": {"log_style": "offline"}}' --plain_logs
+srun --exclusive -n1 python run_pretrain.py --dataset zinc --method feuler --experiment_group test_aug --experiment_name zinc_pre_augon_zinc_feuler_raw_aug_e50 --device auto --bpe_encode_rank_mode none --epochs 50 --batch_size 1024 --learning_rate 0.0005 --config_json '{"bert": {"pretraining": {"mlm_augmentation_methods": ["random_deletion", "random_insertion", "random_replacement", "random_swap", "random_truncation"]}}, "system": {"log_style": "offline"}}' --plain_logs
 echo "INFO: Finished gzy_task-1."
