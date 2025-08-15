@@ -44,6 +44,9 @@ def resolve_finetuned_model_dir(config: ProjectConfig, *, model_dir: Optional[st
         cand_list: list[Path] = []
         if save_name:
             cand_list += [Path(base_dir, save_name, 'best'), Path(base_dir, save_name, 'final')]
+        else:
+            cand_list += [Path(base_dir, 'finetune', 'best'), Path(base_dir, 'finetune', 'final')]
+
         cand_list += [Path(base_dir, 'best'), Path(base_dir, 'final')]
         for c in cand_list:
             if _has_model_files(c):
@@ -130,6 +133,7 @@ def run_infer(
     model = build_task_model(config, task, pretrained=pretrained, num_classes=num_classes)
 
     finetuned_dir = resolve_finetuned_model_dir(config, model_dir=model_dir, save_name=save_name)
+    logger.info(f"加载微调模型权重: {finetuned_dir}")
     state = torch.load(finetuned_dir / 'pytorch_model.bin', map_location='cpu')
     model.load_state_dict(state)
 

@@ -169,8 +169,10 @@ def evaluate_model(
                         weights = aggregator(feats_t, mask=mask_t)  # [1, K]
                         preds_t = torch.from_numpy(preds_norm.astype(np.float32)).unsqueeze(0).to(agg_dev)
                         y_hat_norm = (weights * preds_t).sum(dim=1).squeeze(0).item()
-                    # 反标准化
-                    agg_pred = float(label_normalizer.inverse_transform([[y_hat_norm]])[0][0])
+                    # 反标准化：本项目的 LabelNormalizer.inverse_transform 返回 List[float]
+                    inv = label_normalizer.inverse_transform([float(y_hat_norm)])
+                    assert isinstance(inv, list) and len(inv) == 1, "LabelNormalizer.inverse_transform 应返回长度为1的list"
+                    agg_pred = float(inv[0])
             else:
                 # 先反标准化，再聚合
                 preds_for_gid_orig = np.array(label_normalizer.inverse_transform(preds_for_gid.reshape(-1, 1))).flatten()
