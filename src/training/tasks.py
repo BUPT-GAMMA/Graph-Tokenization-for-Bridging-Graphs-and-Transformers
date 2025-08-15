@@ -12,8 +12,17 @@ from src.models.bert.data import (
 
 
 
-def _effective_max_len(seqs, max_pos: int) -> int:
-    return min(max(len(s) for s in seqs) + 2, max_pos) if seqs else max_pos
+def _effective_max_len(seqs, max_pos: int, config=None) -> int:
+    if not seqs:
+        return max_pos
+    try:
+        # 复用与预训练一致的策略（max 或 sigma_k）
+        from src.models.bert.data import _candidate_len_from_policy
+        cand = _candidate_len_from_policy([len(s) for s in seqs], config)
+        cand_plus2 = int(cand) + 2
+    except Exception:
+        cand_plus2 = max(len(s) for s in seqs) + 2
+    return min(int(cand_plus2), int(max_pos))
 
 
 def build_regression_datasets(
@@ -27,9 +36,9 @@ def build_regression_datasets(
     normalizer.fit(train_labels)
 
     max_pos = int(pretrained.config.max_position_embeddings)
-    train_eff = _effective_max_len(train_sequences, max_pos)
-    val_eff = _effective_max_len(val_sequences, max_pos)
-    test_eff = _effective_max_len(test_sequences, max_pos)
+    train_eff = _effective_max_len(train_sequences, max_pos, config)
+    val_eff = _effective_max_len(val_sequences, max_pos, config)
+    test_eff = _effective_max_len(test_sequences, max_pos, config)
 
     # 创建统一的transforms
     transforms = create_transforms_from_config(config, pretrained.vocab_manager.get_valid_tokens(), "regression")
@@ -66,9 +75,9 @@ def build_classification_datasets(
     num_classes: int,
 ):
     max_pos = int(pretrained.config.max_position_embeddings)
-    train_eff = _effective_max_len(train_sequences, max_pos)
-    val_eff = _effective_max_len(val_sequences, max_pos)
-    test_eff = _effective_max_len(test_sequences, max_pos)
+    train_eff = _effective_max_len(train_sequences, max_pos, config)
+    val_eff = _effective_max_len(val_sequences, max_pos, config)
+    test_eff = _effective_max_len(test_sequences, max_pos, config)
 
     # 创建统一的transforms
     transforms = create_transforms_from_config(config, pretrained.vocab_manager.get_valid_tokens(), "classification")

@@ -30,8 +30,9 @@ DEFAULT_EXPERIMENT_GROUP = "test_zinc_10multi_4bpe-way"
 DEFAULT_DATASETS = ["zinc"]
 DEFAULT_METHODS = ["feuler", "eulerian", "cpp", "fcpp", "topo", "smiles"]
 DEFAULT_GPUS = [0,1,2,3]
-DEFAULT_BPE_SCENARIOS = ["raw", "all", "random", "gaussian"]
-DEFAULT_FT_HYPERPARAMS = [{"finetune_epochs": 30, "finetune_batch_size": 1024, "finetune_learning_rate": 5e-5}]
+# DEFAULT_BPE_SCENARIOS = ["raw", "all", "random", "gaussian"]
+DEFAULT_BPE_SCENARIOS = ["all"]
+DEFAULT_FT_HYPERPARAMS = [{"epochs": 60, "batch_size": 1024, "learning_rate": 5e-5}]
 DEFAULT_AGGREGATION_MODE = "best"  # or "best"
 DEFAULT_LOG_DIR = "logs/batch_finetune"
 
@@ -109,21 +110,21 @@ def build_bpe_test_configs(scenarios: List[str]) -> List[Dict[str, Any]]:
     return configs
 
 
-def build_hyperparams_list(hp_json: Optional[str], ft_epochs: Optional[int],
-                           ft_batch_size: Optional[int], ft_learning_rate: Optional[float]) -> List[Dict[str, Any]]:
+def build_hyperparams_list(hp_json: Optional[str], epochs: Optional[int],
+                           batch_size: Optional[int], learning_rate: Optional[float]) -> List[Dict[str, Any]]:
     if hp_json:
         loaded = load_json_input(hp_json)
         if not isinstance(loaded, list):
             raise ValueError("--hyperparams_json 必须是包含若干对象的JSON数组")
         for item in loaded:
-            if not isinstance(item, dict) or not {"finetune_epochs", "finetune_batch_size", "finetune_learning_rate"} <= set(item.keys()):
-                raise ValueError("--hyperparams_json 中每个对象必须包含 finetune_epochs, finetune_batch_size, finetune_learning_rate 三个键")
+            if not isinstance(item, dict) or not {"epochs", "batch_size", "learning_rate"} <= set(item.keys()):
+                raise ValueError("--hyperparams_json 中每个对象必须包含 epochs, batch_size, learning_rate 三个键")
         return loaded
-    if ft_epochs is None and ft_batch_size is None and ft_learning_rate is None:
+    if epochs is None and batch_size is None and learning_rate is None:
         return DEFAULT_FT_HYPERPARAMS
-    if ft_epochs is None or ft_batch_size is None or ft_learning_rate is None:
-        raise ValueError("使用独立参数指定微调超参数时，必须同时提供 --finetune_epochs, --finetune_batch_size, --finetune_learning_rate")
-    return [{"finetune_epochs": int(ft_epochs), "finetune_batch_size": int(ft_batch_size), "finetune_learning_rate": float(ft_learning_rate)}]
+    if epochs is None or batch_size is None or learning_rate is None:
+        raise ValueError("使用独立参数指定微调超参数时，必须同时提供 --epochs, --batch_size, --learning_rate")
+    return [{"epochs": int(epochs), "batch_size": int(batch_size), "learning_rate": float(learning_rate)}]
 
 
 def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: List[Dict[str, Any]],
@@ -203,9 +204,9 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
     if task["hyperparams"]:
         params = task["hyperparams"]
         cmd.extend([
-            "--epochs", str(params["finetune_epochs"]),
-            "--batch_size", str(params["finetune_batch_size"]),
-            "--learning_rate", str(params["finetune_learning_rate"])
+            "--epochs", str(params["epochs"]),
+            "--batch_size", str(params["batch_size"]),
+            "--learning_rate", str(params["learning_rate"])
         ])
     
     if combined_config_json:
@@ -314,9 +315,9 @@ def main():
     parser.add_argument("--bpe_scenarios", type=str, default=','.join(DEFAULT_BPE_SCENARIOS), help="BPE测试场景，逗号分隔: raw,all,random,gaussian（仅选择类型）")
 
     # 微调超参数（单组）或 JSON 多组
-    parser.add_argument("--finetune_epochs", type=int, default=None, help="微调轮数（单组超参用）")
-    parser.add_argument("--finetune_batch_size", type=int, default=None, help="微调批次大小（单组超参用）")
-    parser.add_argument("--finetune_learning_rate", type=float, default=None, help="微调学习率（单组超参用）")
+    parser.add_argument("--epochs", type=int, default=None, help="微调轮数（单组超参用）")
+    parser.add_argument("--batch_size", type=int, default=None, help="微调批次大小（单组超参用）")
+    parser.add_argument("--learning_rate", type=float, default=None, help="微调学习率（单组超参用）")
     parser.add_argument("--hyperparams_json", type=str, default=None, help="多组超参数的JSON（字符串或文件路径），数组形式")
 
     # 任务与评估
@@ -350,9 +351,9 @@ def main():
 
     hyperparams_list = build_hyperparams_list(
         hp_json=args.hyperparams_json,
-        ft_epochs=args.finetune_epochs,
-        ft_batch_size=args.finetune_batch_size,
-        ft_learning_rate=args.finetune_learning_rate,
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        learning_rate=args.learning_rate,
     )
 
     combined_json_obj: Dict[str, Any] = {}

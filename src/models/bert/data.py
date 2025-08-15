@@ -27,6 +27,23 @@ class NoOpTransform(TokenTransform):
 logger = logging.getLogger(__name__)
 
 
+def _candidate_len_from_policy(lengths: List[int], project_config) -> int:
+    """根据配置策略返回候选长度（不含特殊token +2）。"""
+    policy = project_config.bert.architecture.max_len_policy
+    policy = str(policy).lower()
+    if policy == 'sigma':
+        # 支持 'sigma' 或 'sigma3'，k 可通过配置提供
+        k = project_config.bert.architecture.max_len_sigma_k
+        import math as _math
+        import numpy as _np
+        arr = _np.asarray(lengths, dtype=_np.int64)
+        mean = float(arr.mean()) if arr.size > 0 else 0.0
+        std = float(arr.std(ddof=0)) if arr.size > 0 else 0.0
+        return int(_math.ceil(mean + k * std))
+    # 默认：max
+    return max(lengths) if lengths else 0
+
+
 def compute_effective_max_length(token_sequences: List[List[int]], project_config, split_name: Optional[str] = None) -> int:
     """根据数据与配置计算有效的最大序列长度。
 
@@ -46,7 +63,9 @@ def compute_effective_max_length(token_sequences: List[List[int]], project_confi
     """
     assert token_sequences, "token_sequences 不能为空"
 
-    data_max_plus_2 = max(len(seq) for seq in token_sequences) + 2
+    lengths = [len(seq) for seq in token_sequences]
+    data_candidate = _candidate_len_from_policy(lengths, project_config)
+    data_max_plus_2 = int(data_candidate) + 2
     upper_bound = int(project_config.bert.architecture.max_seq_length)
     max_pos = int(project_config.bert.architecture.max_position_embeddings)
 
@@ -59,15 +78,16 @@ def compute_effective_max_length(token_sequences: List[List[int]], project_confi
             f"请增大 bert.architecture.max_position_embeddings 或降低 bert.architecture.max_seq_length。"
         )
 
+    policy = project_config.bert.architecture.max_len_policy
     if split_name:
         logger.info(
             f"✅ 有效最大长度{f' [{split_name}]' if split_name else ''}: {effective}"
-            f" (数据侧: {data_max_plus_2}, 上限: {upper_bound}, 位置嵌入: {max_pos})"
+            f" (策略: {policy}, 数据侧: {data_max_plus_2}, 上限: {upper_bound}, 位置嵌入: {max_pos})"
         )
     else:
         logger.info(
             f"✅ 有效最大长度: {effective}"
-            f" (数据侧: {data_max_plus_2}, 上限: {upper_bound}, 位置嵌入: {max_pos})"
+            f" (策略: {policy}, 数据侧: {data_max_plus_2}, 上限: {upper_bound}, 位置嵌入: {max_pos})"
         )
 
     return effective
