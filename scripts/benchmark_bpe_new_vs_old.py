@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-"""BPE训练性能对比（基线 vs 新引擎）"""
-#!/usr/bin/env python3
 """
 BPE 训练性能对比脚本（基线 vs 新引擎）
 - 基线：standard 或 minbpe

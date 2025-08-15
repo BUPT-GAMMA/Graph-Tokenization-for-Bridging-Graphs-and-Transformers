@@ -19,9 +19,16 @@ logger = get_logger('tokenizerGraph.training.finetune_pipeline')
 logger.propagate = False
 
 
-def load_pretrained_backbone(config: ProjectConfig):
+def load_pretrained_backbone(config: ProjectConfig, pretrained_dir: Optional[str] = None):
     from src.models.bert.model import BertMLM, create_bert_mlm
     from pathlib import Path
+
+    # 显式提供的预训练目录优先
+    if pretrained_dir is not None:
+        p = Path(pretrained_dir)
+        if (p / 'config.bin').exists() and (p / 'pytorch_model.bin').exists():
+            return BertMLM.load_model(str(p), config)
+        raise FileNotFoundError(f"预训练目录无效或缺少必要文件: {pretrained_dir}")
 
     # 优先使用主目录结构：model/<group>/<exp_name>/<dataset>/<method-variant>/(best|final)
     # 注意：config.get_model_dir() 已经返回到 ".../<dataset>/<method-variant>" 层级
@@ -69,9 +76,10 @@ def run_finetune(
     *,
     task: Literal["regression", "classification"],
     num_classes: Optional[int] = None,
-    aggregation_mode: Literal["avg", "best"] = "avg",
+    aggregation_mode: Literal["avg", "best", "learned"] = "avg",
     save_name_prefix: Optional[str] = None,
     save_name_suffix: Optional[str] = None,
+    pretrained_dir: Optional[str] = None,
 ) -> Dict[str, Any]:
     dataset_name = config.dataset.name
     method = config.serialization.method
@@ -79,7 +87,7 @@ def run_finetune(
     udi = UnifiedDataInterface(config=config, dataset=dataset_name)
 
     # 加载预训练 backbone 并构建任务模型
-    pretrained = load_pretrained_backbone(config)
+    pretrained = load_pretrained_backbone(config, pretrained_dir=pretrained_dir)
     model = build_task_model(config, task, pretrained=pretrained, num_classes=num_classes)
 
 
@@ -103,9 +111,9 @@ def run_finetune(
     logs_dir.mkdir(parents=True, exist_ok=True)
     _log_name = "finetune"
     if save_name_prefix:
-        _log_name = f"{save_name_prefix}{_log_name}"
+        _log_name = f"{save_name_prefix}_{_log_name}"
     if save_name_suffix:
-        _log_name = f"{_log_name}{save_name_suffix}"
+        _log_name = f"{_log_name}_{save_name_suffix}"
     (logs_dir / _log_name).mkdir(parents=True, exist_ok=True)
     writer = SummaryWriter(logs_dir / _log_name / "tensorboard")
 
@@ -133,9 +141,9 @@ def run_finetune(
     _base = config.get_model_dir()
     _save_name = "finetune"
     if save_name_prefix:
-        _save_name = f"{save_name_prefix}{_save_name}"
+        _save_name = f"{save_name_prefix}_{_save_name}"
     if save_name_suffix:
-        _save_name = f"{_save_name}{save_name_suffix}"
+        _save_name = f"{_save_name}_{save_name_suffix}"
     _save_root = _base / _save_name
     _save_root.mkdir(parents=True, exist_ok=True)
     best_dir = _save_root / "best"
@@ -185,13 +193,15 @@ def run_finetune(
             total_epochs=config.bert.finetuning.epochs,
             log_style=getattr(config.system, 'log_style', 'online'),
         )
+        # 训练期验证：若选择 learned，则在聚合器未训练前强制使用 avg
+        _val_agg_mode = aggregation_mode if aggregation_mode != "learned" else "avg"
         val_metrics = evaluate_model(
             model,
             val_dl,
             device,
             task,
             label_normalizer=normalizer if task == "regression" else None,
-            aggregation_mode=aggregation_mode,
+            aggregation_mode=_val_agg_mode,
             epoch_num=epoch + 1,
             total_epochs=config.bert.finetuning.epochs,
             log_style=getattr(config.system, 'log_style', 'online'),
@@ -305,16 +315,46 @@ def run_finetune(
         with open(final_dir / "label_normalizer.pkl", "wb") as f:
             pickle.dump(normalizer, f)
 
+    # 可学习聚合：在测试前训练聚合器
+    aggregator = None
+    if aggregation_mode == "learned":
+        try:
+            from src.training.learned_aggregation import train_variant_aggregator
+            agg_cfg: Dict[str, Any] = {
+                "hidden_dim": 256,
+                "dropout": 0.1,
+                "epochs": 10,
+                "lr": 1e-3,
+                "weight_decay": 1e-2,
+                "early_stopping_patience": 5,
+                "use_pred_as_feat": (task == "regression"),
+                "batch_size": 64,
+            }
+            aggregator = train_variant_aggregator(
+                model=model,
+                train_loader=train_dl,
+                val_loader=val_dl,
+                device=device,
+                task=task,
+                label_normalizer=normalizer if task == "regression" else None,
+                save_dir=str(final_dir / "aggregator"),
+                cfg=agg_cfg,
+            )
+        except Exception as e:
+            logger.warning(f"训练聚合器失败，将回退到 avg 聚合: {e}")
+            aggregator = None
+
     test_metrics = evaluate_model(
         model, 
         test_dl, 
         device, 
         task, 
         label_normalizer=normalizer if task=="regression" else None,
-        aggregation_mode=aggregation_mode,
+        aggregation_mode=("learned" if aggregator is not None else ("avg" if aggregation_mode == "learned" else aggregation_mode)),
         epoch_num=None,
         total_epochs=None,
         log_style=getattr(config.system, 'log_style', 'online'),
+        aggregator=aggregator,
     )
 
     # 记录测试指标（仅两种分支：回归/分类）
@@ -384,6 +424,7 @@ def run_finetune(
         'test_metrics': test_metrics,
         'best_dir': str(best_dir),
         'final_dir': str(final_dir),
+        'aggregator_dir': str(final_dir / "aggregator") if aggregator is not None else None,
     }
 
 
