@@ -308,7 +308,7 @@ class BertMLM(nn.Module):
                                map_location='cpu')
         model.load_state_dict(state_dict)
         
-        print(f"模型已从 {model_path} 加载完成")
+        print(f"MLM模型已从 {model_path}/pytorch_model.bin 加载完成")
         return model
 
 
