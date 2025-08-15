@@ -38,6 +38,7 @@ python batch_pretrain_simple.py \
   python batch_finetune_simple.py \
   --experiment_group test_aug \
   --exp_prefix zinc_pre_augon_ \
+  --save_name_suffix avg \
   --datasets zinc \
   --gpus 0 \
   --bpe_scenarios raw,all,random,gaussian \

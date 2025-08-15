@@ -70,6 +70,8 @@ def run_finetune(
     task: Literal["regression", "classification"],
     num_classes: Optional[int] = None,
     aggregation_mode: Literal["avg", "best"] = "avg",
+    save_name_prefix: Optional[str] = None,
+    save_name_suffix: Optional[str] = None,
 ) -> Dict[str, Any]:
     dataset_name = config.dataset.name
     method = config.serialization.method
@@ -99,8 +101,13 @@ def run_finetune(
     from torch.utils.tensorboard import SummaryWriter
     logs_dir = config.get_logs_dir()
     logs_dir.mkdir(parents=True, exist_ok=True)
-    (logs_dir / "finetune").mkdir(parents=True, exist_ok=True)
-    writer = SummaryWriter(logs_dir / "finetune" / "tensorboard")
+    _log_name = "finetune"
+    if save_name_prefix:
+        _log_name = f"{save_name_prefix}{_log_name}"
+    if save_name_suffix:
+        _log_name = f"{_log_name}{save_name_suffix}"
+    (logs_dir / _log_name).mkdir(parents=True, exist_ok=True)
+    writer = SummaryWriter(logs_dir / _log_name / "tensorboard")
 
     wandb_logger = None
     if getattr(config.logging, 'use_wandb', False):
@@ -122,8 +129,14 @@ def run_finetune(
     best_val = float('inf')
     patience = config.bert.finetuning.early_stopping_patience
     patience_ctr = 0
-    # 为避免覆盖预训练权重，微调阶段统一保存到 finetune 子目录
-    _save_root = config.get_model_dir() / "finetune"
+    # 为避免覆盖预训练权重，微调阶段保存到独立子目录，可选加前后缀
+    _base = config.get_model_dir()
+    _save_name = "finetune"
+    if save_name_prefix:
+        _save_name = f"{save_name_prefix}{_save_name}"
+    if save_name_suffix:
+        _save_name = f"{_save_name}{save_name_suffix}"
+    _save_root = _base / _save_name
     _save_root.mkdir(parents=True, exist_ok=True)
     best_dir = _save_root / "best"
     final_dir = _save_root / "final"
@@ -308,16 +321,16 @@ def run_finetune(
     try:
         writer.add_scalar('Test/Loss', float(test_metrics['val_loss']), 0)
         if task == "regression":
-            writer.add_scalar('Regression/Test_MAE', float(test_metrics['mae']), 0)
-            writer.add_scalar('Regression/Test_MSE', float(test_metrics['mse']), 0)
-            writer.add_scalar('Regression/Test_RMSE', float(test_metrics['rmse']), 0)
-            writer.add_scalar('Regression/Test_R2', float(test_metrics['r2']), 0)
-            writer.add_scalar('Regression/Test_Correlation', float(test_metrics['correlation']), 0)
+            writer.add_scalar('Test/Regression_MAE', float(test_metrics['mae']), 0)
+            writer.add_scalar('Test/Regression_MSE', float(test_metrics['mse']), 0)
+            writer.add_scalar('Test/Regression_RMSE', float(test_metrics['rmse']), 0)
+            writer.add_scalar('Test/Regression_R2', float(test_metrics['r2']), 0)
+            writer.add_scalar('Test/Regression_Correlation', float(test_metrics['correlation']), 0)
         else:
-            writer.add_scalar('Classification/Test_Accuracy', float(test_metrics['accuracy']), 0)
-            writer.add_scalar('Classification/Test_Precision', float(test_metrics['precision']), 0)
-            writer.add_scalar('Classification/Test_Recall', float(test_metrics['recall']), 0)
-            writer.add_scalar('Classification/Test_F1', float(test_metrics['f1']), 0)
+            writer.add_scalar('Test/Classification_Accuracy', float(test_metrics['accuracy']), 0)
+            writer.add_scalar('Test/Classification_Precision', float(test_metrics['precision']), 0)
+            writer.add_scalar('Test/Classification_Recall', float(test_metrics['recall']), 0)
+            writer.add_scalar('Test/Classification_F1', float(test_metrics['f1']), 0)
 
         if wandb_logger is not None:
             if task == "regression":
