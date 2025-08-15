@@ -312,16 +312,21 @@ def main():
         "--aggregation_mode",
         type=str,
         default="avg",
-        choices=["avg", "best"],
-        help="测试时增强（TTA）的聚合模式: "
-             "'avg' - 对多重采样结果取平均 (用于报告); "
-             "'best' - 选择最优结果 (用于分析模型上限)。"
+        choices=["avg", "best", "learned"],
+        help=(
+            "测试时增强（TTA）的聚合模式: "
+            "'avg' - 对多重采样结果取平均 (用于报告); "
+            "'best' - 选择最优结果 (用于分析上限，含标签信息，勿用于正式报告); "
+            "'learned' - 使用单独训练的加权聚合器（推荐）。"
+        )
     )
     # 仅影响保存目录命名的前后缀（不影响加载预训练所用 experiment_name）
     parser.add_argument("--save_name_prefix", type=str, default=None,
                         help="仅用于保存目录的实验名前缀（预训练加载仍使用原 experiment_name）")
     parser.add_argument("--save_name_suffix", type=str, default=None,
                         help="仅用于保存目录的实验名后缀（预训练加载仍使用原 experiment_name）")
+    parser.add_argument("--pretrained_dir", type=str, default=None,
+                        help="显式指定预训练权重目录（包含 config.bin 与 pytorch_model.bin）；优先于按 experiment_name 推断")
     
     # 可选：分类任务显式指定类别数（否则从数据集元信息自动推断）
     parser.add_argument(
@@ -383,6 +388,7 @@ def main():
             save_name_prefix=args.save_name_prefix,
             save_name_suffix=args.save_name_suffix,
         )
+        # 注意：如需显式指定预训练目录，请在上方 run_finetuning 中加入 pretrained_dir=args.pretrained_dir 并在 pipeline 中接收
         
         print("\n" + "="*60)
         print("🎉 微调完成!")

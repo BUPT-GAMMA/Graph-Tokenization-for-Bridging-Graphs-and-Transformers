@@ -322,7 +322,7 @@ def main():
     # 任务与评估
     parser.add_argument("--task", type=str, default=None, choices=["regression", "classification"], help="任务类型（不指定则自动推断）")
     parser.add_argument("--target_property", type=str, default=None, help="回归目标属性（可选；不指定则按数据集默认推断）")
-    parser.add_argument("--aggregation_mode", type=str, default=DEFAULT_AGGREGATION_MODE, choices=["avg", "best"], help="测试时增强的聚合模式")
+    parser.add_argument("--aggregation_mode", type=str, default=DEFAULT_AGGREGATION_MODE, choices=["avg", "best", "learned"], help="测试时增强的聚合模式")
     parser.add_argument("--num_classes", type=int, default=None, help="分类类别数（可选；不提供则自动推断）")
 
     # 数据增强（回归）

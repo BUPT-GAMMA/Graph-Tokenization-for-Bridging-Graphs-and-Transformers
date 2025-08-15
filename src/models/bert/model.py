@@ -405,11 +405,11 @@ class BertRegression(nn.Module):
         
         # 池化: [batch_size, seq_len, hidden_size] -> [batch_size, hidden_size]
         pooled_output = self._pool_sequence(sequence_output, attention_mask)
-        
+
         # 回归预测: [batch_size, hidden_size] -> [batch_size, 1]
         predictions = self.regression_head(pooled_output)
-        
-        outputs: Dict[str, torch.Any] = {'predictions': predictions}
+
+        outputs: Dict[str, torch.Any] = {'predictions': predictions, 'pooled': pooled_output}
         
         # 计算损失
         if labels is not None:
@@ -568,7 +568,7 @@ class BertClassification(nn.Module):
         # 分类预测: [batch_size, hidden_size] -> [batch_size, num_classes]
         logits = self.classification_head(pooled_output)
         
-        outputs: Dict[str, torch.Any] = {'logits': logits}
+        outputs: Dict[str, torch.Any] = {'logits': logits, 'pooled': pooled_output}
         
         # 计算损失
         if labels is not None:
