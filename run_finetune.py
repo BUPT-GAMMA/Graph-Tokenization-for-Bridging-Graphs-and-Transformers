@@ -213,7 +213,14 @@ def check_pretrained_model(config: ProjectConfig) -> bool:
         return False
 
 
-def run_finetuning(config: ProjectConfig, task: str, num_classes: int | None = None, aggregation_mode: str = "avg") -> dict:
+def run_finetuning(
+    config: ProjectConfig,
+    task: str,
+    num_classes: int | None = None,
+    aggregation_mode: str = "avg",
+    save_name_prefix: str | None = None,
+    save_name_suffix: str | None = None,
+) -> dict:
     """
     运行BERT微调
     
@@ -243,7 +250,14 @@ def run_finetuning(config: ProjectConfig, task: str, num_classes: int | None = N
     # 运行微调
     print("🎓 开始微调...")
     try:
-        result = run_finetune(config, task=task, num_classes=num_classes, aggregation_mode=aggregation_mode)
+        result = run_finetune(
+            config,
+            task=task,
+            num_classes=num_classes,
+            aggregation_mode=aggregation_mode,
+            save_name_prefix=save_name_prefix,
+            save_name_suffix=save_name_suffix,
+        )
         print("✅ 微调完成!")
         print(f"📊 最优验证损失: {result['best_val_loss']:.4f}")
         
@@ -303,6 +317,11 @@ def main():
              "'avg' - 对多重采样结果取平均 (用于报告); "
              "'best' - 选择最优结果 (用于分析模型上限)。"
     )
+    # 仅影响保存目录命名的前后缀（不影响加载预训练所用 experiment_name）
+    parser.add_argument("--save_name_prefix", type=str, default=None,
+                        help="仅用于保存目录的实验名前缀（预训练加载仍使用原 experiment_name）")
+    parser.add_argument("--save_name_suffix", type=str, default=None,
+                        help="仅用于保存目录的实验名后缀（预训练加载仍使用原 experiment_name）")
     
     # 可选：分类任务显式指定类别数（否则从数据集元信息自动推断）
     parser.add_argument(
@@ -356,7 +375,14 @@ def main():
     
     # 运行微调
     try:
-        result = run_finetuning(config, task, num_classes, aggregation_mode=args.aggregation_mode)
+        result = run_finetuning(
+            config,
+            task,
+            num_classes,
+            aggregation_mode=args.aggregation_mode,
+            save_name_prefix=args.save_name_prefix,
+            save_name_suffix=args.save_name_suffix,
+        )
         
         print("\n" + "="*60)
         print("🎉 微调完成!")

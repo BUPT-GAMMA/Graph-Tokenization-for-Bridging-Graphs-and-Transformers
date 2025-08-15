@@ -167,7 +167,9 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
              task_type: Optional[str], target_property: Optional[str], aggregation_mode: str,
              num_classes: Optional[int], log_dir: Optional[str],
              commands_only: bool = False, plain_logs: bool = False,
-             commands_file: Optional[str] = None) -> Optional[subprocess.Popen]:
+             commands_file: Optional[str] = None,
+             save_name_prefix: Optional[str] = None,
+             save_name_suffix: Optional[str] = None) -> Optional[subprocess.Popen]:
     cmd = [
         "python", "run_finetune.py",
         "--dataset", task["dataset"],
@@ -189,6 +191,10 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
         finetune_extras.extend(["--target_property", target_property])
     if num_classes is not None:
         finetune_extras.extend(["--num_classes", str(num_classes)])
+    if save_name_prefix:
+        finetune_extras.extend(["--save_name_prefix", save_name_prefix])
+    if save_name_suffix:
+        finetune_extras.extend(["--save_name_suffix", save_name_suffix])
 
     bpe_config = task["bpe_config"]
     if "bpe_encode_rank_mode" in bpe_config and bpe_config["bpe_encode_rank_mode"]:
@@ -330,6 +336,8 @@ def main():
     parser.add_argument("--commands_only", action="store_true", help="仅记录将要运行的命令到统一文件（append），不实际执行")
     parser.add_argument("--commands_file", type=str, default=None, help="commands_only 模式下的统一命令文件（默认 ./commands.list）")
     parser.add_argument("--plain_logs", action="store_true", help="将子任务输出写入无ANSI/emoji的纯文本日志，解决乱码问题")
+    parser.add_argument("--save_name_prefix", type=str, default=None, help="仅用于保存目录的实验名前缀（不影响预训练加载）")
+    parser.add_argument("--save_name_suffix", type=str, default=None, help="仅用于保存目录的实验名后缀（不影响预训练加载）")
 
     args = parser.parse_args()
 
@@ -441,6 +449,8 @@ def main():
                         commands_only=args.commands_only,
                         plain_logs=args.plain_logs,
                         commands_file=args.commands_file,
+                        save_name_prefix=args.save_name_prefix,
+                        save_name_suffix=args.save_name_suffix,
                     )
                     if args.commands_only:
                         continue
