@@ -156,13 +156,34 @@ def _lazy_import_loader(loader_name: str):
     elif loader_name == "colors3":
         from .colors3_loader import COLORS3Loader
         return COLORS3Loader
+    elif loader_name == "proteins":
+        from .proteins_loader import PROTEINSLoader
+        return PROTEINSLoader
+    elif loader_name == "synthetic":
+        from .synthetic_loader import SYNTHETICLoader
+        return SYNTHETICLoader
+    elif loader_name == "mutagenicity":
+        from .mutagenicity_loader import MutagenicityLoader
+        return MutagenicityLoader
+    elif loader_name == "coil_del":
+        from .coil_del_loader import COILDELLoader
+        return COILDELLoader
+    elif loader_name == "dblp_v1":
+        from .dblp_v1_loader import DBLPv1Loader
+        return DBLPv1Loader
+    elif loader_name == "dd":
+        from .dd_loader import DDLoader
+        return DDLoader
+    elif loader_name == "twitter_real_graph_partial":
+        from .twitter_real_graph_partial_loader import TWITTERRealGraphPartialLoader
+        return TWITTERRealGraphPartialLoader
     else:
         raise ValueError(f"Unknown loader: {loader_name}")
 
 def _register_all_loaders():
     """注册所有数据加载器 - 使用字符串注册，延迟导入"""
     # 注册所有支持的加载器名称，实际类在使用时才导入
-    loader_names = ["qm9", "qm9test", "zinc", "aqsol", "mnist", "mnist_raw", "colors3"]
+    loader_names = ["qm9", "qm9test", "zinc", "aqsol", "mnist", "mnist_raw", "colors3", "proteins", "synthetic", "mutagenicity", "coil_del", "dblp_v1", "dd", "twitter_real_graph_partial"]
     
     for name in loader_names:
         # 注册延迟导入函数而不是直接导入类
