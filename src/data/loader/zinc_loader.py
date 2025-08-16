@@ -1,14 +1,12 @@
 """
-QM9数据加载器
+ZINC数据加载器
 ================
 
-直接从预处理数据目录读取QM9数据集。
+直接从预处理数据目录读取ZINC数据集。
 支持多任务标签选择和多种SMILES格式。
 """
 
- 
 import time
- 
 import numpy as np
 from typing import Dict, List, Tuple, Optional, Any
 from pathlib import Path
@@ -18,7 +16,7 @@ import pickle
 import dgl
 import torch
 
-from .base_loader import BaseDataLoader
+from ..base_loader import BaseDataLoader
 from config import ProjectConfig
 from utils.logger import get_logger
 from tqdm import tqdm
@@ -26,30 +24,25 @@ from tqdm import tqdm
 logger = get_logger(__name__)
 
 
-class QM9Loader(BaseDataLoader):
-    """QM9数据加载器 - 支持多任务和数据集划分"""
+class ZINCLoader(BaseDataLoader):
+    """ZINC数据加载器 - 支持多任务和数据集划分"""
     
-    # QM9数据集信息
-    QM9_PROPERTIES = [
-        "mu", "alpha", "homo", "lumo", "gap", "r2", "zpve", 
-        "u0", "u298", "h298", "g298", "cv", "u0_atom", "u298_atom", 
-        "h298_atom", "g298_atom"
-    ]
+    # ZINC数据集信息
+    ZINC_PROPERTIES = ["logP_SA_cycle_normalized"]
+    
+    ATOM_TYPES = {1:'H', 2:"He",3:"Li",4:"Be",5:"B",6:"C",7:"N",8:"O",9:"F",10:"Ne",11:"Na",12:"Mg",13:"Al",14:"Si",15:"P",16:"S",17:"Cl",18:"Ar",19:"K",20:"Ca",21:"Sc",22:"Ti",23:"V",24:"Cr",25:"Mn",26:"Fe",27:"Co",28:"Ni",29:"Cu",30:"Zn",31:"Ga",32:"Ge",33:"As",34:"Se",35:"Br",36:"Kr",37:"Rb",38:"Sr",39:"Y",40:"Zr",41:"Nb",42:"Mo",43:"Tc",44:"Ru",45:"Rh",46:"Pd",47:"Ag",48:"Cd",49:"In",50:"Sn",51:"Sb",52:"Te",53:"I",54:"Xe",55:"Cs",56:"Ba",57:"La",58:"Ce",59:"Pr",60:"Nd",61:"Pm",62:"Sm",63:"Eu",64:"Gd",65:"Tb",66:"Dy",67:"Ho",68:"Er",69:"Tm",70:"Yb",71:"Lu",72:"Hf",73:"Ta",74:"W",75:"Re",76:"Os",77:"Ir",78:"Pt",79:"Au",80:"Hg",81:"Tl",82:"Pb",83:"Bi",84:"Po",85:"At",86:"Rn",87:"Fr",88:"Ra",89:"Ac",90:"Th",91:"Pa",92:"U",93:"Np",94:"Pu",95:"Am",96:"Cm",97:"Bk",98:"Cf",99:"Es",100:"Fm",101:"Md",102:"No",103:"Lr",104:"Rf",105:"Db",106:"Sg",107:"Bh",108:"Hs",109:"Mt",110:"Ds",111:"Rg",112:"Cn",113:"Nh",114:"Fl",115:"Mc",116:"Lv",117:"Ts",118:"Og"}
     BOND_TYPES = {0:'NONE', 1:'SINGLE', 2:'DOUBLE', 3:'TRIPLE', 4:'AROMATIC'}
-    ATOM_TYPES = {1:'H', 2:"He",3:"Li",4:"Be",5:"B",6:"C",7:"N",8:"O",9:"F",10:"Ne",11:"Na",12:"Mg",13:"Al",14:"Si",15:"P",16:"S",17:"Cl",18:"Ar",19:"K",20:"Ca",21:"Sc",22:"Ti",23:"V",24:"Cr",25:"Mn",26:"Fe",27:"Co",28:"Ni",29:"Cu",30:"Zn",31:"Ga",32:"Ge",33:"As",34:"Se",35:"Br",36:"Kr",37:"Rb",38:"Sr",39:"Y",40:"Zr",41:"Nb",42:"Mo",43:"Tc",44:"Ru",45:"Rh",46:"Pd",47:"Ag",48:"Cd",49:"In",50:"Sn",51:"Sb",52:"Te",53:"I",54:"Xe",55:"Cs",56:"Ba",57:"La",58:"Ce",59:"Pr",60:"Nd",61:"Pm",62:"Sm",63:"Eu",64:"Gd",65:"Tb",66:"Dy",67:"Ho",68:"Er",69:"Tm",70:"Yb",71:"Lu",72:"Hf",73:"Ta",74:"W",75:"Re",76:"Os",77:"Ir",78:"Pt",79:"Au",80:"Hg",81:"Tl",82:"Pb",83:"Bi",84:"Po",85:"At",86:"Rn",87:"Fr",88:"Ra",89:"Ac",90:"Th",91:"Pa",92:"U",93:"Np",94:"Pu",95:"Am",96:"Cm",97:"Bk",98:"Cf",99:"Es",100:"Fm",101:"Md",102:"No",103:"Lr",104:"Rf",105:"Db",106:"Sg",107:"Bh",108:"Hs",109:"Mt",110:"Ds",111:"Rg",112:"Cn",113:"Nh",114:"Fl",115:"Mc",116:"Lv",117:"Ts",118:"Og"} 
     
-    
-    
-    def __init__(self, config: ProjectConfig, dataset_name: str='qm9',
+    def __init__(self, config: ProjectConfig, 
                  target_property: Optional[str] = None):
         """
-        初始化QM9加载器
+        初始化ZINC加载器
         
         Args:
             config: 项目配置
             target_property: 目标属性（对于多标签数据集，None表示返回所有属性）
         """
-        super().__init__(dataset_name, config, target_property)
+        super().__init__("zinc", config, target_property)
         
         # 属性缓存（仅内存缓存，不持久化）
         self._node_attr_cache = {}  # id(graph) -> {node_id -> attr_value}
@@ -59,20 +52,14 @@ class QM9Loader(BaseDataLoader):
         # 全部数据缓存
         self._all_data = None
         self.load_data()
-    
     def _load_processed_data(self) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
         """
         从预处理数据目录加载数据
         
-        新的数据结构：
-        - 统一的数据文件：data.pkl
-        - 三个index文件：train_index.json, test_index.json, val_index.json
-        - 使用索引来标识不同划分的数据条目
-        
         Returns:
             Tuple[List, List, List]: (训练集, 验证集, 测试集)
         """
-        logger.info(f"📂 从预处理数据目录加载QM9数据: {self.data_dir}")
+        logger.info(f"📂 从预处理数据目录加载ZINC数据: {self.data_dir}")
         
         # 检查index文件是否存在
         train_index_file = self.data_dir / "train_index.json"
@@ -117,7 +104,6 @@ class QM9Loader(BaseDataLoader):
         logger.info(f"✅ 数据加载完成: 训练集{len(train_data)}, 验证集{len(val_data)}, 测试集{len(test_data)}")
         
         return train_data, val_data, test_data
-    
     
     def _add_smiles_to_all_data(self, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
@@ -173,12 +159,23 @@ class QM9Loader(BaseDataLoader):
             # 转换tuple格式为dict格式
             data = []
             for i, (graph, label) in enumerate(raw_data):
+                # 将torch.Tensor格式的标签转换为字典格式
+                if isinstance(label, torch.Tensor):
+                    # 如果是单个数值，转换为字典格式
+                    if label.numel() == 1:
+                        properties = {self.ZINC_PROPERTIES[0]: float(label.item())}
+                    else:
+                        raise ValueError(f"标签格式错误: {label}")
+                else:
+                    # 如果已经是字典格式，直接使用
+                    properties = label
+                
                 sample = {
                     'id': f"molecule_{i}",
                     'dgl_graph': graph,
                     'num_nodes': graph.num_nodes(),
                     'num_edges': graph.num_edges() // 2,  # DGL图是双向的
-                    'properties': label,
+                    'properties': properties,
                     'dataset_name': self.dataset_name,
                     'data_type': 'molecular_graph'
                 }
@@ -202,19 +199,8 @@ class QM9Loader(BaseDataLoader):
         labels = []
         
         for sample in data:
-            properties = sample['properties']
-            
-            if self.target_property:
-                # 指定了目标属性 - 返回单标签
-                if self.target_property in properties:
-                    label = properties[self.target_property]
-                    labels.append(label)
-                else:
-                    logger.warning(f"目标属性 {self.target_property} 不存在于样本中")
-                    labels.append(0.0)
-            else:
-                # 没有指定目标属性 - 返回所有属性（多标签）
-                labels.append(properties)
+            label = sample['properties']['logP_SA_cycle_normalized']
+            labels.append(label)
         
         return labels
     
@@ -243,7 +229,7 @@ class QM9Loader(BaseDataLoader):
         property_stats = {}
         if all_data and 'properties' in all_data[0]:
             properties = all_data[0]['properties']
-            for prop_name in self.QM9_PROPERTIES:
+            for prop_name in self.ZINC_PROPERTIES:
                 if prop_name in properties:
                     prop_values = [sample.get('properties', {}).get(prop_name) for sample in all_data 
                                  if prop_name in sample.get('properties', {})]
@@ -258,12 +244,12 @@ class QM9Loader(BaseDataLoader):
         metadata = {
             'dataset_name': self.dataset_name,
             'dataset_type': 'molecular_graph',
-            'data_source': 'preprocessed_qm9',
+            'data_source': 'preprocessed_zinc',
             'total_molecules': num_samples,
             'avg_num_nodes': int(np.mean(num_nodes_list)),
             'avg_num_edges': int(np.mean(num_edges_list)),
             'target_property': self.target_property,
-            'qm9_properties': self.QM9_PROPERTIES,
+            'zinc_properties': self.ZINC_PROPERTIES,
             'processing_time': time.strftime('%Y-%m-%d %H:%M:%S'),
             'data_dir': str(self.data_dir),
             'property_availability': property_stats,
@@ -278,16 +264,16 @@ class QM9Loader(BaseDataLoader):
 
     # ---------------- 下游任务元信息（供上层自动推断） ----------------
     def get_dataset_task_type(self) -> str:
-        """QM9 为回归任务（可多属性回归）。"""
+        """ZINC 常用为单属性回归任务。"""
         return "regression"
 
     def get_default_target_property(self) -> str:
-        """返回一个常用默认属性，若未指定 target_property 时可采用。"""
-        return self.QM9_PROPERTIES[0]
+        """返回默认的回归属性键。"""
+        return self.ZINC_PROPERTIES[0]
     
     def get_downstream_label_keys(self) -> List[str]:
         """返回数据集支持的所有标签属性名列表。"""
-        return self.QM9_PROPERTIES.copy()
+        return self.ZINC_PROPERTIES.copy()
     
     def load_data(self) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]], 
                            List[Any], List[Any], List[Any]]:
@@ -312,31 +298,30 @@ class QM9Loader(BaseDataLoader):
         for sample in tqdm(processed_data, desc="构建缓存"):
             dgl_graph = sample['dgl_graph']
             graph_id = id(dgl_graph)
-
-            # ========= 张量化提取并写入类型ID =========
-            # 节点原子序数: ndata['attr'] 第6列（索引5）
-            assert 'attr' in dgl_graph.ndata, "图缺少 ndata['attr']，无法构建类型特征"
-            attr_features = dgl_graph.ndata['attr']  # [N, 12]
-            atomic_num_tensor = attr_features[:, 5].long().clamp(min=0)
-            dgl_graph.ndata['node_type_id'] = atomic_num_tensor
-
-            # 边键类型: edata['edge_attr'] 前4维 one-hot 的 argmax，再 +1 映射到统一空间
-            assert 'edge_attr' in dgl_graph.edata, "图缺少 edata['edge_attr']，无法构建类型特征"
-            edge_attrs = dgl_graph.edata['edge_attr']  # [E, 4]
-            bond_type_base = torch.argmax(edge_attrs[:, :4], dim=1).long()  # 0..3
-            edge_type_ids = bond_type_base + 1  # 1..4 (NONE 预留为0)
-            dgl_graph.edata['edge_type_id'] = edge_type_ids
-
-            # ========= 构建内存缓存（供现有单项接口复用） =========
-            self._node_attr_cache[graph_id] = {int(i): int(v) for i, v in enumerate(atomic_num_tensor.tolist())}
-            self._edge_attr_cache[graph_id] = {int(i): int(v) for i, v in enumerate(edge_type_ids.tolist())}
-
-            # ========= 张量化写入定长 token =========
-            # QM9 当前 token 维度均为1：节点 token = 2*atomic_num+1；边 token = 2*edge_type_id
-            node_token_ids = (atomic_num_tensor * 2 + 1).view(-1, 1)
-            edge_token_ids = (edge_type_ids * 2).view(-1, 1)
-            dgl_graph.ndata['node_token_ids'] = node_token_ids
-            dgl_graph.edata['edge_token_ids'] = edge_token_ids
+            
+            # 构建节点属性缓存
+            # zinc格式：每个node一个离散数值，即原子序数。graph.ndata：tensor(num_nodes),eg:[1,6,6,6,1,8,1]
+            # 因此，node_id即为原子序数。
+            node_cache = {}
+            if 'feat' in dgl_graph.ndata:
+                node_features = dgl_graph.ndata['feat']
+                for node_id in range(dgl_graph.num_nodes()):
+                    if node_id < len(node_features):
+                        atomic_num = int(node_features[node_id].item())
+                        node_cache[node_id] = atomic_num
+            self._node_attr_cache[graph_id] = node_cache
+            
+            # 构建边属性缓存
+            # zinc格式：每个edge一个离散数值，即键类型。graph.edata：tensor(num_edges),eg:[1,2,2,2,1]。
+            # 因此，edge_id即为键类型。
+            edge_cache = {}
+            if 'feat' in dgl_graph.edata:
+                edge_features = dgl_graph.edata['feat']
+                for edge_id in range(dgl_graph.num_edges()):
+                    if edge_id < len(edge_features):
+                        bond_type = int(edge_features[edge_id].item())
+                        edge_cache[edge_id] = bond_type
+            self._edge_attr_cache[graph_id] = edge_cache
         
         self._cache_built = True
         cache_time = time.time() - start_time
@@ -361,22 +346,21 @@ class QM9Loader(BaseDataLoader):
         Returns:
             int: 节点的关键属性值
         """
-        assert node_id >= 0 and node_id < graph.num_nodes(), f"❌ 节点ID {node_id} 超出范围"
+        assert 0 <= node_id < graph.num_nodes(), f"节点ID {node_id} 超出范围"
         
         # 优先使用缓存
         if self._cache_built:
             graph_id = id(graph)
             if graph_id in self._node_attr_cache:
-                node_cache = self._node_attr_cache[graph_id]
-                if node_id in node_cache:
-                    return node_cache[node_id]
+                cache = self._node_attr_cache[graph_id]
+                if node_id in cache:
+                    return cache[node_id]
         
-        # 回退到原始方法
-        if 'attr' in graph.ndata:
-            attr_features = graph.ndata['attr']
-            if node_id < len(attr_features):
-                atomic_num = int(attr_features[node_id][5].item())  # 维度5是原子序数
-                return atomic_num
+        # 回退方法
+        if 'feat' in graph.ndata:
+            node_features = graph.ndata['feat']
+            if node_id < len(node_features):
+                return int(node_features[node_id].item())
         
         raise ValueError(f"❌ 无法获取节点 {node_id} 的属性")
     
@@ -392,23 +376,21 @@ class QM9Loader(BaseDataLoader):
         Returns:
             int: 边的关键属性值
         """
-        assert edge_id >= 0 and edge_id < graph.num_edges(), f"❌ 边ID {edge_id} 超出范围"
+        assert 0 <= edge_id < graph.num_edges(), f"边ID {edge_id} 超出范围"
         
         # 优先使用缓存
         if self._cache_built:
             graph_id = id(graph)
             if graph_id in self._edge_attr_cache:
-                edge_cache = self._edge_attr_cache[graph_id]
-                if edge_id in edge_cache:
-                    return edge_cache[edge_id]
+                cache = self._edge_attr_cache[graph_id]
+                if edge_id in cache:
+                    return cache[edge_id]
         
-        # 回退到原始方法
-        if 'edge_attr' in graph.edata:
-            edge_attrs = graph.edata['edge_attr']
-            if edge_id < len(edge_attrs):
-                # 从one-hot编码中提取键类型
-                bond_type = torch.argmax(edge_attrs[edge_id][:4]).item()  # 取前4维作为键类型
-                return bond_type
+        # 回退方法
+        if 'feat' in graph.edata:
+            edge_features = graph.edata['feat']
+            if edge_id < len(edge_features):
+                return int(edge_features[edge_id].item())
         
         raise ValueError(f"❌ 无法获取边 {edge_id} 的属性")
     
@@ -423,47 +405,19 @@ class QM9Loader(BaseDataLoader):
         获取边的类型
         """
         return self.BOND_TYPES[self.get_edge_attribute(graph, edge_id)]
-
-    # ==================== 批量张量化接口 ====================
-
-    def get_node_types_bulk(self, graph: dgl.DGLGraph, node_ids: List[int]) -> List[str]:
-        assert 'node_type_id' in graph.ndata, "缺少 node_type_id 特征"
-        ids = torch.as_tensor(node_ids, dtype=torch.long)
-        type_ids = graph.ndata['node_type_id'][ids].tolist()
-        return [self.ATOM_TYPES[int(tid)] for tid in type_ids]
-
-    def get_edge_types_bulk(self, graph: dgl.DGLGraph, edge_ids: List[int]) -> List[str]:
-        assert 'edge_type_id' in graph.edata, "缺少 edge_type_id 特征"
-        ids = torch.as_tensor(edge_ids, dtype=torch.long)
-        type_ids = graph.edata['edge_type_id'][ids].tolist()
-        return [self.BOND_TYPES[int(tid)] for tid in type_ids]
-
-    def get_node_tokens_bulk(self, graph: dgl.DGLGraph, node_ids: List[int]) -> List[List[int]]:
-        assert 'node_token_ids' in graph.ndata, "缺少 node_token_ids 特征"
-        ids = torch.as_tensor(node_ids, dtype=torch.long)
-        tok = graph.ndata['node_token_ids'][ids]  # [N, D]
-        return tok.tolist()
-
-    def get_edge_tokens_bulk(self, graph: dgl.DGLGraph, edge_ids: List[int]) -> List[List[int]]:
-        assert 'edge_token_ids' in graph.edata, "缺少 edge_token_ids 特征"
-        ids = torch.as_tensor(edge_ids, dtype=torch.long)
-        tok = graph.edata['edge_token_ids'][ids]
-        return tok.tolist()
       
     def get_node_token(self, graph: dgl.DGLGraph, node_id: int, ntype: str = None) -> List[int]:
         """
         获取节点的token列表
         """
-        node_key = ('atom', self.get_node_attribute(graph, node_id, ntype))
-        return [self.token_map[node_key]]
+        return [self.token_map[('atom', self.get_node_attribute(graph, node_id, ntype))]]
       
     def get_edge_token(self, graph: dgl.DGLGraph, edge_id: int, etype: str = None) -> List[int]:
         """
         获取边的token列表
         """
-        edge_key = ('bond', self.get_edge_attribute(graph, edge_id, etype))
-        return [self.token_map[edge_key]]
-    
+        return [self.token_map[('bond', self.get_edge_attribute(graph, edge_id, etype))]]
+      
     def get_token_map(self) -> Dict[Tuple[str, int], int]:
         """
         获取整个数据集的token映射
@@ -497,22 +451,48 @@ class QM9Loader(BaseDataLoader):
         """获取最频繁的边类型"""
         return 'SINGLE'
 
-    # ==================== 整图张量接口实现 ====================
+    # ==================== 批量张量化与整图张量接口实现 ====================
+    def get_node_types_bulk(self, graph: dgl.DGLGraph, node_ids: List[int]) -> List[str]:
+        assert 'feat' in graph.ndata, "缺少节点feat"
+        ids = torch.as_tensor(node_ids, dtype=torch.long)
+        type_ids = graph.ndata['feat'][ids].tolist()
+        return [self.ATOM_TYPES[int(tid)] for tid in type_ids]
+
+    def get_edge_types_bulk(self, graph: dgl.DGLGraph, edge_ids: List[int]) -> List[str]:
+        assert 'feat' in graph.edata, "缺少边feat"
+        ids = torch.as_tensor(edge_ids, dtype=torch.long)
+        type_ids = graph.edata['feat'][ids].tolist()
+        return [self.BOND_TYPES[int(tid)] for tid in type_ids]
+
+    def get_node_tokens_bulk(self, graph: dgl.DGLGraph, node_ids: List[int]) -> List[List[int]]:
+        assert 'feat' in graph.ndata, "缺少节点feat"
+        ids = torch.as_tensor(node_ids, dtype=torch.long)
+        atomic = graph.ndata['feat'][ids].long()
+        tok = (atomic * 2 + 1).view(-1, 1)
+        return tok.tolist()
+
+    def get_edge_tokens_bulk(self, graph: dgl.DGLGraph, edge_ids: List[int]) -> List[List[int]]:
+        assert 'feat' in graph.edata, "缺少边feat"
+        ids = torch.as_tensor(edge_ids, dtype=torch.long)
+        bond = graph.edata['feat'][ids].long()
+        tok = (bond * 2).view(-1, 1)
+        return tok.tolist()
+
     def get_graph_node_type_ids(self, graph: dgl.DGLGraph) -> torch.Tensor:
-        assert 'node_type_id' in graph.ndata, "缺少 node_type_id"
-        return graph.ndata['node_type_id']
+        assert 'feat' in graph.ndata, "缺少节点feat"
+        return graph.ndata['feat'].long()
 
     def get_graph_edge_type_ids(self, graph: dgl.DGLGraph) -> torch.Tensor:
-        assert 'edge_type_id' in graph.edata, "缺少 edge_type_id"
-        return graph.edata['edge_type_id']
+        assert 'feat' in graph.edata, "缺少边feat"
+        return graph.edata['feat'].long()
 
     def get_graph_node_token_ids(self, graph: dgl.DGLGraph) -> torch.Tensor:
-        assert 'node_token_ids' in graph.ndata, "缺少 node_token_ids"
-        return graph.ndata['node_token_ids']
+        nt = self.get_graph_node_type_ids(graph)
+        return (nt * 2 + 1).view(-1, 1)
 
     def get_graph_edge_token_ids(self, graph: dgl.DGLGraph) -> torch.Tensor:
-        assert 'edge_token_ids' in graph.edata, "缺少 edge_token_ids"
-        return graph.edata['edge_token_ids']
+        et = self.get_graph_edge_type_ids(graph)
+        return (et * 2).view(-1, 1)
 
     def get_graph_src_dst(self, graph: dgl.DGLGraph) -> Tuple[torch.Tensor, torch.Tensor]:
         return graph.edges()

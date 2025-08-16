@@ -15,7 +15,7 @@ from typing import List, Tuple, Dict, Any, Sequence
 import dgl
 import torch
 
-from .base_loader import BaseDataLoader
+from ..base_loader import BaseDataLoader
 from utils.logger import get_logger
 logger = get_logger(__name__)
 

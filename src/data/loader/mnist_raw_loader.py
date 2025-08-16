@@ -26,7 +26,7 @@ import dgl
 import torch
 import numpy as np
 
-from .base_loader import BaseDataLoader
+from ..base_loader import BaseDataLoader
 from utils.logger import get_logger
 
 logger = get_logger(__name__)

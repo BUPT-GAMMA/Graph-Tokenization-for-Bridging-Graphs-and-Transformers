@@ -122,7 +122,7 @@ tests/
 # 主要API接口
 from src.algorithms.compression.bpe_engine import BPEEngine
 from src.data.unified_data_interface import UnifiedDataInterface
-from src.data.transforms.bpe_transform import BPETokenTransform
+from src.data.bpe_transform import BPETokenTransform
 
 # 使用示例
 engine = BPEEngine(...)

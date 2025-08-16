@@ -114,7 +114,7 @@ class MLMDataset(Dataset):
         """应用BPE编码（延迟初始化，失败时报错）"""
         if not self._bpe_checked:
             try:
-                from src.data.transforms.bpe_transform import _g_bpe_transform
+                from src.data.bpe_transform import _g_bpe_transform
                 self._bpe_transform = _g_bpe_transform
                 if self._bpe_transform is None:
                     raise RuntimeError("BPE Transform未正确初始化（_g_bpe_transform为None）")
@@ -343,7 +343,7 @@ class NormalizedRegressionDataset:
         """应用BPE编码（延迟初始化，失败时报错）"""
         if not self._bpe_checked:
             try:
-                from src.data.transforms.bpe_transform import _g_bpe_transform
+                from src.data.bpe_transform import _g_bpe_transform
                 self._bpe_transform = _g_bpe_transform
                 if self._bpe_transform is None:
                     raise RuntimeError("BPE Transform未正确初始化（_g_bpe_transform为None）")
@@ -482,7 +482,7 @@ class ClassificationDataset(Dataset):
         """应用BPE编码（延迟初始化，失败时报错）"""
         if not self._bpe_checked:
             try:
-                from src.data.transforms.bpe_transform import _g_bpe_transform
+                from src.data.bpe_transform import _g_bpe_transform
                 self._bpe_transform = _g_bpe_transform
                 if self._bpe_transform is None:
                     raise RuntimeError("BPE Transform未正确初始化（_g_bpe_transform为None）")
