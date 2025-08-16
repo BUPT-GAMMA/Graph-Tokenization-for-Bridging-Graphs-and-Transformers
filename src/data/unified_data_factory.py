@@ -153,13 +153,16 @@ def _lazy_import_loader(loader_name: str):
     elif loader_name == "mnist_raw":
         from .mnist_raw_loader import MNISTRawDataLoader
         return MNISTRawDataLoader
+    elif loader_name == "colors3":
+        from .colors3_loader import COLORS3Loader
+        return COLORS3Loader
     else:
         raise ValueError(f"Unknown loader: {loader_name}")
 
 def _register_all_loaders():
     """注册所有数据加载器 - 使用字符串注册，延迟导入"""
     # 注册所有支持的加载器名称，实际类在使用时才导入
-    loader_names = ["qm9", "qm9test", "zinc", "aqsol", "mnist", "mnist_raw"]
+    loader_names = ["qm9", "qm9test", "zinc", "aqsol", "mnist", "mnist_raw", "colors3"]
     
     for name in loader_names:
         # 注册延迟导入函数而不是直接导入类
