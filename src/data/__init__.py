@@ -6,9 +6,10 @@
 """
 
 # from .qm9_loader import QM9Loader
-from .qm9_loader import QM9Loader
+# from .qm9_loader import QM9Loader  # 避免在导入数据层时强制导入 DGL 依赖的数据集
 
-from .single_graph_loader import SingleGraphLoader, load_single_graph_dataset
+# 为避免在导入本包时触发 DGL 的重依赖，仅在需要时由调用方延迟导入
+# from .single_graph_loader import SingleGraphLoader, load_single_graph_dataset
 
 # 新的统一数据加载器工厂 - 推荐使用
 from .unified_data_factory import (
@@ -27,11 +28,6 @@ from .unified_data_interface import UnifiedDataInterface
 
 # 导出公共接口
 __all__ = [
-    # 基础接口
-    'QM9Loader',  
-    'SingleGraphLoader',
-    'load_single_graph_dataset',
-    
     # 新的统一数据加载器工厂 - 推荐使用
     'UnifiedDataFactory',
     'get_dataloader',

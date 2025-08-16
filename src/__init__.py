@@ -22,8 +22,9 @@ PROJECT_LOGGER = setup_logger('tokenizerGraph', level='INFO')
 __version__ = '1.0.0'
 __author__ = 'TokenizerGraph Team'
 
-from . import data
-from . import algorithms
+# 延迟导入，避免在测试收集阶段不必要的重依赖加载
+# from . import data
+# from . import algorithms
 from . import utils
 
 __all__ = [
