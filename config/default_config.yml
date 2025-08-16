@@ -41,11 +41,11 @@ serialization:
     flatten_variants: true  # 是否将多个采样结果平铺为独立样本
   bpe:  # BPE压缩配置
     enabled: true
-    num_merges: 3000
-    min_frequency: 100
+    num_merges: 2000
+    min_frequency: 2
     # 统一 BPEEngine 配置（训练与编码后端、rank-limit 策略）
     engine:
-      train_backend: numba   # numba | python
+      train_backend: cpp   # python | cpp
       encode_backend: cpp    # 仅支持 cpp
       encode_rank_mode: all  # none | all | topk | random | gaussian
       encode_rank_k: null    # topk 固定值；random/gaussian 时可留空使用默认区间
@@ -55,7 +55,7 @@ serialization:
 
 # 编码后端配置（用于在线encode）
 encoding:
-  backend: numba  # 可选: py-standard | numba | cpp （无隐式回退，缺失即报错）
+  backend: cpp  # 可选: py-standard | numba | cpp （无隐式回退，缺失即报错）
   threads:
     omp_num_threads: 1
     mkl_num_threads: 1
@@ -70,7 +70,7 @@ bert:
     num_hidden_layers: 4  # n_layers
     intermediate_size: 2048  # d_ff
     max_seq_length: 768  # 最大上限（effective_max_length 不会超过此值）
-    max_len_policy: max
+    max_len_policy: max # max | sigma
     max_len_sigma_k: 3
     layer_norm_eps: 1e-12
     hidden_dropout_prob: 0.1

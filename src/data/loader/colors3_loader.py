@@ -8,7 +8,7 @@ import dgl
 import numpy as np
 import torch
 
-from .base_loader import BaseDataLoader
+from ..base_loader import BaseDataLoader
 from config import ProjectConfig
 from utils.logger import get_logger
 
@@ -19,12 +19,14 @@ logger = get_logger(__name__)
 class COLORS3Loader(BaseDataLoader):
     """COLORS-3 图分类数据集（TU）。从预处理目录读取 data.pkl 与三份划分索引。"""
 
-    def __init__(self, config: ProjectConfig, dataset_name: str = "colors3", target_property: Optional[str] = None):
+    def __init__(self, config: ProjectConfig, dataset_name: str = "COLORS-3", target_property: Optional[str] = None):
+        # 统一以目录名作为 dataset_name；内部再记录标准化名称用于 id 前缀
         super().__init__(dataset_name, config, target_property)
         self._all_data: Optional[List[Dict[str, Any]]] = None
         self._cache_built: bool = False
         self._node_attr_cache: Dict[int, Dict[int, int]] = {}
         self._edge_attr_cache: Dict[int, Dict[int, int]] = {}
+        self._normalized_name = "colors3"
         self.load_data()
 
     def _load_processed_data(self) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
@@ -47,7 +49,7 @@ class COLORS3Loader(BaseDataLoader):
             all_data: List[Dict[str, Any]] = []
             for i, (graph, label_int) in enumerate(raw_data):
                 sample = {
-                    "id": f"colors3_{i}",
+                    "id": f"{self._normalized_name}_{i}",
                     "dgl_graph": graph,
                     "num_nodes": int(graph.num_nodes()),
                     "num_edges": int(graph.num_edges()),
@@ -188,5 +190,3 @@ class COLORS3Loader(BaseDataLoader):
 
     def get_token_map(self) -> Dict[Tuple[str, int], int]:
         return {}
-
-

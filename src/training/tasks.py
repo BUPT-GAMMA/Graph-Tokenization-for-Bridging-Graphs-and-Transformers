@@ -130,7 +130,7 @@ def build_regression_loaders(
     num_workers = 4  # 统一使用多进程
     if udi is not None and method is not None:
         try:
-            from src.data.transforms.bpe_transform import create_bpe_worker_init_fn_from_udi
+            from src.data.bpe_transform import create_bpe_worker_init_fn_from_udi
             bpe_worker_init_fn = create_bpe_worker_init_fn_from_udi(udi, config, method)
         except Exception as e:
             # 如果BPE创建失败，回退到无BPE模式（但不静默忽略错误）
@@ -207,7 +207,7 @@ def build_classification_loaders(
     num_workers = 4  # 统一使用多进程
     if udi is not None and method is not None:
         try:
-            from src.data.transforms.bpe_transform import create_bpe_worker_init_fn_from_udi
+            from src.data.bpe_transform import create_bpe_worker_init_fn_from_udi
             bpe_worker_init_fn = create_bpe_worker_init_fn_from_udi(udi, config, method)
         except Exception as e:
             # 如果BPE创建失败，回退到无BPE模式（但不静默忽略错误）

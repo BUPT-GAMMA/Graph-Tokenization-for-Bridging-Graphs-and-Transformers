@@ -6,21 +6,12 @@ QM9Test数据加载器
 继承自QM9Loader，但使用qm9test目录下的数据。
 """
 
-import os
-import pickle
 import time
-import warnings
 import numpy as np
-import pandas as pd
-import networkx as nx
-from typing import Dict, List, Tuple, Optional, Union, Any
-from tqdm import tqdm
+from typing import Dict, Optional, Any
 import json
-from pathlib import Path
 
 # 必需依赖
-import dgl
-import torch
 
 from .qm9_loader import QM9Loader
 from config import ProjectConfig
@@ -68,8 +59,6 @@ class QM9TestLoader(QM9Loader):
         
         # 统计信息
         num_samples = len(all_data)
-        num_nodes_list = [sample.get('num_nodes', 0) for sample in all_data]
-        num_edges_list = [sample.get('num_edges', 0) for sample in all_data]
         
         # 属性统计
         property_stats = {}

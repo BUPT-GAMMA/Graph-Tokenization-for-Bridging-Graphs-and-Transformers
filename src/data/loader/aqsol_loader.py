@@ -6,13 +6,10 @@ AQSOL数据加载器
 支持多任务标签选择和多种SMILES格式。
 """
 
-import os
 import json
 import time
-import warnings
 import numpy as np
-import pandas as pd
-from typing import Dict, List, Tuple, Optional, Union, Any
+from typing import Dict, List, Tuple, Optional, Any
 from pathlib import Path
 import pickle
 
@@ -20,7 +17,7 @@ import pickle
 import dgl
 import torch
 
-from .base_loader import BaseDataLoader
+from ..base_loader import BaseDataLoader
 from config import ProjectConfig
 from utils.logger import get_logger
 from tqdm import tqdm
@@ -72,7 +69,7 @@ class AQSOLoader(BaseDataLoader):
         val_index_file = self.data_dir / "val_index.json"
         
         if not all(f.exists() for f in [train_index_file, test_index_file, val_index_file]):
-            raise FileNotFoundError(f"索引文件不存在，请先运行数据重构脚本")
+            raise FileNotFoundError("索引文件不存在，请先运行数据重构脚本")
         
         # 加载全部数据
         data_file = self.data_dir / "data.pkl"
@@ -123,10 +120,10 @@ class AQSOLoader(BaseDataLoader):
         """
         # 4种SMILES格式的文件名
         smiles_files = {
-            "smiles_1": f"smiles_1_direct.txt",
-            "smiles_2": f"smiles_2_explicit_h.txt", 
-            "smiles_3": f"smiles_3_addhs.txt",
-            "smiles_4": f"smiles_4_addhs_explicit_h.txt"
+            "smiles_1": "smiles_1_direct.txt",
+            "smiles_2": "smiles_2_explicit_h.txt", 
+            "smiles_3": "smiles_3_addhs.txt",
+            "smiles_4": "smiles_4_addhs_explicit_h.txt"
         }
         
         # 加载每种格式的SMILES

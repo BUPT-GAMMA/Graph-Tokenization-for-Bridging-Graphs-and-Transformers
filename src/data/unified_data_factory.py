@@ -136,33 +136,54 @@ class UnifiedDataFactory:
 def _lazy_import_loader(loader_name: str):
     """延迟导入数据加载器，避免在工厂初始化时导入所有依赖"""
     if loader_name == "qm9":
-        from .qm9_loader import QM9Loader
+        from .loader.qm9_loader import QM9Loader
         return QM9Loader
     elif loader_name == "qm9test":
-        from .qm9test_loader import QM9TestLoader
+        from .loader.qm9test_loader import QM9TestLoader
         return QM9TestLoader
     elif loader_name == "zinc":
-        from .zinc_loader import ZINCLoader
+        from .loader.zinc_loader import ZINCLoader
         return ZINCLoader
     elif loader_name == "aqsol":
-        from .aqsol_loader import AQSOLoader
+        from .loader.aqsol_loader import AQSOLoader
         return AQSOLoader
     elif loader_name == "mnist":
-        from .mnist_loader import MNISTDataLoader
+        from .loader.mnist_loader import MNISTDataLoader
         return MNISTDataLoader
     elif loader_name == "mnist_raw":
-        from .mnist_raw_loader import MNISTRawDataLoader
+        from .loader.mnist_raw_loader import MNISTRawDataLoader
         return MNISTRawDataLoader
     elif loader_name == "colors3":
-        from .colors3_loader import COLORS3Loader
+        from .loader.colors3_loader import COLORS3Loader
         return COLORS3Loader
+    elif loader_name == "proteins":
+        from .loader.proteins_loader import PROTEINSLoader
+        return PROTEINSLoader
+    elif loader_name == "synthetic":
+        from .loader.synthetic_loader import SYNTHETICLoader
+        return SYNTHETICLoader
+    elif loader_name == "mutagenicity":
+        from .loader.mutagenicity_loader import MutagenicityLoader
+        return MutagenicityLoader
+    elif loader_name == "coildel":
+        from .loader.coildel_loader import COILDELLoader
+        return COILDELLoader
+    elif loader_name == "dblp":
+        from .loader.dblp_loader import DBLPLoader
+        return DBLPLoader
+    elif loader_name == "dd":
+        from .loader.dd_loader import DDLoader
+        return DDLoader
+    elif loader_name == "twitter":
+        from .loader.twitter_loader import TwitterLoader
+        return TwitterLoader
     else:
         raise ValueError(f"Unknown loader: {loader_name}")
 
 def _register_all_loaders():
     """注册所有数据加载器 - 使用字符串注册，延迟导入"""
     # 注册所有支持的加载器名称，实际类在使用时才导入
-    loader_names = ["qm9", "qm9test", "zinc", "aqsol", "mnist", "mnist_raw", "colors3"]
+    loader_names = ["qm9", "qm9test", "zinc", "aqsol", "mnist", "mnist_raw", "colors3", "proteins", "synthetic", "mutagenicity", "coildel", "dblp", "dd", "twitter"]
     
     for name in loader_names:
         # 注册延迟导入函数而不是直接导入类
