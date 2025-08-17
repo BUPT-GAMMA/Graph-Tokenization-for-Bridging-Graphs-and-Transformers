@@ -5,8 +5,7 @@
 管理所有数据集加载器，提供统一的创建和访问接口。
 """
 
-from typing import Dict, Type, Optional, Any, List, Tuple, Union
-from pathlib import Path
+from typing import Dict, Type, Optional, Any, List, Tuple
 
 from config import ProjectConfig
 # 使用延迟导入，避免在模块导入时就加载所有依赖（特别是DGL/OGB相关的警告）
@@ -177,13 +176,19 @@ def _lazy_import_loader(loader_name: str):
     elif loader_name == "twitter":
         from .loader.twitter_loader import TwitterLoader
         return TwitterLoader
+    elif loader_name == "molhiv":
+        from .loader.molhiv_loader import MOLHIVLoader
+        return MOLHIVLoader
+    elif loader_name == "code2":
+        from .loader.code2_loader import CODE2Loader
+        return CODE2Loader
     else:
         raise ValueError(f"Unknown loader: {loader_name}")
 
 def _register_all_loaders():
     """注册所有数据加载器 - 使用字符串注册，延迟导入"""
     # 注册所有支持的加载器名称，实际类在使用时才导入
-    loader_names = ["qm9", "qm9test", "zinc", "aqsol", "mnist", "mnist_raw", "colors3", "proteins", "synthetic", "mutagenicity", "coildel", "dblp", "dd", "twitter"]
+    loader_names = ["qm9", "qm9test", "zinc", "aqsol", "colors3", "proteins", "synthetic", "mutagenicity", "coildel", "dblp", "dd", "twitter", "molhiv", "code2"]
     
     for name in loader_names:
         # 注册延迟导入函数而不是直接导入类

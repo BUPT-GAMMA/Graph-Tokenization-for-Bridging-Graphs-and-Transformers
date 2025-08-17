@@ -19,13 +19,13 @@ logger = get_logger(__name__)
 class TwitterLoader(BaseDataLoader):
     """TWITTER-Real-Graph-Partial 图分类数据集（TU）。"""
 
-    def __init__(self, config: ProjectConfig, dataset_name: str = "TWITTER-Real-Graph-Partial", target_property: Optional[str] = None):
+    def __init__(self, config: ProjectConfig, dataset_name: str = "twitter", target_property: Optional[str] = None):
         super().__init__(dataset_name, config, target_property)
         self._all_data: Optional[List[Dict[str, Any]]] = None
         self._cache_built: bool = False
         self._node_attr_cache: Dict[int, Dict[int, int]] = {}
         self._edge_attr_cache: Dict[int, Dict[int, int]] = {}
-        self._normalized_name = "twitter_real_graph_partial"
+        self._normalized_name = "twitter"
         self.load_data()
 
     def _load_processed_data(self) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
@@ -168,10 +168,12 @@ class TwitterLoader(BaseDataLoader):
         return graph.edata["edge_type_id"]
 
     def get_graph_node_token_ids(self, graph: dgl.DGLGraph) -> torch.Tensor:
-        return graph.ndata["node_token_ids"]
+        nt = self.get_graph_node_type_ids(graph)
+        return (nt.long() * 2 + 1).view(-1, 1)
 
     def get_graph_edge_token_ids(self, graph: dgl.DGLGraph) -> torch.Tensor:
-        return graph.edata["edge_token_ids"]
+        et = self.get_graph_edge_type_ids(graph)
+        return (et.long() * 2).view(-1, 1)
 
     def get_graph_src_dst(self, graph: dgl.DGLGraph) -> Tuple[torch.Tensor, torch.Tensor]:
         return graph.edges()

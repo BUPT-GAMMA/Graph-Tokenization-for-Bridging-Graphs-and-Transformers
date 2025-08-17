@@ -16,20 +16,29 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-class PROTEINSLoader(BaseDataLoader):
-    """PROTEINS 图分类数据集（TU）。"""
+class MOLHIVLoader(BaseDataLoader):
+    """ogbg-molhiv 图分类数据集（OGB）。
 
-    def __init__(self, config: ProjectConfig, dataset_name: str = "proteins", target_property: Optional[str] = None):
+    预处理约定：
+    - 仅保留节点/边 token（以及可选的 type_id），并写入 `feat`。
+    - 节点 token：使用原子序数（atomic number）映射到奇数域（2Z+1）。
+    - 边 token：使用 ZINC 规范的键类型ID（0: NONE, 1: SINGLE, 2: DOUBLE, 3: TRIPLE, 4: AROMATIC）映射到偶数域（2E）。
+    """
+
+    # 与 ZINC/QM9 对齐
+    BOND_TYPES = {0: 'NONE', 1: 'SINGLE', 2: 'DOUBLE', 3: 'TRIPLE', 4: 'AROMATIC'}
+
+    def __init__(self, config: ProjectConfig, dataset_name: str = "molhiv", target_property: Optional[str] = None):
         super().__init__(dataset_name, config, target_property)
         self._all_data: Optional[List[Dict[str, Any]]] = None
         self._cache_built: bool = False
         self._node_attr_cache: Dict[int, Dict[int, int]] = {}
         self._edge_attr_cache: Dict[int, Dict[int, int]] = {}
-        self._normalized_name = "proteins"
+        self._normalized_name = "molhiv"
         self.load_data()
 
     def _load_processed_data(self) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
-        logger.info(f"📂 读取 PROTEINS 预处理目录: {self.data_dir}")
+        logger.info(f"📂 读取 MOLHIV 预处理目录: {self.data_dir}")
         train_index_file = self.data_dir / "train_index.json"
         test_index_file = self.data_dir / "test_index.json"
         val_index_file = self.data_dir / "val_index.json"
@@ -41,17 +50,17 @@ class PROTEINSLoader(BaseDataLoader):
             raise FileNotFoundError(f"统一数据文件不存在: {data_file}")
         if self._all_data is None:
             with open(data_file, "rb") as f:
-                raw_data: List[Tuple[dgl.DGLGraph, int]] = pickle.load(f)
+                raw_data: List[Tuple[dgl.DGLGraph, Any]] = pickle.load(f)
             all_data: List[Dict[str, Any]] = []
-            for i, (graph, label_int) in enumerate(raw_data):
+            for i, (graph, label_obj) in enumerate(raw_data):
                 sample = {
                     "id": f"{self._normalized_name}_{i}",
                     "dgl_graph": graph,
                     "num_nodes": int(graph.num_nodes()),
                     "num_edges": int(graph.num_edges()),
-                    "properties": {"label": int(label_int)},
+                    "properties": {"label": int(label_obj) if isinstance(label_obj, (int, np.integer)) else int(label_obj)},
                     "dataset_name": self.dataset_name,
-                    "data_type": "protein_graph",
+                    "data_type": "molecule_graph",
                 }
                 all_data.append(sample)
             self._all_data = all_data
@@ -79,7 +88,7 @@ class PROTEINSLoader(BaseDataLoader):
         num_edges = [s["num_edges"] for s in all_data]
         return {
             "dataset_name": self.dataset_name,
-            "dataset_type": "protein_graph",
+            "dataset_type": "molecule_graph",
             "total_graphs": len(all_data),
             "avg_num_nodes": float(np.mean(num_nodes)),
             "avg_num_edges": float(np.mean(num_edges)),
@@ -97,20 +106,23 @@ class PROTEINSLoader(BaseDataLoader):
         for sample in processed_data:
             g: dgl.DGLGraph = sample["dgl_graph"]
             gid = id(g)
-            if "node_token_ids" not in g.ndata:
-                raise AssertionError("缺少 node_token_ids，请先运行预处理生成")
-            node_token_ids = g.ndata["node_token_ids"].long()
-            g.ndata["node_type_id"] = node_token_ids.view(-1)
-            if "edge_token_ids" not in g.edata:
-                zeros = torch.zeros(g.num_edges(), dtype=torch.long)
-                g.edata["edge_token_ids"] = zeros.view(-1, 1)
-            g.edata["edge_type_id"] = g.edata["edge_token_ids"].view(-1)
+            # 预处理阶段已经提供 node_type_id / edge_type_id 与 token ids
+            if "node_type_id" not in g.ndata:
+                if "node_token_ids" in g.ndata:
+                    g.ndata["node_type_id"] = (g.ndata["node_token_ids"].view(-1) - 1) // 2
+                else:
+                    raise AssertionError("缺少 node_type_id，请先运行预处理生成")
+            if "edge_type_id" not in g.edata:
+                if "edge_token_ids" in g.edata:
+                    g.edata["edge_type_id"] = (g.edata["edge_token_ids"].view(-1)) // 2
+                else:
+                    g.edata["edge_type_id"] = torch.zeros(g.num_edges(), dtype=torch.long)
             self._node_attr_cache[gid] = {int(i): int(v) for i, v in enumerate(g.ndata["node_type_id"].tolist())}
             self._edge_attr_cache[gid] = {int(i): int(v) for i, v in enumerate(g.edata["edge_type_id"].tolist())}
         self._cache_built = True
 
     def get_dataset_task_type(self) -> str:
-        return "classification"
+        return "binary_classification"
 
     def get_num_classes(self) -> int:
         return 2
@@ -128,16 +140,19 @@ class PROTEINSLoader(BaseDataLoader):
         return 0
 
     def get_node_type(self, graph: dgl.DGLGraph, node_id: int) -> str:
-        return str(self.get_node_attribute(graph, node_id))
+        atomic_num = self.get_node_attribute(graph, node_id)
+        return str(atomic_num)
 
     def get_edge_type(self, graph: dgl.DGLGraph, edge_id: int) -> str:
-        return str(self.get_edge_attribute(graph, edge_id))
+        et = self.get_edge_attribute(graph, edge_id)
+        return self.BOND_TYPES.get(int(et), str(int(et)))
 
     def get_most_frequent_edge_type(self) -> str:
-        return "0"
+        return "SINGLE"
 
     def get_edge_type_id_by_name(self, name: str) -> int:
-        return int(name)
+        inv = {v: k for k, v in self.BOND_TYPES.items()}
+        return int(inv[name])
 
     def get_node_token(self, graph: dgl.DGLGraph, node_id: int, ntype: str = None) -> List[int]:
         return [int(graph.ndata["node_token_ids"][int(node_id)][0].item())]
@@ -159,7 +174,7 @@ class PROTEINSLoader(BaseDataLoader):
 
     def get_edge_types_bulk(self, graph: dgl.DGLGraph, edge_ids: List[int]) -> List[str]:
         ids = torch.as_tensor(edge_ids, dtype=torch.long)
-        return [str(int(v)) for v in graph.edata["edge_type_id"][ids].tolist()]
+        return [self.BOND_TYPES.get(int(v), str(int(v))) for v in graph.edata["edge_type_id"][ids].tolist()]
 
     def get_graph_node_type_ids(self, graph: dgl.DGLGraph) -> torch.Tensor:
         return graph.ndata["node_type_id"]
@@ -168,15 +183,24 @@ class PROTEINSLoader(BaseDataLoader):
         return graph.edata["edge_type_id"]
 
     def get_graph_node_token_ids(self, graph: dgl.DGLGraph) -> torch.Tensor:
-        nt = self.get_graph_node_type_ids(graph)
-        return (nt.long() * 2 + 1).view(-1, 1)
+        return graph.ndata["node_token_ids"]
 
     def get_graph_edge_token_ids(self, graph: dgl.DGLGraph) -> torch.Tensor:
-        et = self.get_graph_edge_type_ids(graph)
-        return (et.long() * 2).view(-1, 1)
+        return graph.edata["edge_token_ids"]
 
     def get_graph_src_dst(self, graph: dgl.DGLGraph) -> Tuple[torch.Tensor, torch.Tensor]:
         return graph.edges()
 
     def get_token_map(self) -> Dict[Tuple[str, int], int]:
-        return {}
+        token_map = {}
+        # 原子：奇数域
+        for atomic_num in range(1, 119):
+            odd_token = 2 * atomic_num + 1
+            token_map[("atom", atomic_num)] = odd_token
+        # 键：偶数域
+        for bond_type_id, _name in self.BOND_TYPES.items():
+            even_token = 2 * int(bond_type_id)
+            token_map[("bond", int(bond_type_id))] = even_token
+        return token_map
+
+

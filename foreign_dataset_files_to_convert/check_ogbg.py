@@ -63,6 +63,8 @@ class FeatureInfo:
     dtype: Optional[str]
     is_continuous: Optional[bool]
     example_values: Optional[List[List[float]]]
+    # 若为离散整型特征：按维度统计 unique 数量
+    unique_counts_per_dim: Optional[List[int]] = None
 
 
 @dataclass
@@ -151,6 +153,56 @@ def infer_edge_feature_info(batch_first_data) -> FeatureInfo:
     return FeatureInfo(True, dim, dtype, is_cont, example)
 
 
+def _is_int_dtype(dtype: torch.dtype) -> bool:
+    return dtype in (torch.int8, torch.int16, torch.int32, torch.int64, torch.uint8)
+
+
+def compute_unique_counts_for_features(loader: 'DataLoader', feature_kind: str, feature_dim: Optional[int]) -> Optional[List[int]]:
+    """
+    仅当对应特征存在且为整型离散时，按维度统计 unique 数量。
+    feature_kind: 'node' | 'edge'
+    返回：长度为 dim 的列表，或 None（若不适用）。
+    """
+    if feature_dim is None or feature_dim <= 0:
+        return None
+
+    unique_sets = [set() for _ in range(int(feature_dim))]
+
+    for batch in loader:
+        if feature_kind == 'node':
+            x = getattr(batch, 'x', None)
+            if x is None or not isinstance(x, torch.Tensor):
+                continue
+            if not _is_int_dtype(x.dtype):
+                return None
+            if x.dim() == 1:
+                unique_sets[0].update(x.detach().cpu().tolist())
+            elif x.dim() == 2:
+                xb = x.detach().cpu()
+                for j in range(xb.size(1)):
+                    unique_sets[j].update(xb[:, j].tolist())
+            else:
+                return None
+        elif feature_kind == 'edge':
+            e = getattr(batch, 'edge_attr', None)
+            if e is None or not isinstance(e, torch.Tensor):
+                continue
+            if not _is_int_dtype(e.dtype):
+                return None
+            if e.dim() == 1:
+                unique_sets[0].update(e.detach().cpu().tolist())
+            elif e.dim() == 2:
+                eb = e.detach().cpu()
+                for j in range(eb.size(1)):
+                    unique_sets[j].update(eb[:, j].tolist())
+            else:
+                return None
+        else:
+            return None
+
+    return [int(len(s)) for s in unique_sets]
+
+
 def _flatten_y_tensor(y: torch.Tensor) -> torch.Tensor:
     if y is None:
         return torch.tensor([])
@@ -230,7 +282,6 @@ def summarize_labels(sample_data, loader: 'DataLoader') -> LabelSummary:
                 if len(obj) > 0 and isinstance(obj[0], (list, tuple)):
                     return list(obj[0])
                 return list(obj)
-        return None
 
         seq_example = _extract_seq(y0) or []
         elem_dtype = type(seq_example[0]).__name__ if len(seq_example) > 0 else "unknown"
@@ -289,7 +340,7 @@ def analyze_dataset(name: str, root: str, batch_size: int, num_workers: int, lim
                 node_counts.append(int(g.num_nodes))
                 edge_counts.append(int(g.num_edges))
         else:
-        node_counts.append(int(data.num_nodes))
+            node_counts.append(int(data.num_nodes))
             edge_counts.append(int(data.num_edges))
 
     node_stats = compute_scalar_stats(node_counts)
@@ -297,6 +348,25 @@ def analyze_dataset(name: str, root: str, batch_size: int, num_workers: int, lim
 
     node_feat_info = infer_feature_info(first_sample)
     edge_feat_info = infer_edge_feature_info(first_sample)
+
+    # 若为离散型整型特征，按维度补充 unique 数量统计
+    single_loader_for_discrete = DataLoader(dataset, batch_size=64, shuffle=False, num_workers=num_workers)
+    if node_feat_info.exists and node_feat_info.dim is not None and node_feat_info.dtype is not None:
+        try:
+            # 通过 first_sample.x 的 dtype 判断是否整型
+            x0 = getattr(first_sample, 'x', None)
+            if isinstance(x0, torch.Tensor) and _is_int_dtype(x0.dtype):
+                node_feat_info.unique_counts_per_dim = compute_unique_counts_for_features(single_loader_for_discrete, 'node', node_feat_info.dim)
+        except Exception:
+            pass
+
+    if edge_feat_info.exists and edge_feat_info.dim is not None and edge_feat_info.dtype is not None:
+        try:
+            e0 = getattr(first_sample, 'edge_attr', None)
+            if isinstance(e0, torch.Tensor) and _is_int_dtype(e0.dtype):
+                edge_feat_info.unique_counts_per_dim = compute_unique_counts_for_features(single_loader_for_discrete, 'edge', edge_feat_info.dim)
+        except Exception:
+            pass
 
     single_loader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=num_workers)
     label_summary = summarize_labels(first_sample, single_loader)
@@ -334,6 +404,8 @@ def print_report(report: DatasetReport) -> None:
         print("节点特征示例(前3行x前8列):")
         for row in nf.example_values:
             print(f"  {row}")
+    if nf.unique_counts_per_dim is not None:
+        print(f"节点特征各维 unique 数量: {nf.unique_counts_per_dim}")
 
     ef = report.edge_features
     print(f"边特征: exists={ef.exists}, dim={ef.dim}, dtype={ef.dtype}, 连续={ef.is_continuous}")
@@ -341,6 +413,8 @@ def print_report(report: DatasetReport) -> None:
         print("边特征示例(前3行x前8列):")
         for row in ef.example_values:
             print(f"  {row}")
+    if ef.unique_counts_per_dim is not None:
+        print(f"边特征各维 unique 数量: {ef.unique_counts_per_dim}")
 
     ls = report.labels
     print(f"标签: shape={ls.shape}, dtype={ls.dtype}, 任务类型={ls.task_type}")
@@ -431,7 +505,7 @@ def main() -> None:
     args = build_argparser().parse_args()
     reports: List[DatasetReport] = []
 
-        for name in args.datasets:
+    for name in args.datasets:
         print(f"开始分析数据集：{name} ...")
         report = analyze_dataset(
             name=name,
