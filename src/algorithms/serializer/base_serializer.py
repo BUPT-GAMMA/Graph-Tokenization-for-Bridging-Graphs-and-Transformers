@@ -880,7 +880,28 @@ class BaseGraphSerializer(ABC):
             try:
                 edge_ids_tensor_full = dgl_graph.edge_ids(src_tensor, dst_tensor)  # [P-1]
             except Exception as e:
-                raise ValueError(f"获取边ID失败: {e}")
+                # 兼容多重边（同一 (u,v) 存在多条边）或异构情况导致的标量转换失败
+                # 回退到逐对查询，取首个匹配的边ID，以确保稳定且可序列化
+                import torch as _torch
+                eid_list: List[int] = []
+                src_list = src_tensor.tolist()
+                dst_list = dst_tensor.tolist()
+                for u, v in zip(src_list, dst_list):
+                    try:
+                        # 单对查询：若存在多条边，DGL 返回 1D 张量；我们取第一个
+                        eids = dgl_graph.edge_ids(int(u), int(v), return_uv=False)
+                        if hasattr(eids, 'numel') and eids.numel() > 1:
+                            eid_list.append(int(eids[0].item()))
+                        else:
+                            eid_list.append(int(eids.item()))
+                    except Exception:
+                        # 最后兜底：构建 (u,v)->eid 映射，选第一个遍历到的边
+                        mapping = self._build_edge_id_mapping(dgl_graph)
+                        eid = mapping.get((int(u), int(v)))
+                        if eid is None:
+                            raise ValueError(f"获取边ID失败: (src={u}, dst={v}) 无对应边")
+                        eid_list.append(int(eid))
+                edge_ids_tensor_full = _torch.as_tensor(eid_list, dtype=_torch.long)
 
             # 掩码：省略最高频边
             keep_mask = None

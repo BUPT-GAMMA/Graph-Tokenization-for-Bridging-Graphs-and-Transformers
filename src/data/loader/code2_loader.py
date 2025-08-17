@@ -104,28 +104,9 @@ class CODE2Loader(BaseDataLoader):
         for sample in processed_data:
             g: dgl.DGLGraph = sample["dgl_graph"]
             gid = id(g)
-            if "node_token_ids" not in g.ndata:
-                raise AssertionError("缺少 node_token_ids，请先运行预处理生成")
-            if "edge_token_ids" not in g.edata:
-                # 统一填 0
-                zeros = torch.zeros(g.num_edges(), dtype=torch.long)
-                g.edata["edge_token_ids"] = zeros.view(-1, 1)
-            # 同步 type_id（用于统一接口）
-            # 对于节点：若两列token，第一列去奇数/2得到原索引，第二列减偏置后去奇数/2
-            ntok = g.ndata["node_token_ids"].long()
-            if ntok.dim() == 1:
-                ntok = ntok.view(-1, 1)
-            if ntok.shape[1] == 1:
-                node_type_id = (ntok.view(-1) - 1) // 2
-            else:
-                first = (ntok[:, 0].view(-1) - 1) // 2
-                second = ((ntok[:, 1].view(-1) - self._second_channel_bias) - 1) // 2
-                # 对于多通道，默认以第一通道作为 node_type_id 的主类型（与COIL-DEL类似做法）
-                node_type_id = first
-            g.ndata["node_type_id"] = node_type_id
-            g.edata["edge_type_id"] = (g.edata["edge_token_ids"].view(-1)) // 2
-            self._node_attr_cache[gid] = {int(i): g.ndata["node_token_ids"][i].long().tolist() for i in range(g.num_nodes())}
-            self._edge_attr_cache[gid] = {int(i): int(g.edata["edge_type_id"][i].item()) for i in range(g.num_edges())}
+            # 已在预处理阶段写回标准键；此处仅构建缓存。
+            self._node_attr_cache[gid] = {int(i): g.ndata['node_token_ids'][i].long().tolist() for i in range(g.num_nodes())}
+            self._edge_attr_cache[gid] = {int(i): int(g.edata['edge_type_id'][i].item()) for i in range(g.num_edges())}
         self._cache_built = True
 
     def get_dataset_task_type(self) -> str:
@@ -161,7 +142,7 @@ class CODE2Loader(BaseDataLoader):
         t = graph.ndata["node_token_ids"][int(node_id)].long()
         if t.dim() == 0:
             return [int(t.item())]
-        return [int(t[0].item()), int(t[1].item())] if t.shape[0] >= 2 else [int(t[0].item())]
+        return [int(t[0].item()), int(t[1].item())] 
 
     def get_edge_token(self, graph: dgl.DGLGraph, edge_id: int, etype: str = None) -> List[int]:
         return [int(graph.edata["edge_token_ids"][int(edge_id)][0].item())]

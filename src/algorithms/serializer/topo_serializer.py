@@ -54,12 +54,13 @@ class TopoSerializer(BaseGraphSerializer):
         """
         #将图转为有向图，边从小的id指向大的id
         src, dst = graph_data['dgl_graph'].edges()
-        mask=src>dst
-        src=src[mask]
-        dst=dst[mask]
-        dgl_graph = dgl.graph((src, dst))
-        # 兼容不同数据集的节点特征字段命名：优先 'feat'，其次 'attr'，再次 'feature'；不存在则不复制
+        mask = src > dst
+        src = src[mask]
+        dst = dst[mask]
+        # 保持与原图相同的节点数量，避免特征长度与节点数不一致
         orig = graph_data['dgl_graph']
+        dgl_graph = dgl.graph((src, dst), num_nodes=int(orig.num_nodes()))
+        # 兼容不同数据集的节点特征字段命名：优先 'feat'，其次 'attr'，再次 'feature'；不存在则不复制
         if 'feat' in orig.ndata:
             dgl_graph.ndata['feat'] = orig.ndata['feat']
         elif 'attr' in orig.ndata:
