@@ -19,7 +19,7 @@ logger = get_logger(__name__)
 class COLORS3Loader(BaseDataLoader):
     """COLORS-3 图分类数据集（TU）。从预处理目录读取 data.pkl 与三份划分索引。"""
 
-    def __init__(self, config: ProjectConfig, dataset_name: str = "COLORS-3", target_property: Optional[str] = None):
+    def __init__(self, config: ProjectConfig, dataset_name: str = "colors3", target_property: Optional[str] = None):
         # 统一以目录名作为 dataset_name；内部再记录标准化名称用于 id 前缀
         super().__init__(dataset_name, config, target_property)
         self._all_data: Optional[List[Dict[str, Any]]] = None
@@ -180,10 +180,12 @@ class COLORS3Loader(BaseDataLoader):
         return graph.edata["edge_type_id"]
 
     def get_graph_node_token_ids(self, graph: dgl.DGLGraph) -> torch.Tensor:
-        return graph.ndata["node_token_ids"]
+        nt = self.get_graph_node_type_ids(graph)
+        return (nt.long() * 2 + 1).view(-1, 1)
 
     def get_graph_edge_token_ids(self, graph: dgl.DGLGraph) -> torch.Tensor:
-        return graph.edata["edge_token_ids"]
+        et = self.get_graph_edge_type_ids(graph)
+        return (et.long() * 2).view(-1, 1)
 
     def get_graph_src_dst(self, graph: dgl.DGLGraph) -> Tuple[torch.Tensor, torch.Tensor]:
         return graph.edges()

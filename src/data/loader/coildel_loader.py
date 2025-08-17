@@ -19,7 +19,7 @@ logger = get_logger(__name__)
 class COILDELLoader(BaseDataLoader):
     """COIL-DEL 图分类数据集（TU）。"""
 
-    def __init__(self, config: ProjectConfig, dataset_name: str = "COIL-DEL", target_property: Optional[str] = None):
+    def __init__(self, config: ProjectConfig, dataset_name: str = "coildel", target_property: Optional[str] = None):
         super().__init__(dataset_name, config, target_property)
         self._all_data: Optional[List[Dict[str, Any]]] = None
         self._cache_built: bool = False
@@ -27,6 +27,8 @@ class COILDELLoader(BaseDataLoader):
         self._edge_attr_cache: Dict[int, Dict[int, int]] = {}
         self._normalized_name = "coildel"
         self.load_data()
+        # 第二通道节点token偏置（取偶数，确保与第一通道奇数域错开且仍为奇数）
+        self._node_second_channel_bias: int = 1000000
 
     def _load_processed_data(self) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
         logger.info(f"📂 读取 COIL-DEL 预处理目录: {self.data_dir}")
@@ -113,7 +115,8 @@ class COILDELLoader(BaseDataLoader):
         return "classification"
 
     def get_num_classes(self) -> int:
-        return 2
+        # COIL-DEL 为 100 类多分类任务（标签 0..99）
+        return 100
 
     def get_node_attribute(self, graph: dgl.DGLGraph, node_id: int) -> int:
         if self._cache_built and id(graph) in self._node_attr_cache:
@@ -140,14 +143,35 @@ class COILDELLoader(BaseDataLoader):
         return int(name)
 
     def get_node_token(self, graph: dgl.DGLGraph, node_id: int, ntype: str = None) -> List[int]:
-        return [int(graph.ndata["node_token_ids"][int(node_id)][0].item())]
+        idx = int(node_id)
+        # 优先返回两维token（各自奇数域）
+        if 'node_attr' in graph.ndata and graph.ndata['node_attr'].dim() == 2 and graph.ndata['node_attr'].shape[1] >= 2:
+            attrs = graph.ndata['node_attr'][idx].long()
+            a = int(attrs[0].item())
+            b = int(attrs[1].item())
+            return [2 * a + 1, 2 * b + 1 + self._node_second_channel_bias]
+        # 回退：单通道（奇数域）
+        # nt = int(self.get_graph_node_type_ids(graph)[idx].item())
+        # return [2 * nt + 1]
+        raise NotImplementedError("COIL-DEL 数据集不支持单token")
 
     def get_edge_token(self, graph: dgl.DGLGraph, edge_id: int, etype: str = None) -> List[int]:
         return [int(graph.edata["edge_token_ids"][int(edge_id)][0].item())]
 
     def get_node_tokens_bulk(self, graph: dgl.DGLGraph, node_ids: List[int]) -> List[List[int]]:
         ids = torch.as_tensor(node_ids, dtype=torch.long)
-        return graph.ndata["node_token_ids"][ids].tolist()
+        # 若存在原始两维节点属性，则返回两维token（各自映射到奇数域）
+        if 'node_attr' in graph.ndata and graph.ndata['node_attr'].dim() == 2 and graph.ndata['node_attr'].shape[1] >= 2:
+            attrs = graph.ndata['node_attr'][ids].long()
+            a = (attrs[:, 0].view(-1, 1) * 2 + 1)
+            b = (attrs[:, 1].view(-1, 1) * 2 + 1) + self._node_second_channel_bias
+            tok = torch.cat([a, b], dim=1)
+            return tok.tolist()
+        # 回退：使用单通道type id（奇数域）
+        # nt = self.get_graph_node_type_ids(graph)[ids]
+        # tok = (nt.long() * 2 + 1).view(-1, 1)
+        # return tok.tolist()
+        raise NotImplementedError("COIL-DEL 数据集不支持单token")
 
     def get_edge_tokens_bulk(self, graph: dgl.DGLGraph, edge_ids: List[int]) -> List[List[int]]:
         ids = torch.as_tensor(edge_ids, dtype=torch.long)
@@ -168,10 +192,20 @@ class COILDELLoader(BaseDataLoader):
         return graph.edata["edge_type_id"]
 
     def get_graph_node_token_ids(self, graph: dgl.DGLGraph) -> torch.Tensor:
-        return graph.ndata["node_token_ids"]
+        # 优先返回原始两维节点属性映射后的双通道token
+        if 'node_attr' in graph.ndata and graph.ndata['node_attr'].dim() == 2 and graph.ndata['node_attr'].shape[1] >= 2:
+            attrs = graph.ndata['node_attr'].long()
+            a = (attrs[:, 0].view(-1, 1) * 2 + 1)
+            b = (attrs[:, 1].view(-1, 1) * 2 + 1) + self._node_second_channel_bias
+            return torch.cat([a, b], dim=1)
+        # 回退：单通道（奇数域）
+        # nt = self.get_graph_node_type_ids(graph)
+        # return (nt.long() * 2 + 1).view(-1, 1)
+        raise NotImplementedError("COIL-DEL 数据集不支持单token")
 
     def get_graph_edge_token_ids(self, graph: dgl.DGLGraph) -> torch.Tensor:
-        return graph.edata["edge_token_ids"]
+        et = self.get_graph_edge_type_ids(graph)
+        return (et.long() * 2).view(-1, 1)
 
     def get_graph_src_dst(self, graph: dgl.DGLGraph) -> Tuple[torch.Tensor, torch.Tensor]:
         return graph.edges()

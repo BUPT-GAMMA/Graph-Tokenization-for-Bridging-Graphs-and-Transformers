@@ -9,6 +9,7 @@ from src.models.bert.data import (
     ClassificationDataset,
     LabelNormalizer,
 )
+from src.data.unified_data_interface import UnifiedDataInterface
 
 
 
@@ -169,9 +170,7 @@ def build_regression_loaders(
 def build_classification_loaders(
     config,
     pretrained,
-    *,
-    num_classes: int,
-    udi,
+    udi: UnifiedDataInterface,
     method,
 ) -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
   # 获取带graph_id的原始数据
@@ -180,18 +179,21 @@ def build_classification_loaders(
         (val_seqs_with_id, val_props),
         (test_seqs_with_id, test_props),
     ) = udi.get_training_data(method)
+    target_property = udi._resolve_target_property(config.task.target_property)
+    config.task.target_property = target_property # 更新配置
+    num_classes = udi.get_num_classes()
     
     # 准备扁平化数据
     train_sequences = [seq for _, seq in train_seqs_with_id]
-    train_labels = udi._extract_labels_from_properties(train_props, config.task.target_property)
+    train_labels = udi._extract_labels_from_properties(train_props, target_property)
     train_gids = [gid for gid, _ in train_seqs_with_id]
     
     val_sequences = [seq for _, seq in val_seqs_with_id]
-    val_labels = udi._extract_labels_from_properties(val_props, config.task.target_property)
+    val_labels = udi._extract_labels_from_properties(val_props, target_property)
     val_gids = [gid for gid, _ in val_seqs_with_id]
     
     test_sequences = [seq for _, seq in test_seqs_with_id]
-    test_labels = udi._extract_labels_from_properties(test_props, config.task.target_property)
+    test_labels = udi._extract_labels_from_properties(test_props, target_property)
     test_gids = [gid for gid, _ in test_seqs_with_id]
     assert num_classes > 1, "分类任务需要至少2个类别"
     train_ds, val_ds, test_ds = build_classification_datasets(

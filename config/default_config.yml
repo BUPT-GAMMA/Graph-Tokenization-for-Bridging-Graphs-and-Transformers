@@ -83,7 +83,7 @@ bert:
   # 预训练配置
   pretraining:
     epochs: 5
-    batch_size: 128
+    batch_size: 32
     learning_rate: 2e-4
     mask_prob: 0.15
     warmup_steps: 1000
@@ -105,7 +105,7 @@ bert:
   # 微调配置
   finetuning:
     epochs: 60
-    batch_size: 128
+    batch_size: 32
     learning_rate: 5e-5
     weight_decay: 0.15
     head_lr_multiplier: 2.0

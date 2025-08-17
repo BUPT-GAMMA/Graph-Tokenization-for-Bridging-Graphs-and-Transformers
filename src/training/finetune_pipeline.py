@@ -97,7 +97,7 @@ def run_finetune(
         )
     else:
         train_dl, val_dl, test_dl = build_classification_loaders(
-            config, pretrained, udi, method, num_classes=num_classes
+            config, pretrained, udi, method
         )
         normalizer = None  # 分类任务不需要normalizer
 

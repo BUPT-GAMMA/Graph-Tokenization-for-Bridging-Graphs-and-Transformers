@@ -154,7 +154,6 @@ def evaluate_model(
                     preds_for_gid_orig = np.array(label_normalizer.inverse_transform(preds_for_gid.reshape(-1, 1))).flatten()
                     agg_pred = np.mean(preds_for_gid_orig)
                 else:
-                    import torch
                     pooled_arr = np.stack(pooled_list, axis=0).astype(np.float32)
                     feats = pooled_arr
                     # 若聚合器声明使用预测作为特征，则拼接
@@ -185,7 +184,6 @@ def evaluate_model(
                     raise ValueError(f"Unknown aggregation mode: {aggregation_mode}")
         else: # classification
             if aggregation_mode == 'learned' and aggregator is not None:
-                import torch
                 logits_mat = np.array(grouped_logits.get(gid, []), dtype=np.float32)
                 pooled_list = grouped_pooled.get(gid, [])
                 if logits_mat.shape[0] == 0 or len(pooled_list) != logits_mat.shape[0]:

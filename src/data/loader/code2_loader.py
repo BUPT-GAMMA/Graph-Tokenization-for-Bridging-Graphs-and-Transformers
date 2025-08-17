@@ -16,20 +16,28 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-class PROTEINSLoader(BaseDataLoader):
-    """PROTEINS 图分类数据集（TU）。"""
+class CODE2Loader(BaseDataLoader):
+    """ogbg-code2 图到序列数据集（OGB）。
 
-    def __init__(self, config: ProjectConfig, dataset_name: str = "proteins", target_property: Optional[str] = None):
+    预处理约定：
+    - 节点两维离散特征分别作为两个节点token输出；两者需域不相交，因此第二维加大偏置。
+    - 数据集中无边特征，边token统一为0（偶数域）。
+    - 写入规范键：`node_token_ids: [N, Dn]`、`edge_token_ids: [E, 1]`，并同步 `feat`。
+    """
+
+    def __init__(self, config: ProjectConfig, dataset_name: str = "code2", target_property: Optional[str] = None):
         super().__init__(dataset_name, config, target_property)
         self._all_data: Optional[List[Dict[str, Any]]] = None
         self._cache_built: bool = False
-        self._node_attr_cache: Dict[int, Dict[int, int]] = {}
+        self._node_attr_cache: Dict[int, Dict[int, List[int]]] = {}
         self._edge_attr_cache: Dict[int, Dict[int, int]] = {}
-        self._normalized_name = "proteins"
+        self._normalized_name = "code2"
+        # 大偏置，确保两个节点token域不重叠，且仍保持奇数域
+        self._second_channel_bias = 10_000_000
         self.load_data()
 
     def _load_processed_data(self) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
-        logger.info(f"📂 读取 PROTEINS 预处理目录: {self.data_dir}")
+        logger.info(f"📂 读取 CODE2 预处理目录: {self.data_dir}")
         train_index_file = self.data_dir / "train_index.json"
         test_index_file = self.data_dir / "test_index.json"
         val_index_file = self.data_dir / "val_index.json"
@@ -41,17 +49,17 @@ class PROTEINSLoader(BaseDataLoader):
             raise FileNotFoundError(f"统一数据文件不存在: {data_file}")
         if self._all_data is None:
             with open(data_file, "rb") as f:
-                raw_data: List[Tuple[dgl.DGLGraph, int]] = pickle.load(f)
+                raw_data: List[Tuple[dgl.DGLGraph, Any]] = pickle.load(f)
             all_data: List[Dict[str, Any]] = []
-            for i, (graph, label_int) in enumerate(raw_data):
+            for i, (graph, label_obj) in enumerate(raw_data):
                 sample = {
                     "id": f"{self._normalized_name}_{i}",
                     "dgl_graph": graph,
                     "num_nodes": int(graph.num_nodes()),
                     "num_edges": int(graph.num_edges()),
-                    "properties": {"label": int(label_int)},
+                    "properties": {"label": label_obj},  # code2 是序列标签
                     "dataset_name": self.dataset_name,
-                    "data_type": "protein_graph",
+                    "data_type": "program_graph",
                 }
                 all_data.append(sample)
             self._all_data = all_data
@@ -67,7 +75,7 @@ class PROTEINSLoader(BaseDataLoader):
         return train_data, val_data, test_data
 
     def _extract_labels(self, data: List[Dict[str, Any]]) -> List[Any]:
-        return [int(s.get("properties", {}).get("label", 0)) for s in data]
+        return [s.get("properties", {}).get("label") for s in data]
 
     def _get_data_metadata(self) -> Dict[str, Any]:
         if self._train_data is None:
@@ -79,12 +87,11 @@ class PROTEINSLoader(BaseDataLoader):
         num_edges = [s["num_edges"] for s in all_data]
         return {
             "dataset_name": self.dataset_name,
-            "dataset_type": "protein_graph",
+            "dataset_type": "program_graph",
             "total_graphs": len(all_data),
             "avg_num_nodes": float(np.mean(num_nodes)),
             "avg_num_edges": float(np.mean(num_edges)),
             "task_type": self.get_dataset_task_type(),
-            "num_classes": self.get_num_classes(),
         }
 
     def load_data(self):
@@ -99,33 +106,43 @@ class PROTEINSLoader(BaseDataLoader):
             gid = id(g)
             if "node_token_ids" not in g.ndata:
                 raise AssertionError("缺少 node_token_ids，请先运行预处理生成")
-            node_token_ids = g.ndata["node_token_ids"].long()
-            g.ndata["node_type_id"] = node_token_ids.view(-1)
             if "edge_token_ids" not in g.edata:
+                # 统一填 0
                 zeros = torch.zeros(g.num_edges(), dtype=torch.long)
                 g.edata["edge_token_ids"] = zeros.view(-1, 1)
-            g.edata["edge_type_id"] = g.edata["edge_token_ids"].view(-1)
-            self._node_attr_cache[gid] = {int(i): int(v) for i, v in enumerate(g.ndata["node_type_id"].tolist())}
-            self._edge_attr_cache[gid] = {int(i): int(v) for i, v in enumerate(g.edata["edge_type_id"].tolist())}
+            # 同步 type_id（用于统一接口）
+            # 对于节点：若两列token，第一列去奇数/2得到原索引，第二列减偏置后去奇数/2
+            ntok = g.ndata["node_token_ids"].long()
+            if ntok.dim() == 1:
+                ntok = ntok.view(-1, 1)
+            if ntok.shape[1] == 1:
+                node_type_id = (ntok.view(-1) - 1) // 2
+            else:
+                first = (ntok[:, 0].view(-1) - 1) // 2
+                second = ((ntok[:, 1].view(-1) - self._second_channel_bias) - 1) // 2
+                # 对于多通道，默认以第一通道作为 node_type_id 的主类型（与COIL-DEL类似做法）
+                node_type_id = first
+            g.ndata["node_type_id"] = node_type_id
+            g.edata["edge_type_id"] = (g.edata["edge_token_ids"].view(-1)) // 2
+            self._node_attr_cache[gid] = {int(i): g.ndata["node_token_ids"][i].long().tolist() for i in range(g.num_nodes())}
+            self._edge_attr_cache[gid] = {int(i): int(g.edata["edge_type_id"][i].item()) for i in range(g.num_edges())}
         self._cache_built = True
 
     def get_dataset_task_type(self) -> str:
-        return "classification"
+        return "sequence_prediction"
 
     def get_num_classes(self) -> int:
-        return 2
+        return 0
 
     def get_node_attribute(self, graph: dgl.DGLGraph, node_id: int) -> int:
-        if self._cache_built and id(graph) in self._node_attr_cache:
-            return int(self._node_attr_cache[id(graph)][int(node_id)])
-        return int(graph.ndata["node_type_id"][int(node_id)].item())
+        # 返回主通道类型（第一通道还原前的索引）
+        tok = graph.ndata["node_token_ids"][int(node_id)]
+        return int(((int(tok[0].item())) - 1) // 2)
 
     def get_edge_attribute(self, graph: dgl.DGLGraph, edge_id: int) -> int:
-        if self._cache_built and id(graph) in self._edge_attr_cache:
-            return int(self._edge_attr_cache[id(graph)][int(edge_id)])
-        if "edge_type_id" in graph.edata:
-            return int(graph.edata["edge_type_id"][int(edge_id)].item())
-        return 0
+        if graph.num_edges() == 0:
+            return 0
+        return int(graph.edata["edge_type_id"][int(edge_id)].item())
 
     def get_node_type(self, graph: dgl.DGLGraph, node_id: int) -> str:
         return str(self.get_node_attribute(graph, node_id))
@@ -140,7 +157,11 @@ class PROTEINSLoader(BaseDataLoader):
         return int(name)
 
     def get_node_token(self, graph: dgl.DGLGraph, node_id: int, ntype: str = None) -> List[int]:
-        return [int(graph.ndata["node_token_ids"][int(node_id)][0].item())]
+        # 返回两通道 token
+        t = graph.ndata["node_token_ids"][int(node_id)].long()
+        if t.dim() == 0:
+            return [int(t.item())]
+        return [int(t[0].item()), int(t[1].item())] if t.shape[0] >= 2 else [int(t[0].item())]
 
     def get_edge_token(self, graph: dgl.DGLGraph, edge_id: int, etype: str = None) -> List[int]:
         return [int(graph.edata["edge_token_ids"][int(edge_id)][0].item())]
@@ -168,15 +189,15 @@ class PROTEINSLoader(BaseDataLoader):
         return graph.edata["edge_type_id"]
 
     def get_graph_node_token_ids(self, graph: dgl.DGLGraph) -> torch.Tensor:
-        nt = self.get_graph_node_type_ids(graph)
-        return (nt.long() * 2 + 1).view(-1, 1)
+        return graph.ndata["node_token_ids"].long()
 
     def get_graph_edge_token_ids(self, graph: dgl.DGLGraph) -> torch.Tensor:
-        et = self.get_graph_edge_type_ids(graph)
-        return (et.long() * 2).view(-1, 1)
+        return graph.edata["edge_token_ids"].long()
 
     def get_graph_src_dst(self, graph: dgl.DGLGraph) -> Tuple[torch.Tensor, torch.Tensor]:
         return graph.edges()
 
     def get_token_map(self) -> Dict[Tuple[str, int], int]:
         return {}
+
+
