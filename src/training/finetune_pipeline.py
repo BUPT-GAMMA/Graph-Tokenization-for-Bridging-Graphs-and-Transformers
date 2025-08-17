@@ -4,6 +4,7 @@ from typing import Dict, Any, Literal, Optional
 import time
 import pickle
 import torch
+import json
 
 from config import ProjectConfig
 from src.data.unified_data_interface import UnifiedDataInterface
@@ -155,6 +156,10 @@ def run_finetune(
     steps_per_epoch = len(train_dl)
     log_interval = steps_per_epoch//10
     best_val_mae = float('inf')  # 仅用于回归任务的最佳MAE记录
+    # 追踪最后一轮用于汇总写盘
+    last_train_loss: float | None = None
+    last_val_metrics: Dict[str, float] | None = None
+    last_learning_rate: float | None = None
 
     for epoch in range(config.bert.finetuning.epochs):
         epoch_start = time.time()
@@ -241,6 +246,16 @@ def run_finetune(
             writer.add_scalar('Epoch_Time', float(epoch_time), epoch + 1)
             current_lr = scheduler.get_last_lr()[0] if scheduler else optimizer.param_groups[0]['lr']
             writer.add_scalar('Train/Learning_Rate', float(current_lr), epoch + 1)
+            # 记录本轮快照
+            last_train_loss = float(train_loss)
+            try:
+                last_val_metrics = {k: float(v) for k, v in val_metrics.items()}
+            except Exception:
+                last_val_metrics = None
+            try:
+                last_learning_rate = float(current_lr)
+            except Exception:
+                last_learning_rate = None
 
             # 任务特定指标（仅两个分支：回归/分类）
             if task == "regression":
@@ -250,7 +265,7 @@ def run_finetune(
                 writer.add_scalar('Regression/Val_MSE', float(val_metrics['mse']), epoch + 1)
                 writer.add_scalar('Regression/Val_RMSE', float(val_metrics['rmse']), epoch + 1)
                 writer.add_scalar('Regression/Val_R2', float(val_metrics['r2']), epoch + 1)
-                writer.add_scalar('Regression/Val_Correlation', float(val_metrics['correlation']), epoch + 1)
+                # writer.add_scalar('Regression/Val_Correlation', float(val_metrics['correlation']), epoch + 1)
             else:  # classification
                 writer.add_scalar('Classification/Val_Accuracy', float(val_metrics['accuracy']), epoch + 1)
                 writer.add_scalar('Classification/Val_Precision', float(val_metrics['precision']), epoch + 1)
@@ -274,7 +289,7 @@ def run_finetune(
                         'val/mse': float(val_metrics['mse']),
                         'val/rmse': float(val_metrics['rmse']),
                         'val/r2': float(val_metrics['r2']),
-                        'val/correlation': float(val_metrics['correlation']),
+                        # 'val/correlation': float(val_metrics['correlation']),
                     })
                 else:
                     payload.update({
@@ -365,12 +380,14 @@ def run_finetune(
             writer.add_scalar('Test/Regression_MSE', float(test_metrics['mse']), 0)
             writer.add_scalar('Test/Regression_RMSE', float(test_metrics['rmse']), 0)
             writer.add_scalar('Test/Regression_R2', float(test_metrics['r2']), 0)
-            writer.add_scalar('Test/Regression_Correlation', float(test_metrics['correlation']), 0)
+            # writer.add_scalar('Test/Regression_Correlation', float(test_metrics['correlation']), 0)
         else:
             writer.add_scalar('Test/Classification_Accuracy', float(test_metrics['accuracy']), 0)
             writer.add_scalar('Test/Classification_Precision', float(test_metrics['precision']), 0)
             writer.add_scalar('Test/Classification_Recall', float(test_metrics['recall']), 0)
             writer.add_scalar('Test/Classification_F1', float(test_metrics['f1']), 0)
+            writer.add_scalar('Test/Classification_ROC_AUC', float(test_metrics['roc_auc']), 0)
+            writer.add_scalar('Test/Classification_AP', float(test_metrics['ap']), 0)
 
         if wandb_logger is not None:
             if task == "regression":
@@ -380,7 +397,7 @@ def run_finetune(
                     'test/mse': float(test_metrics['mse']),
                     'test/rmse': float(test_metrics['rmse']),
                     'test/r2': float(test_metrics['r2']),
-                    'test/correlation': float(test_metrics['correlation']),
+                    # 'test/correlation': float(test_metrics['correlation']),
                 }
             else:
                 wb_payload = {
@@ -394,7 +411,7 @@ def run_finetune(
     except Exception:
         pass
 
-    # 最终汇总与关闭日志器
+    # 最终汇总与关闭日志器（含写盘JSON）
     try:
         total_train_time = time.time() - train_start_time
         avg_epoch_time = (sum(epoch_times) / len(epoch_times)) if epoch_times else 0.0
@@ -403,6 +420,38 @@ def run_finetune(
         writer.add_scalar('Final/Best_Val_Loss', float(best_val), 0)
         if task == "regression" and best_val_mae != float('inf'):
             writer.add_scalar('Final/Best_Val_MAE', float(best_val_mae), 0)
+        # 组装最终指标并写入日志目录
+        final_json = {
+            'dataset': str(dataset_name),
+            'method': str(method),
+            'task': str(task),
+            'epochs': int(config.bert.finetuning.epochs),
+            'steps_per_epoch': int(steps_per_epoch),
+            'best_dir': str(best_dir),
+            'final_dir': str(final_dir),
+            'train': {
+                'last_loss': float(last_train_loss) if last_train_loss is not None else None,
+                'learning_rate_last': float(last_learning_rate) if last_learning_rate is not None else None,
+            },
+            'val': {
+                **({k: float(v) for k, v in (last_val_metrics or {}).items()}),
+                'best_val_loss': float(best_val),
+                'best_val_mae': float(best_val_mae) if task == 'regression' and best_val_mae != float('inf') else None,
+            },
+            'test': {k: (float(v) if isinstance(v, (int, float)) else v) for k, v in (test_metrics or {}).items()},
+            'time': {
+                'total_train_time_sec': float(total_train_time),
+                'avg_epoch_time_sec': float(avg_epoch_time),
+            },
+        }
+        out_json_path = logs_dir / _log_name / 'finetune_metrics.json'
+        try:
+            (logs_dir / _log_name).mkdir(parents=True, exist_ok=True)
+            with open(out_json_path, 'w') as fjson:
+                json.dump(final_json, fjson, ensure_ascii=False, indent=2)
+            logger.info(f"📝 已写入最终指标: {out_json_path}")
+        except Exception as e:
+            logger.warning(f"最终指标写盘失败: {e}")
         if wandb_logger is not None:
             final_payload = {
                 'final/avg_epoch_time': float(avg_epoch_time),

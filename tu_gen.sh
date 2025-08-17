@@ -6,8 +6,8 @@ python batch_pretrain_simple.py \
   --experiment_group 815_base \
   --exp_prefix colors3 \
   --datasets colors3 \
-  --epochs 100 \
-  --batch_size 1024 \
+  --epochs 50 \
+  --batch_size 512 \
   --learning_rate 5e-4 \
   --gpus 0 \
   --bpe_scenarios all,random,raw \
@@ -21,8 +21,8 @@ python batch_pretrain_simple.py \
   --experiment_group 815_base \
   --exp_prefix proteins \
   --datasets proteins \
-  --epochs 100 \
-  --batch_size 1024 \
+  --epochs 50 \
+  --batch_size 512 \
   --learning_rate 5e-4 \
   --gpus 0 \
   --bpe_scenarios all,random,raw \
@@ -36,8 +36,8 @@ python batch_pretrain_simple.py \
   --experiment_group 815_base \
   --exp_prefix synthetic \
   --datasets synthetic \
-  --epochs 100 \
-  --batch_size 1024 \
+  --epochs 50 \
+  --batch_size 512 \
   --learning_rate 5e-4 \
   --gpus 0 \
   --bpe_scenarios all,random,raw \
@@ -51,8 +51,8 @@ python batch_pretrain_simple.py \
   --experiment_group 815_base \
   --exp_prefix mutagenicity \
   --datasets mutagenicity \
-  --epochs 100 \
-  --batch_size 1024 \
+  --epochs 50 \
+  --batch_size 512 \
   --learning_rate 5e-4 \
   --gpus 0 \
   --bpe_scenarios all,random,raw \
@@ -66,8 +66,8 @@ python batch_pretrain_simple.py \
   --experiment_group 815_base \
   --exp_prefix coildel \
   --datasets coildel \
-  --epochs 100 \
-  --batch_size 1024 \
+  --epochs 50 \
+  --batch_size 512 \
   --learning_rate 5e-4 \
   --gpus 0 \
   --bpe_scenarios all,random,raw \
@@ -97,8 +97,8 @@ python batch_pretrain_simple.py \
   --experiment_group 815_base \
   --exp_prefix dd \
   --datasets dd \
-  --epochs 100 \
-  --batch_size 1024 \
+  --epochs 50 \
+  --batch_size 512 \
   --learning_rate 5e-4 \
   --gpus 0 \
   --bpe_scenarios all,random,raw \
@@ -112,8 +112,8 @@ python batch_pretrain_simple.py \
   --experiment_group 815_base \
   --exp_prefix twitter \
   --datasets twitter \
-  --epochs 100 \
-  --batch_size 1024 \
+  --epochs 50 \
+  --batch_size 512 \
   --learning_rate 5e-4 \
   --gpus 0 \
   --bpe_scenarios all,random,raw \
@@ -132,8 +132,8 @@ python batch_finetune_simple.py \
   --experiment_group 815_base \
   --exp_prefix colors3 \
   --datasets colors3 \
-  --epochs 60 \
-  --batch_size 1024 \
+  --epochs 30 \
+  --batch_size 512 \
   --learning_rate 5e-5 \
   --gpus 0 \
   --bpe_scenarios all,random,raw \
@@ -147,8 +147,8 @@ python batch_finetune_simple.py \
   --experiment_group 815_base \
   --exp_prefix proteins \
   --datasets proteins \
-  --epochs 60 \
-  --batch_size 1024 \
+  --epochs 30 \
+  --batch_size 512 \
   --learning_rate 5e-5 \
   --gpus 0 \
   --bpe_scenarios all,random,raw \
@@ -162,8 +162,8 @@ python batch_finetune_simple.py \
   --experiment_group 815_base \
   --exp_prefix synthetic \
   --datasets synthetic \
-  --epochs 60 \
-  --batch_size 1024 \
+  --epochs 30 \
+  --batch_size 512 \
   --learning_rate 5e-5 \
   --gpus 0 \
   --bpe_scenarios all,random,raw \
@@ -177,8 +177,8 @@ python batch_finetune_simple.py \
   --experiment_group 815_base \
   --exp_prefix mutagenicity \
   --datasets mutagenicity \
-  --epochs 60 \
-  --batch_size 1024 \
+  --epochs 30 \
+  --batch_size 512 \
   --learning_rate 5e-5 \
   --gpus 0 \
   --bpe_scenarios all,random,raw \
@@ -192,8 +192,8 @@ python batch_finetune_simple.py \
   --experiment_group 815_base \
   --exp_prefix coildel \
   --datasets coildel \
-  --epochs 60 \
-  --batch_size 1024 \
+  --epochs 30 \
+  --batch_size 512 \
   --learning_rate 5e-5 \
   --gpus 0 \
   --bpe_scenarios all,random,raw \
@@ -223,8 +223,8 @@ python batch_finetune_simple.py \
   --experiment_group 815_base \
   --exp_prefix dd \
   --datasets dd \
-  --epochs 60 \
-  --batch_size 1024 \
+  --epochs 30 \
+  --batch_size 512 \
   --learning_rate 5e-5 \
   --gpus 0 \
   --bpe_scenarios all,random,raw \
@@ -238,8 +238,8 @@ python batch_finetune_simple.py \
   --experiment_group 815_base \
   --exp_prefix twitter \
   --datasets twitter \
-  --epochs 60 \
-  --batch_size 1024 \
+  --epochs 30 \
+  --batch_size 512 \
   --learning_rate 5e-5 \
   --gpus 0 \
   --bpe_scenarios all,random,raw \

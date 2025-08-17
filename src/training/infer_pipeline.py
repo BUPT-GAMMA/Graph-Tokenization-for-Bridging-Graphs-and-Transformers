@@ -240,7 +240,7 @@ def run_infer(
     try:
         writer.add_scalar('Infer/Loss', float(metrics.get('val_loss', 0.0)), 0)
         if task == 'regression':
-            for key in ['mae', 'mse', 'rmse', 'r2', 'correlation']:
+            for key in ['mae', 'mse', 'rmse', 'r2']:
                 if key in metrics:
                     writer.add_scalar(f'Infer/{key.upper()}', float(metrics[key]), 0)
         else:
@@ -255,7 +255,7 @@ def run_infer(
         try:
             payload = {'infer/loss': float(metrics.get('val_loss', 0.0))}
             if task == 'regression':
-                for key in ['mae', 'mse', 'rmse', 'r2', 'correlation']:
+                for key in ['mae', 'mse', 'rmse', 'r2']:
                     if key in metrics:
                         payload[f'infer/{key}'] = float(metrics[key])
             else:
