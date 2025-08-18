@@ -440,11 +440,11 @@ def run_finetune(
         # 追加：分别记录三种聚合模式到不同路径 Test/{mode}/...
         for _mode, _m in test_metrics_by_mode.items():
             base = f"Test/{_mode}"
-            writer.add_scalar(f'{base}/Loss', float(_m['val_loss']), 0)
+            # writer.add_scalar(f'{base}/Loss', float(_m['val_loss']), 0)
             if task == "regression":
                 writer.add_scalar(f'{base}/MAE', float(_m['mae']), 0)
                 writer.add_scalar(f'{base}/MSE', float(_m['mse']), 0)
-                writer.add_scalar(f'{base}/RMSE', float(_m['rmse']), 0)
+                # writer.add_scalar(f'{base}/RMSE', float(_m['rmse']), 0)
                 writer.add_scalar(f'{base}/R2', float(_m['r2']), 0)
                 # writer.add_scalar(f'{base}/Correlation', float(_m['correlation']), 0)
             else:
@@ -517,7 +517,7 @@ def run_finetune(
             },
             'val': {
                 **({k: float(v) for k, v in (last_val_metrics or {}).items()}),
-                'best_val_loss': float(best_val),
+                # 'best_val_loss': float(best_val),
                 'best_val_mae': float(best_val_mae) if task == 'regression' and best_val_mae != float('inf') else None,
             },
             'test': {k: (float(v) if isinstance(v, (int, float)) else v) for k, v in (test_metrics or {}).items()},
