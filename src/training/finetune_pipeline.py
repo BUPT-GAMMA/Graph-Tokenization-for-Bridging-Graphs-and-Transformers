@@ -135,7 +135,8 @@ def run_finetune(
     # 训练
     device = config.system.device if config.system.device != "auto" else ("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
-    best_val = float('inf')
+    # 早停监控基线：回归(min) 用 +inf，分类(max) 用 -inf
+    best_val = float('inf') if task == "regression" else float('-inf')
     patience = config.bert.finetuning.early_stopping_patience
     patience_ctr = 0
     # 为避免覆盖预训练权重，微调阶段保存到独立子目录，可选加前后缀
@@ -231,7 +232,7 @@ def run_finetune(
             val_metrics_by_mode[_mode] = _metrics
 
         # 主验证指标用于早停逻辑，仍按传入 aggregation_mode
-        val_metrics = val_metrics_by_mode[_val_agg_mode]
+        val_metrics = val_metrics_by_mode['avg']
         epoch_time = time.time() - epoch_start
         epoch_times.append(epoch_time)
 
