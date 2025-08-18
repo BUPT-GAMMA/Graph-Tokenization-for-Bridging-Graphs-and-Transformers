@@ -198,19 +198,40 @@ def run_finetune(
             total_epochs=config.bert.finetuning.epochs,
             log_style=getattr(config.system, 'log_style', 'online'),
         )
-        # 训练期验证：若选择 learned，则在聚合器未训练前强制使用 avg
+        # 训练期验证：无论传入模式如何，均计算三种聚合模式并分别记录；
+        # learned 在验证阶段若无聚合器则回退为 avg（仅用于参考日志）。
         _val_agg_mode = aggregation_mode if aggregation_mode != "learned" else "avg"
-        val_metrics = evaluate_model(
-            model,
-            val_dl,
-            device,
-            task,
-            label_normalizer=normalizer if task == "regression" else None,
-            aggregation_mode=_val_agg_mode,
-            epoch_num=epoch + 1,
-            total_epochs=config.bert.finetuning.epochs,
-            log_style=getattr(config.system, 'log_style', 'online'),
-        )
+        val_metrics_by_mode: Dict[str, Dict[str, float]] = {}
+        for _mode in ("avg", "best"):
+            try:
+                    _metrics = evaluate_model(
+                        model,
+                        val_dl,
+                        device,
+                        task,
+                        label_normalizer=normalizer if task == "regression" else None,
+                        aggregation_mode=_mode,
+                        epoch_num=epoch + 1,
+                        total_epochs=config.bert.finetuning.epochs,
+                        log_style=getattr(config.system, 'log_style', 'online'),
+                    )
+            except Exception:
+                # learned 回退为 avg
+                _metrics = evaluate_model(
+                    model,
+                    val_dl,
+                    device,
+                    task,
+                    label_normalizer=normalizer if task == "regression" else None,
+                    aggregation_mode="avg",
+                    epoch_num=epoch + 1,
+                    total_epochs=config.bert.finetuning.epochs,
+                    log_style=getattr(config.system, 'log_style', 'online'),
+                )
+            val_metrics_by_mode[_mode] = _metrics
+
+        # 主验证指标用于早停逻辑，仍按传入 aggregation_mode
+        val_metrics = val_metrics_by_mode[_val_agg_mode]
         epoch_time = time.time() - epoch_start
         epoch_times.append(epoch_time)
 
@@ -261,12 +282,30 @@ def run_finetune(
             if task == "regression":
                 if train_metrics_eval is not None:
                     writer.add_scalar('Regression/Train_MAE', float(train_metrics_eval['mae']), epoch + 1)
+                # 追加：分别记录两种聚合模式
+                for _mode, _m in val_metrics_by_mode.items():
+                    base = f"Val/{_mode}"
+                    writer.add_scalar(f'{base}/Loss', float(_m['val_loss']), epoch + 1)
+                    writer.add_scalar(f'{base}/MAE', float(_m['mae']), epoch + 1)
+                    writer.add_scalar(f'{base}/MSE', float(_m['mse']), epoch + 1)
+                    writer.add_scalar(f'{base}/RMSE', float(_m['rmse']), epoch + 1)
+                    writer.add_scalar(f'{base}/R2', float(_m['r2']), epoch + 1)
+                # 兼容原标签
                 writer.add_scalar('Regression/Val_MAE', float(val_metrics['mae']), epoch + 1)
                 writer.add_scalar('Regression/Val_MSE', float(val_metrics['mse']), epoch + 1)
                 writer.add_scalar('Regression/Val_RMSE', float(val_metrics['rmse']), epoch + 1)
                 writer.add_scalar('Regression/Val_R2', float(val_metrics['r2']), epoch + 1)
                 # writer.add_scalar('Regression/Val_Correlation', float(val_metrics['correlation']), epoch + 1)
             else:  # classification
+                # 追加：分别记录两种聚合模式
+                for _mode, _m in val_metrics_by_mode.items():
+                    base = f"Val/{_mode}"
+                    writer.add_scalar(f'{base}/Loss', float(_m['val_loss']), epoch + 1)
+                    writer.add_scalar(f'{base}/Accuracy', float(_m['accuracy']), epoch + 1)
+                    writer.add_scalar(f'{base}/Precision', float(_m['precision']), epoch + 1)
+                    writer.add_scalar(f'{base}/Recall', float(_m['recall']), epoch + 1)
+                    writer.add_scalar(f'{base}/F1', float(_m['f1']), epoch + 1)
+                # 兼容原标签
                 writer.add_scalar('Classification/Val_Accuracy', float(val_metrics['accuracy']), epoch + 1)
                 writer.add_scalar('Classification/Val_Precision', float(val_metrics['precision']), epoch + 1)
                 writer.add_scalar('Classification/Val_Recall', float(val_metrics['recall']), epoch + 1)
@@ -330,50 +369,89 @@ def run_finetune(
         with open(final_dir / "label_normalizer.pkl", "wb") as f:
             pickle.dump(normalizer, f)
 
-    # 可学习聚合：在测试前训练聚合器
+    # 可学习聚合：在测试前尝试训练聚合器（无论传入模式为何，都为 learned 评估做准备）
     aggregator = None
-    if aggregation_mode == "learned":
-        try:
-            from src.training.learned_aggregation import train_variant_aggregator
-            agg_cfg: Dict[str, Any] = {
-                "hidden_dim": 256,
-                "dropout": 0.1,
-                "epochs": 10,
-                "lr": 1e-3,
-                "weight_decay": 1e-2,
-                "early_stopping_patience": 5,
-                "use_pred_as_feat": (task == "regression"),
-                "batch_size": 64,
-            }
-            aggregator = train_variant_aggregator(
-                model=model,
-                train_loader=train_dl,
-                val_loader=val_dl,
-                device=device,
-                task=task,
-                label_normalizer=normalizer if task == "regression" else None,
-                save_dir=str(final_dir / "aggregator"),
-                cfg=agg_cfg,
-            )
-        except Exception as e:
-            logger.warning(f"训练聚合器失败，将回退到 avg 聚合: {e}")
-            aggregator = None
+    try:
+        from src.training.learned_aggregation import train_variant_aggregator
+        agg_cfg: Dict[str, Any] = {
+            "hidden_dim": 256,
+            "dropout": 0.1,
+            "epochs": 10,
+            "lr": 1e-3,
+            "weight_decay": 1e-2,
+            "early_stopping_patience": 5,
+            "use_pred_as_feat": (task == "regression"),
+            "batch_size": 64,
+        }
+        aggregator = train_variant_aggregator(
+            model=model,
+            train_loader=train_dl,
+            val_loader=val_dl,
+            device=device,
+            task=task,
+            label_normalizer=normalizer if task == "regression" else None,
+            save_dir=str(final_dir / "aggregator"),
+            cfg=agg_cfg,
+        )
+    except Exception as e:
+        logger.warning(f"训练聚合器失败，将回退到 avg 聚合: {e}")
+        aggregator = None
 
-    test_metrics = evaluate_model(
-        model, 
-        test_dl, 
-        device, 
-        task, 
-        label_normalizer=normalizer if task=="regression" else None,
-        aggregation_mode=("learned" if aggregator is not None else ("avg" if aggregation_mode == "learned" else aggregation_mode)),
-        epoch_num=None,
-        total_epochs=None,
-        log_style=getattr(config.system, 'log_style', 'online'),
-        aggregator=aggregator,
-    )
+    # 测试集：三种聚合模式均评估并记录
+    test_metrics_by_mode: Dict[str, Dict[str, float]] = {}
+    for _mode in ("avg", "best", "learned"):
+        try:
+            _metrics = evaluate_model(
+                model,
+                test_dl,
+                device,
+                task,
+                label_normalizer=normalizer if task=="regression" else None,
+                aggregation_mode=_mode if not (_mode == "learned" and aggregator is None) else "avg",
+                epoch_num=None,
+                total_epochs=None,
+                log_style=getattr(config.system, 'log_style', 'online'),
+                aggregator=aggregator if _mode == "learned" else None,
+            )
+        except Exception:
+            _metrics = evaluate_model(
+                model,
+                test_dl,
+                device,
+                task,
+                label_normalizer=normalizer if task=="regression" else None,
+                aggregation_mode="avg",
+                epoch_num=None,
+                total_epochs=None,
+                log_style=getattr(config.system, 'log_style', 'online'),
+            )
+        test_metrics_by_mode[_mode] = _metrics
+
+    # 主测试指标沿用传入 aggregation_mode 语义（learned 无聚合器则回退为 avg）
+    _main_test_mode = ("learned" if aggregation_mode == "learned" and aggregator is not None else ("avg" if aggregation_mode == "learned" else aggregation_mode))
+    test_metrics = test_metrics_by_mode.get(_main_test_mode, test_metrics_by_mode.get("avg"))
 
     # 记录测试指标（仅两种分支：回归/分类）
     try:
+        # 追加：分别记录三种聚合模式到不同路径 Test/{mode}/...
+        for _mode, _m in test_metrics_by_mode.items():
+            base = f"Test/{_mode}"
+            writer.add_scalar(f'{base}/Loss', float(_m['val_loss']), 0)
+            if task == "regression":
+                writer.add_scalar(f'{base}/MAE', float(_m['mae']), 0)
+                writer.add_scalar(f'{base}/MSE', float(_m['mse']), 0)
+                writer.add_scalar(f'{base}/RMSE', float(_m['rmse']), 0)
+                writer.add_scalar(f'{base}/R2', float(_m['r2']), 0)
+                # writer.add_scalar(f'{base}/Correlation', float(_m['correlation']), 0)
+            else:
+                writer.add_scalar(f'{base}/Accuracy', float(_m['accuracy']), 0)
+                writer.add_scalar(f'{base}/Precision', float(_m['precision']), 0)
+                writer.add_scalar(f'{base}/Recall', float(_m['recall']), 0)
+                writer.add_scalar(f'{base}/F1', float(_m['f1']), 0)
+                writer.add_scalar(f'{base}/ROC_AUC', float(_m.get('roc_auc', 0.0)), 0)
+                writer.add_scalar(f'{base}/AP', float(_m.get('ap', 0.0)), 0)
+
+        # 兼容原有单一路径写法
         writer.add_scalar('Test/Loss', float(test_metrics['val_loss']), 0)
         if task == "regression":
             writer.add_scalar('Test/Regression_MAE', float(test_metrics['mae']), 0)
@@ -386,8 +464,8 @@ def run_finetune(
             writer.add_scalar('Test/Classification_Precision', float(test_metrics['precision']), 0)
             writer.add_scalar('Test/Classification_Recall', float(test_metrics['recall']), 0)
             writer.add_scalar('Test/Classification_F1', float(test_metrics['f1']), 0)
-            writer.add_scalar('Test/Classification_ROC_AUC', float(test_metrics['roc_auc']), 0)
-            writer.add_scalar('Test/Classification_AP', float(test_metrics['ap']), 0)
+            writer.add_scalar('Test/Classification_ROC_AUC', float(test_metrics.get('roc_auc', 0.0)), 0)
+            writer.add_scalar('Test/Classification_AP', float(test_metrics.get('ap', 0.0)), 0)
 
         if wandb_logger is not None:
             if task == "regression":
