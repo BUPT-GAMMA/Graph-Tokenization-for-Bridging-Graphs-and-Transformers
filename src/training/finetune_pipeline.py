@@ -264,7 +264,7 @@ def run_finetune(
             # 通用指标
             writer.add_scalar('Loss/Train', float(train_loss), epoch + 1)
             writer.add_scalar('Loss/Validation', float(val_metrics['val_loss']), epoch + 1)
-            writer.add_scalar('Epoch_Time', float(epoch_time), epoch + 1)
+            writer.add_scalar('Train/Epoch_Time', float(epoch_time), epoch + 1)
             current_lr = scheduler.get_last_lr()[0] if scheduler else optimizer.param_groups[0]['lr']
             writer.add_scalar('Train/Learning_Rate', float(current_lr), epoch + 1)
             # 记录本轮快照
@@ -285,31 +285,31 @@ def run_finetune(
                 # 追加：分别记录两种聚合模式
                 for _mode, _m in val_metrics_by_mode.items():
                     base = f"Val/{_mode}"
-                    writer.add_scalar(f'{base}/Loss', float(_m['val_loss']), epoch + 1)
+                    # writer.add_scalar(f'{base}/Loss', float(_m['val_loss']), epoch + 1)
                     writer.add_scalar(f'{base}/MAE', float(_m['mae']), epoch + 1)
                     writer.add_scalar(f'{base}/MSE', float(_m['mse']), epoch + 1)
-                    writer.add_scalar(f'{base}/RMSE', float(_m['rmse']), epoch + 1)
-                    writer.add_scalar(f'{base}/R2', float(_m['r2']), epoch + 1)
+                    # writer.add_scalar(f'{base}/RMSE', float(_m['rmse']), epoch + 1)
+                    # writer.add_scalar(f'{base}/R2', float(_m['r2']), epoch + 1)
                 # 兼容原标签
-                writer.add_scalar('Regression/Val_MAE', float(val_metrics['mae']), epoch + 1)
-                writer.add_scalar('Regression/Val_MSE', float(val_metrics['mse']), epoch + 1)
-                writer.add_scalar('Regression/Val_RMSE', float(val_metrics['rmse']), epoch + 1)
-                writer.add_scalar('Regression/Val_R2', float(val_metrics['r2']), epoch + 1)
+                # writer.add_scalar('Regression/Val_MAE', float(val_metrics['mae']), epoch + 1)
+                # writer.add_scalar('Regression/Val_MSE', float(val_metrics['mse']), epoch + 1)
+                # writer.add_scalar('Regression/Val_RMSE', float(val_metrics['rmse']), epoch + 1)
+                # writer.add_scalar('Regression/Val_R2', float(val_metrics['r2']), epoch + 1)
                 # writer.add_scalar('Regression/Val_Correlation', float(val_metrics['correlation']), epoch + 1)
             else:  # classification
                 # 追加：分别记录两种聚合模式
                 for _mode, _m in val_metrics_by_mode.items():
                     base = f"Val/{_mode}"
-                    writer.add_scalar(f'{base}/Loss', float(_m['val_loss']), epoch + 1)
+                    # writer.add_scalar(f'{base}/Loss', float(_m['val_loss']), epoch + 1)
                     writer.add_scalar(f'{base}/Accuracy', float(_m['accuracy']), epoch + 1)
-                    writer.add_scalar(f'{base}/Precision', float(_m['precision']), epoch + 1)
-                    writer.add_scalar(f'{base}/Recall', float(_m['recall']), epoch + 1)
+                    # writer.add_scalar(f'{base}/Precision', float(_m['precision']), epoch + 1)
+                    # writer.add_scalar(f'{base}/Recall', float(_m['recall']), epoch + 1)
                     writer.add_scalar(f'{base}/F1', float(_m['f1']), epoch + 1)
                 # 兼容原标签
-                writer.add_scalar('Classification/Val_Accuracy', float(val_metrics['accuracy']), epoch + 1)
-                writer.add_scalar('Classification/Val_Precision', float(val_metrics['precision']), epoch + 1)
-                writer.add_scalar('Classification/Val_Recall', float(val_metrics['recall']), epoch + 1)
-                writer.add_scalar('Classification/Val_F1', float(val_metrics['f1']), epoch + 1)
+                # writer.add_scalar('Classification/Val_Accuracy', float(val_metrics['accuracy']), epoch + 1)
+                # writer.add_scalar('Classification/Val_Precision', float(val_metrics['precision']), epoch + 1)
+                # writer.add_scalar('Classification/Val_Recall', float(val_metrics['recall']), epoch + 1)
+                # writer.add_scalar('Classification/Val_F1', float(val_metrics['f1']), epoch + 1)
 
             # W&B：epoch级（train_epoch/* 与 val/*，epoch 轴）
             if wandb_logger is not None:
@@ -452,20 +452,20 @@ def run_finetune(
                 writer.add_scalar(f'{base}/AP', float(_m.get('ap', 0.0)), 0)
 
         # 兼容原有单一路径写法
-        writer.add_scalar('Test/Loss', float(test_metrics['val_loss']), 0)
-        if task == "regression":
-            writer.add_scalar('Test/Regression_MAE', float(test_metrics['mae']), 0)
-            writer.add_scalar('Test/Regression_MSE', float(test_metrics['mse']), 0)
-            writer.add_scalar('Test/Regression_RMSE', float(test_metrics['rmse']), 0)
-            writer.add_scalar('Test/Regression_R2', float(test_metrics['r2']), 0)
-            # writer.add_scalar('Test/Regression_Correlation', float(test_metrics['correlation']), 0)
-        else:
-            writer.add_scalar('Test/Classification_Accuracy', float(test_metrics['accuracy']), 0)
-            writer.add_scalar('Test/Classification_Precision', float(test_metrics['precision']), 0)
-            writer.add_scalar('Test/Classification_Recall', float(test_metrics['recall']), 0)
-            writer.add_scalar('Test/Classification_F1', float(test_metrics['f1']), 0)
-            writer.add_scalar('Test/Classification_ROC_AUC', float(test_metrics.get('roc_auc', 0.0)), 0)
-            writer.add_scalar('Test/Classification_AP', float(test_metrics.get('ap', 0.0)), 0)
+        # writer.add_scalar('Test/Loss', float(test_metrics['val_loss']), 0)
+        # if task == "regression":
+        #     writer.add_scalar('Test/Regression_MAE', float(test_metrics['mae']), 0)
+        #     writer.add_scalar('Test/Regression_MSE', float(test_metrics['mse']), 0)
+        #     writer.add_scalar('Test/Regression_RMSE', float(test_metrics['rmse']), 0)
+        #     writer.add_scalar('Test/Regression_R2', float(test_metrics['r2']), 0)
+        #     # writer.add_scalar('Test/Regression_Correlation', float(test_metrics['correlation']), 0)
+        # else:
+        #     writer.add_scalar('Test/Classification_Accuracy', float(test_metrics['accuracy']), 0)
+        #     writer.add_scalar('Test/Classification_Precision', float(test_metrics['precision']), 0)
+        #     writer.add_scalar('Test/Classification_Recall', float(test_metrics['recall']), 0)
+        #     writer.add_scalar('Test/Classification_F1', float(test_metrics['f1']), 0)
+        #     writer.add_scalar('Test/Classification_ROC_AUC', float(test_metrics.get('roc_auc', 0.0)), 0)
+        #     writer.add_scalar('Test/Classification_AP', float(test_metrics.get('ap', 0.0)), 0)
 
         if wandb_logger is not None:
             if task == "regression":
