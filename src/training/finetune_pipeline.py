@@ -502,7 +502,7 @@ def run_finetune(
         writer.add_scalar('Final/Best_Val_Loss', float(best_val), 0)
         if task == "regression" and best_val_mae != float('inf'):
             writer.add_scalar('Final/Best_Val_MAE', float(best_val_mae), 0)
-        # 组装最终指标并写入日志目录
+        # 组装最终指标并写入日志目录，包含所有聚合模式的结果
         final_json = {
             'dataset': str(dataset_name),
             'method': str(method),
@@ -516,15 +516,30 @@ def run_finetune(
                 'learning_rate_last': float(last_learning_rate) if last_learning_rate is not None else None,
             },
             'val': {
+                # 主验证结果（向后兼容）
                 **({k: float(v) for k, v in (last_val_metrics or {}).items()}),
-                # 'best_val_loss': float(best_val),
                 'best_val_mae': float(best_val_mae) if task == 'regression' and best_val_mae != float('inf') else None,
+                # 按聚合模式分别记录最后一轮验证结果
+                'by_aggregation': {
+                    mode: {k: float(v) for k, v in metrics.items()} 
+                    for mode, metrics in val_metrics_by_mode.items()
+                }
             },
-            'test': {k: (float(v) if isinstance(v, (int, float)) else v) for k, v in (test_metrics or {}).items()},
+            'test': {
+                # 主测试结果（向后兼容）
+                **({k: (float(v) if isinstance(v, (int, float)) else v) for k, v in (test_metrics or {}).items()}),
+                # 按聚合模式分别记录测试结果
+                'by_aggregation': {
+                    mode: {k: (float(v) if isinstance(v, (int, float)) else v) for k, v in metrics.items()}
+                    for mode, metrics in test_metrics_by_mode.items()
+                }
+            },
             'time': {
                 'total_train_time_sec': float(total_train_time),
                 'avg_epoch_time_sec': float(avg_epoch_time),
             },
+            'aggregation_mode_used': str(aggregation_mode),
+            'aggregator_trained': aggregator is not None,
         }
         out_json_path = logs_dir / _log_name / 'finetune_metrics.json'
         try:
