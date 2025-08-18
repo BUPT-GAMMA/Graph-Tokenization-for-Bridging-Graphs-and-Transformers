@@ -344,11 +344,14 @@ def run_finetune(
             pass
         if task == "regression":  
           key = "mae"
+          flag = val_metrics['mae'] < best_val_mae
         else:
           key = "accuracy"
-        if val_metrics[key] < best_val and epoch % 5 == 0:
+          flag = val_metrics["accuracy"] > best_val
+        if flag:
             best_val = val_metrics[key]
             patience_ctr = 0
+            logger.info(f"🎯 新的最优模型! {key}: {val_metrics[key]:.4f}")
             model.save_model(str(best_dir))
             if task == "regression":
                 with open(best_dir / "label_normalizer.pkl", "wb") as f:
