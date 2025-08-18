@@ -140,6 +140,7 @@ def evaluate_model(
 
     # 聚合每个组的预测
     final_preds, final_trues = [], []
+    final_scores = []  # 若可得，保存按 gid 聚合后的概率分布（用于 AUC/AP）
     for gid in grouped_preds:
         preds_for_gid = np.array(grouped_preds[gid])
         true_for_gid = grouped_trues[gid]
@@ -183,6 +184,7 @@ def evaluate_model(
                 else:
                     raise ValueError(f"Unknown aggregation mode: {aggregation_mode}")
         else: # classification
+            agg_prob_np = None
             if aggregation_mode == 'learned' and aggregator is not None:
                 logits_mat = np.array(grouped_logits.get(gid, []), dtype=np.float32)
                 pooled_list = grouped_pooled.get(gid, [])
@@ -203,17 +205,45 @@ def evaluate_model(
                         weights_exp = weights.unsqueeze(-1)  # [1, K, 1]
                         p_agg = (weights_exp * probs_t).sum(dim=1).squeeze(0)  # [C]
                         agg_pred = int(torch.argmax(p_agg).item())
+                        agg_prob_np = p_agg.detach().cpu().numpy()
             else:
-                if aggregation_mode == 'avg': # 投票
-                    agg_pred = np.bincount(preds_for_gid.astype(int)).argmax()
-                elif aggregation_mode == 'best':
-                    correct_preds = preds_for_gid[preds_for_gid == true_for_gid]
-                    agg_pred = correct_preds[0] if len(correct_preds) > 0 else np.bincount(preds_for_gid.astype(int)).argmax()
+                logits_mat = np.array(grouped_logits.get(gid, []), dtype=np.float32)
+                if logits_mat.shape[0] == 0:
+                    # 没有 logits 时只能做投票
+                    if aggregation_mode == 'avg':
+                        agg_pred = np.bincount(preds_for_gid.astype(int)).argmax()
+                    elif aggregation_mode == 'best':
+                        correct_preds = preds_for_gid[preds_for_gid == true_for_gid]
+                        agg_pred = correct_preds[0] if len(correct_preds) > 0 else np.bincount(preds_for_gid.astype(int)).argmax()
+                    else:
+                        raise ValueError(f"Unknown aggregation mode: {aggregation_mode}")
                 else:
-                    raise ValueError(f"Unknown aggregation mode: {aggregation_mode}")
+                    # 计算概率矩阵并进行聚合
+                    logits_t = torch.from_numpy(logits_mat)
+                    probs_t = torch.softmax(logits_t, dim=-1)  # [K, C]
+                    if aggregation_mode == 'avg':
+                        prob_avg = probs_t.mean(dim=0)  # [C]
+                        agg_prob_np = prob_avg.detach().cpu().numpy()
+                        agg_pred = int(torch.argmax(prob_avg).item())
+                    elif aggregation_mode == 'best':
+                        # 若存在正确预测，选择其对应概率；否则回退为平均概率
+                        correct_indices = np.where(preds_for_gid == true_for_gid)[0]
+                        if len(correct_indices) > 0:
+                            idx0 = int(correct_indices[0])
+                            prob_sel = probs_t[idx0]
+                            agg_prob_np = prob_sel.detach().cpu().numpy()
+                            agg_pred = int(torch.argmax(prob_sel).item())
+                        else:
+                            prob_avg = probs_t.mean(dim=0)
+                            agg_prob_np = prob_avg.detach().cpu().numpy()
+                            agg_pred = int(torch.argmax(prob_avg).item())
+                    else:
+                        raise ValueError(f"Unknown aggregation mode: {aggregation_mode}")
 
         final_preds.append(agg_pred)
         final_trues.append(true_for_gid)
+        if task == "classification" and agg_prob_np is not None:
+            final_scores.append(agg_prob_np.tolist())
     
     y_pred_agg = np.array(final_preds)
     y_true_agg = np.array(final_trues)
@@ -223,7 +253,8 @@ def evaluate_model(
         metrics = compute_regression_metrics(y_true_agg, y_pred_agg)
         metrics_out.update(metrics)
     else:
-        metrics = compute_classification_metrics(y_true_agg, y_pred_agg)
+        y_score_agg = np.array(final_scores) if len(final_scores) == len(y_true_agg) and len(final_scores) > 0 else None
+        metrics = compute_classification_metrics(y_true_agg, y_pred_agg, y_score=y_score_agg)
         metrics_out.update(metrics)
         
     return metrics_out
