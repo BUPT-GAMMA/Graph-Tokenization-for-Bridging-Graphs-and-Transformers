@@ -149,13 +149,13 @@ def main():
     if args.dry_run:
         if split_idx is None:
             for i, task in enumerate(tasks, start=args.task_id_start):
-                job_name = f"{args.job_name_prefix}_{i}"
+                job_name = f"{args.job_name_prefix}"
                 batch_content = generate_single_task_sbatch_script(task, args.cpus_per_task, job_name, partition=args.partition)
                 print(f"[{i}] {job_name}: {batch_content}")
         else:
             print(f"[Phase 1] 任务数: {split_idx}")
             for i, task in enumerate(tasks[:split_idx], start=args.task_id_start):
-                job_name = f"{args.job_name_prefix}_{i}"
+                job_name = f"{args.job_name_prefix}"
                 batch_content = generate_single_task_sbatch_script(task, args.cpus_per_task, job_name, partition=args.partition)
                 print(f"[{i}] {job_name}: {batch_content}")
             print(f"\n[Phase 2] 任务数: {len(tasks) - split_idx}")
@@ -163,13 +163,13 @@ def main():
                 for offset, task in enumerate(tasks[split_idx:], start=0):
                     i = args.task_id_start + offset  # 对应前半编号
                     j = args.task_id_start + split_idx + offset  # 后半编号
-                    job_name = f"{args.job_name_prefix}_{j}"
+                    job_name = f"{args.job_name_prefix}"
                     batch_content = generate_single_task_sbatch_script(task, args.cpus_per_task, job_name, partition=args.partition)
                     print(f"[{j}] {job_name} (依赖: {args.dependency_type}:<JOBID_OF_{args.job_name_prefix}-{i}>): {batch_content}")
             else:
                 dep_placeholder = f"{args.dependency_type}:<PHASE1_JOB_IDS_COLON_SEPARATED>"
                 for j, task in enumerate(tasks[split_idx:], start=args.task_id_start + split_idx):
-                    job_name = f"{args.job_name_prefix}_{j}"
+                    job_name = f"{args.job_name_prefix}"
                     batch_content = generate_single_task_sbatch_script(task, args.cpus_per_task, job_name, partition=args.partition)
                     print(f"[{j}] {job_name} (依赖: {dep_placeholder}): {batch_content}")
         print("\nDRY RUN: 未提交任何作业。")
@@ -209,7 +209,7 @@ def main():
 
     if split_idx is None:
         for i, task in enumerate(tasks, start=args.task_id_start):
-            job_name = f"{args.job_name_prefix}-{i}"
+            job_name = f"{args.job_name_prefix}"
             content = generate_single_task_sbatch_script(task, args.cpus_per_task, job_name, partition=args.partition)
             path = _write_script(job_name, content)
             _ = _submit_one(path, job_name)
@@ -217,7 +217,7 @@ def main():
     else:
         # Phase 1
         for i, task in enumerate(tasks[:split_idx], start=args.task_id_start):
-            job_name = f"{args.job_name_prefix}-{i}"
+            job_name = f"{args.job_name_prefix}"
             content = generate_single_task_sbatch_script(task, args.cpus_per_task, job_name, partition=args.partition)
             path = _write_script(job_name, content)
             jid = _submit_one(path, job_name)
@@ -234,7 +234,7 @@ def main():
             for offset, task in enumerate(tasks[split_idx:], start=0):
                 i = args.task_id_start + offset
                 j = args.task_id_start + split_idx + offset
-                job_name = f"{args.job_name_prefix}-{j}"
+                job_name = f"{args.job_name_prefix}"
                 content = generate_single_task_sbatch_script(task, args.cpus_per_task, job_name, partition=args.partition)
                 path = _write_script(job_name, content)
                 dep_expr = f"{args.dependency_type}:{phase1_job_ids[offset]}" if phase1_job_ids[offset] else None
@@ -248,7 +248,7 @@ def main():
             else:
                 dep_expr = f"{args.dependency_type}:{':'.join(phase1_job_ids)}"
             for j, task in enumerate(tasks[split_idx:], start=args.task_id_start + split_idx):
-                job_name = f"{args.job_name_prefix}-{j}"
+                job_name = f"{args.job_name_prefix}"
                 content = generate_single_task_sbatch_script(task, args.cpus_per_task, job_name, partition=args.partition)
                 path = _write_script(job_name, content)
                 _ = _submit_one(path, job_name, dependency_expr=dep_expr)

@@ -4,9 +4,9 @@ python batch_pretrain_simple.py \
   --datasets aqsol \
   --epochs 100 \
   --batch_size 1024 \
-  --learning_rate 2e-4 \
+  --learning_rate 5e-4 \
   --gpus 0 \
-  --bpe_scenarios all \
+  --bpe_scenarios raw \
   --use_augmentation true \
   --config_json '{"bert": {"architecture": {"max_len_policy": "sigma", "max_len_sigma_k": 3}}}' \
   --log_dir log/subproc/815_base \
@@ -19,7 +19,7 @@ python batch_pretrain_simple.py \
   --exp_prefix zinc \
   --datasets zinc \
   --gpus 0 \
-  --bpe_scenarios all \
+  --bpe_scenarios raw \
   --use_augmentation true \
   --log_dir log/subproc/815_base \
   --commands_only \
@@ -34,7 +34,7 @@ python batch_pretrain_simple.py \
   --batch_size 1024 \
   --learning_rate 5e-5 \
   --gpus 0 \
-  --bpe_scenarios all \
+  --bpe_scenarios all,random \
   --use_augmentation true \
   --log_dir log/subproc/815_base \
   --commands_only \
@@ -50,9 +50,9 @@ python batch_finetune_simple.py \
   --datasets aqsol \
   --epochs 60 \
   --batch_size 1024 \
-  --learning_rate 2e-5 \
+  --learning_rate 5e-5 \
   --gpus 0 \
-  --bpe_scenarios all \
+  --bpe_scenarios raw \
   --use_augmentation true \
   --config_json '{"bert": {"architecture": {"max_len_policy": "sigma", "max_len_sigma_k": 3}}}' \
   --log_dir log/subproc/815_base \
@@ -65,7 +65,7 @@ python batch_finetune_simple.py \
   --exp_prefix zinc \
   --datasets zinc \
   --gpus 0 \
-  --bpe_scenarios all \
+  --bpe_scenarios raw \
   --use_augmentation true \
   --log_dir log/subproc/815_base \
   --commands_only \
@@ -80,7 +80,7 @@ python batch_finetune_simple.py \
   --batch_size 1024 \
   --learning_rate 5e-5 \
   --gpus 0 \
-  --bpe_scenarios all \
+  --bpe_scenarios all,random \
   --use_augmentation true \
   --log_dir log/subproc/815_base \
   --commands_only \
