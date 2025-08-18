@@ -344,7 +344,7 @@ def run_finetune(
             pass
         if task == "regression":  
           key = "mae"
-          flag = val_metrics['mae'] < best_val_mae
+          flag = val_metrics['mae'] < best_val
         else:
           key = "accuracy"
           flag = val_metrics["accuracy"] > best_val
