@@ -124,6 +124,8 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
     tasks: List[Dict[str, Any]] = []
     for dataset in datasets:
         for method in methods:
+            if method == "smiles" and dataset not in {"qm9", "zinc", "aqsol", "qm9test"}:
+                continue
             for bpe_config in bpe_test_configs:
                 if hyperparams_list:
                     for params in hyperparams_list:

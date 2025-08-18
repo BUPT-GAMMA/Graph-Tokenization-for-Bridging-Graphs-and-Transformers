@@ -7,8 +7,8 @@ python batch_pretrain_simple.py \
   --exp_prefix colors3 \
   --datasets colors3 \
   --epochs 50 \
-  --batch_size 512 \
-  --learning_rate 5e-4 \
+  --batch_size 128 \
+  --learning_rate 2e-4 \
   --gpus 0 \
   --bpe_scenarios all,random,raw \
   --use_augmentation true \
@@ -22,8 +22,8 @@ python batch_pretrain_simple.py \
   --exp_prefix proteins \
   --datasets proteins \
   --epochs 50 \
-  --batch_size 512 \
-  --learning_rate 5e-4 \
+  --batch_size 128 \
+  --learning_rate 2e-4 \
   --gpus 0 \
   --bpe_scenarios all,random,raw \
   --use_augmentation true \
@@ -37,8 +37,8 @@ python batch_pretrain_simple.py \
   --exp_prefix synthetic \
   --datasets synthetic \
   --epochs 50 \
-  --batch_size 512 \
-  --learning_rate 5e-4 \
+  --batch_size 128 \
+  --learning_rate 2e-4 \
   --gpus 0 \
   --bpe_scenarios all,random,raw \
   --use_augmentation true \
@@ -52,8 +52,8 @@ python batch_pretrain_simple.py \
   --exp_prefix mutagenicity \
   --datasets mutagenicity \
   --epochs 50 \
-  --batch_size 512 \
-  --learning_rate 5e-4 \
+  --batch_size 128 \
+  --learning_rate 2e-4 \
   --gpus 0 \
   --bpe_scenarios all,random,raw \
   --use_augmentation true \
@@ -67,8 +67,8 @@ python batch_pretrain_simple.py \
   --exp_prefix coildel \
   --datasets coildel \
   --epochs 50 \
-  --batch_size 512 \
-  --learning_rate 5e-4 \
+  --batch_size 128 \
+  --learning_rate 2e-4 \
   --gpus 0 \
   --bpe_scenarios all,random,raw \
   --use_augmentation true \
@@ -98,8 +98,8 @@ python batch_pretrain_simple.py \
   --exp_prefix dd \
   --datasets dd \
   --epochs 50 \
-  --batch_size 512 \
-  --learning_rate 5e-4 \
+  --batch_size 128 \
+  --learning_rate 2e-4 \
   --gpus 0 \
   --bpe_scenarios all,random,raw \
   --use_augmentation true \
@@ -113,8 +113,8 @@ python batch_pretrain_simple.py \
   --exp_prefix twitter \
   --datasets twitter \
   --epochs 50 \
-  --batch_size 512 \
-  --learning_rate 5e-4 \
+  --batch_size 128 \
+  --learning_rate 2e-4 \
   --gpus 0 \
   --bpe_scenarios all,random,raw \
   --use_augmentation true \
@@ -133,8 +133,8 @@ python batch_finetune_simple.py \
   --exp_prefix colors3 \
   --datasets colors3 \
   --epochs 30 \
-  --batch_size 512 \
-  --learning_rate 5e-5 \
+  --batch_size 128 \
+  --learning_rate 2e-5 \
   --gpus 0 \
   --bpe_scenarios all,random,raw \
   --use_augmentation true \
@@ -148,8 +148,8 @@ python batch_finetune_simple.py \
   --exp_prefix proteins \
   --datasets proteins \
   --epochs 30 \
-  --batch_size 512 \
-  --learning_rate 5e-5 \
+  --batch_size 128 \
+  --learning_rate 2e-5 \
   --gpus 0 \
   --bpe_scenarios all,random,raw \
   --use_augmentation true \
@@ -163,8 +163,8 @@ python batch_finetune_simple.py \
   --exp_prefix synthetic \
   --datasets synthetic \
   --epochs 30 \
-  --batch_size 512 \
-  --learning_rate 5e-5 \
+  --batch_size 128 \
+  --learning_rate 2e-5 \
   --gpus 0 \
   --bpe_scenarios all,random,raw \
   --use_augmentation true \
@@ -178,8 +178,8 @@ python batch_finetune_simple.py \
   --exp_prefix mutagenicity \
   --datasets mutagenicity \
   --epochs 30 \
-  --batch_size 512 \
-  --learning_rate 5e-5 \
+  --batch_size 128 \
+  --learning_rate 2e-5 \
   --gpus 0 \
   --bpe_scenarios all,random,raw \
   --use_augmentation true \
@@ -193,8 +193,8 @@ python batch_finetune_simple.py \
   --exp_prefix coildel \
   --datasets coildel \
   --epochs 30 \
-  --batch_size 512 \
-  --learning_rate 5e-5 \
+  --batch_size 128 \
+  --learning_rate 2e-5 \
   --gpus 0 \
   --bpe_scenarios all,random,raw \
   --use_augmentation true \
@@ -224,8 +224,8 @@ python batch_finetune_simple.py \
   --exp_prefix dd \
   --datasets dd \
   --epochs 30 \
-  --batch_size 512 \
-  --learning_rate 5e-5 \
+  --batch_size 128 \
+  --learning_rate 2e-5 \
   --gpus 0 \
   --bpe_scenarios all,random,raw \
   --use_augmentation true \
@@ -239,8 +239,8 @@ python batch_finetune_simple.py \
   --exp_prefix twitter \
   --datasets twitter \
   --epochs 30 \
-  --batch_size 512 \
-  --learning_rate 5e-5 \
+  --batch_size 128 \
+  --learning_rate 2e-5 \
   --gpus 0 \
   --bpe_scenarios all,random,raw \
   --use_augmentation true \
