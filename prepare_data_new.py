@@ -335,6 +335,8 @@ def main():
                 'multiple_samples': args_ns.multiple_samples,
             }
             results_file = results_dir / f"prepare_results_{dataset}.json"
+            # 确保目录存在（子进程可能看不到主进程创建的目录）
+            results_file.parent.mkdir(parents=True, exist_ok=True)
             with results_file.open('w') as f:
                 json.dump({'results': results, 'config': cfg_dump, 'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')}, f, indent=2)
             # 子进程到此结束
@@ -412,7 +414,9 @@ def main():
                 if rc != 0:
                     results[task_key] = {"task": task_key, "error": f"child failed ({rc})"}
                 else:
-                    child_json = cdir / f"prepare_results_{task_key.split('_')[0]}.json"
+                    # 提取数据集名称 (去掉最后的方法名)
+                    dataset_name = '_'.join(task_key.split('_')[:-1])
+                    child_json = cdir / f"prepare_results_{dataset_name}.json"
                     try:
                         with child_json.open('r') as f:
                             child = json.load(f)

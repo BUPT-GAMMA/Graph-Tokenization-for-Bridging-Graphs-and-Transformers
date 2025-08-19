@@ -75,8 +75,10 @@ def load_pretrained_backbone(config: ProjectConfig, pretrained_dir: Optional[str
 def run_finetune(
     config: ProjectConfig,
     *,
-    task: Literal["regression", "classification"],
+    task: Literal["regression", "classification", "multi_label_classification", "multi_target_regression"],
     num_classes: Optional[int] = None,
+    num_labels: Optional[int] = None,
+    num_targets: Optional[int] = None,
     aggregation_mode: Literal["avg", "best", "learned"] = "avg",
     save_name_prefix: Optional[str] = None,
     save_name_suffix: Optional[str] = None,
@@ -87,20 +89,33 @@ def run_finetune(
 
     udi = UnifiedDataInterface(config=config, dataset=dataset_name)
 
-    # 加载预训练 backbone 并构建任务模型
+    # 加载预训练 backbone 并构建统一任务模型
     pretrained = load_pretrained_backbone(config, pretrained_dir=pretrained_dir)
-    model = build_task_model(config, task, pretrained=pretrained, num_classes=num_classes)
+    model, task_handler = build_task_model(
+        config=config,
+        pretrained=pretrained,
+        udi=udi,
+        method=method
+    )
 
 
     if task == "regression":
         train_dl, val_dl, test_dl, normalizer = build_regression_loaders(
             config, pretrained, udi, method
         )
-    else:
+    elif task == "multi_target_regression":
+        # 多目标回归：复用回归数据加载器，但标签格式不同
+        train_dl, val_dl, test_dl, normalizer = build_regression_loaders(
+            config, pretrained, udi, method
+        )
+    elif task in ["classification", "multi_label_classification"]:
+        # 单标签和多标签分类：复用分类数据加载器
         train_dl, val_dl, test_dl = build_classification_loaders(
             config, pretrained, udi, method
         )
         normalizer = None  # 分类任务不需要normalizer
+    else:
+        raise ValueError(f"不支持的任务类型: {task}")
 
     # 优化器与调度器
     total_steps = len(train_dl) * config.bert.finetuning.epochs
@@ -135,8 +150,8 @@ def run_finetune(
     # 训练
     device = config.system.device if config.system.device != "auto" else ("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
-    # 早停监控基线：回归(min) 用 +inf，分类(max) 用 -inf
-    best_val = float('inf') if task == "regression" else float('-inf')
+    # 早停监控基线：最小化指标用+inf，最大化指标用-inf
+    best_val = float('-inf') if task_handler.should_maximize_metric else float('inf')
     patience = config.bert.finetuning.early_stopping_patience
     patience_ctr = 0
     # 为避免覆盖预训练权重，微调阶段保存到独立子目录，可选加前后缀
@@ -193,6 +208,7 @@ def run_finetune(
             scheduler,
             device,
             max_grad_norm=config.bert.finetuning.max_grad_norm,
+            task_handler=task_handler,
             on_step=_on_step,
             log_interval=log_interval,
             epoch_num=epoch + 1,
@@ -210,7 +226,8 @@ def run_finetune(
                         val_dl,
                         device,
                         task,
-                        label_normalizer=normalizer if task == "regression" else None,
+                        task_handler=task_handler,
+                        label_normalizer=normalizer if task_handler.is_regression_task() else None,
                         aggregation_mode=_mode,
                         epoch_num=epoch + 1,
                         total_epochs=config.bert.finetuning.epochs,
@@ -223,7 +240,8 @@ def run_finetune(
                     val_dl,
                     device,
                     task,
-                    label_normalizer=normalizer if task == "regression" else None,
+                    task_handler=task_handler,
+                    label_normalizer=normalizer if task_handler.is_regression_task() else None,
                     aggregation_mode="avg",
                     epoch_num=epoch + 1,
                     total_epochs=config.bert.finetuning.epochs,
@@ -343,18 +361,18 @@ def run_finetune(
 
         except Exception:
             pass
-        if task == "regression":  
-          key = "mae"
-          flag = val_metrics['mae'] < best_val
+        # 使用TaskHandler确定主要指标和优化方向
+        key = task_handler.primary_metric
+        if task_handler.should_maximize_metric:
+            flag = val_metrics[key] > best_val
         else:
-          key = "accuracy"
-          flag = val_metrics["accuracy"] > best_val
+            flag = val_metrics[key] < best_val
         if flag:
             best_val = val_metrics[key]
             patience_ctr = 0
             logger.info(f"🎯 新的最优模型! {key}: {val_metrics[key]:.4f}")
             model.save_model(str(best_dir))
-            if task == "regression":
+            if task_handler.is_regression_task():
                 with open(best_dir / "label_normalizer.pkl", "wb") as f:
                     pickle.dump(normalizer, f)
         else:
@@ -384,7 +402,7 @@ def run_finetune(
             "lr": 1e-3,
             "weight_decay": 1e-2,
             "early_stopping_patience": 5,
-            "use_pred_as_feat": (task == "regression"),
+            "use_pred_as_feat": task_handler.is_regression_task(),
             "batch_size": 64,
         }
         aggregator = train_variant_aggregator(
@@ -393,7 +411,7 @@ def run_finetune(
             val_loader=val_dl,
             device=device,
             task=task,
-            label_normalizer=normalizer if task == "regression" else None,
+            label_normalizer=normalizer if task_handler.is_regression_task() else None,
             save_dir=str(final_dir / "aggregator"),
             cfg=agg_cfg,
         )
@@ -410,7 +428,8 @@ def run_finetune(
                 test_dl,
                 device,
                 task,
-                label_normalizer=normalizer if task=="regression" else None,
+                task_handler=task_handler,
+                label_normalizer=normalizer if task_handler.is_regression_task() else None,
                 aggregation_mode=_mode if not (_mode == "learned" and aggregator is None) else "avg",
                 epoch_num=None,
                 total_epochs=None,
@@ -423,7 +442,8 @@ def run_finetune(
                 test_dl,
                 device,
                 task,
-                label_normalizer=normalizer if task=="regression" else None,
+                task_handler=task_handler,
+                label_normalizer=normalizer if task_handler.is_regression_task() else None,
                 aggregation_mode="avg",
                 epoch_num=None,
                 total_epochs=None,
@@ -517,12 +537,12 @@ def run_finetune(
             },
             'val': {
                 # 主验证结果（向后兼容）
-                **({k: float(v) for k, v in (last_val_metrics or {}).items()}),
+                **({k: (float(v) if isinstance(v, (int, float)) else v) for k, v in (last_val_metrics or {}).items()}),
                 'best_val_mae': float(best_val_mae) if task == 'regression' and best_val_mae != float('inf') else None,
                 # 按聚合模式分别记录最后一轮验证结果
                 'by_aggregation': {
-                    mode: {k: float(v) for k, v in metrics.items()} 
-                    for mode, metrics in val_metrics_by_mode.items()
+                    mode: {k: (float(v) if isinstance(v, (int, float)) else v) for k, v in mode_metrics.items()} 
+                    for mode, mode_metrics in val_metrics_by_mode.items()
                 }
             },
             'test': {
@@ -530,8 +550,8 @@ def run_finetune(
                 **({k: (float(v) if isinstance(v, (int, float)) else v) for k, v in (test_metrics or {}).items()}),
                 # 按聚合模式分别记录测试结果
                 'by_aggregation': {
-                    mode: {k: (float(v) if isinstance(v, (int, float)) else v) for k, v in metrics.items()}
-                    for mode, metrics in test_metrics_by_mode.items()
+                    mode: {k: (float(v) if isinstance(v, (int, float)) else v) for k, v in mode_metrics.items()}
+                    for mode, mode_metrics in test_metrics_by_mode.items()
                 }
             },
             'time': {
@@ -562,7 +582,8 @@ def run_finetune(
         writer.close()
         if wandb_logger is not None:
             wandb_logger.finish()
-    except Exception:
+    except Exception as e:
+        logger.error(f"最终指标写盘失败: {e}")
         pass
 
     return {

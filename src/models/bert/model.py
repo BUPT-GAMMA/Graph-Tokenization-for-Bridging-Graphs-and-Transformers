@@ -316,11 +316,12 @@ class BertRegression(nn.Module):
     """BERT回归模型 - 对整个序列预测一个连续数值"""
     
     def __init__(self, config: BertConfig, vocab_manager: VocabManager,
-                 pooling_method: str = 'mean'):
+                 num_targets: int = 1, pooling_method: str = 'mean'):
         super().__init__()
         
         self.config = config
         self.vocab_manager = vocab_manager
+        self.num_targets = num_targets
         self.pooling_method = pooling_method
         
         # 更新配置中的词表大小
@@ -330,12 +331,12 @@ class BertRegression(nn.Module):
         hf_config = config.to_hf_config()
         self.bert = BertModel(hf_config)
         
-        # 回归头：[B, C, d] -> 平均池化 -> [B, d] -> MLP -> [B, 1]
+        # 回归头：支持多目标输出
         self.regression_head = nn.Sequential(
             nn.Linear(config.hidden_size, config.hidden_size // 2),
-            nn.ReLU(),
+            nn.ReLU(), 
             nn.Dropout(0.1),
-            nn.Linear(config.hidden_size // 2, 1)
+            nn.Linear(config.hidden_size // 2, self.num_targets)
         )
         
         # 初始化权重
@@ -406,17 +407,23 @@ class BertRegression(nn.Module):
         # 池化: [batch_size, seq_len, hidden_size] -> [batch_size, hidden_size]
         pooled_output = self._pool_sequence(sequence_output, attention_mask)
 
-        # 回归预测: [batch_size, hidden_size] -> [batch_size, 1]
+        # 回归预测: [batch_size, hidden_size] -> [batch_size, num_targets]
         predictions = self.regression_head(pooled_output)
 
         outputs: Dict[str, torch.Any] = {'predictions': predictions, 'pooled': pooled_output}
         
         # 计算损失
         if labels is not None:
-            if labels.dim() == 1:
-                labels = labels.unsqueeze(-1)
+            # 根据目标数量选择损失函数
+            if self.num_targets == 1:
+                # 单目标回归：使用MSE
+                if labels.dim() == 1:
+                    labels = labels.unsqueeze(-1)
+                loss_fct = nn.MSELoss()
+            else:
+                # 多目标回归：使用MAE
+                loss_fct = nn.L1Loss()
             
-            loss_fct = nn.MSELoss()
             regression_loss = loss_fct(predictions, labels.float())
             outputs['loss'] = regression_loss
         
@@ -471,15 +478,208 @@ class BertRegression(nn.Module):
 
 
 class BertClassification(nn.Module):
-    """BERT分类模型 - 对整个序列预测一个类别"""
+    """BERT多标签分类模型 - 对整个序列预测多个二分类标签"""
     
     def __init__(self, config: BertConfig, vocab_manager: VocabManager,
-                 num_classes: int, pooling_method: str = 'mean'):
+                 num_labels: int, pooling_method: str = 'mean'):
+        super().__init__()
+        
+        self.config = config
+        self.vocab_manager = vocab_manager
+        self.num_labels = num_labels
+        self.pooling_method = pooling_method
+        
+        # 更新配置中的词表大小
+        self.config.vocab_size = vocab_manager.vocab_size
+        
+        # 创建HuggingFace BERT模型
+        hf_config = config.to_hf_config()
+        self.bert = BertModel(hf_config)
+        
+        # 多标签分类头：[B, d] -> [B, num_labels]
+        self.classification_head = nn.Sequential(
+            nn.Linear(config.hidden_size, config.hidden_size // 2),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(config.hidden_size // 2, num_labels)
+        )
+        
+        # 初始化权重
+        self._init_weights()
+    
+    def _init_weights(self):
+        """初始化权重"""
+        for module in self.classification_head:
+            if isinstance(module, nn.Linear):
+                nn.init.normal_(module.weight, mean=0.0, std=0.02)
+                nn.init.zeros_(module.bias)
+    
+    def _pool_sequence(self, sequence_output: torch.Tensor, 
+                      attention_mask: torch.Tensor) -> torch.Tensor:
+        """序列池化"""
+        if self.pooling_method == 'mean':
+            # 平均池化 (忽略padding)
+            lengths = attention_mask.sum(dim=1, keepdim=True).float()  # [batch_size, 1]
+            masked_output = sequence_output * attention_mask.unsqueeze(-1)  # [batch_size, seq_len, hidden_size]
+            pooled = masked_output.sum(dim=1) / lengths  # [batch_size, hidden_size]
+            return pooled
+        elif self.pooling_method == 'cls':
+            # 使用[CLS] token的表示
+            return sequence_output[:, 0, :]  # [batch_size, hidden_size]
+        else:
+            raise ValueError(f"不支持的池化方法: {self.pooling_method}")
+    
+    def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor,
+                labels: Optional[torch.Tensor] = None) -> Dict[str, torch.Tensor]:
+        """前向传播
+        
+        Args:
+            input_ids: [batch_size, seq_len] token ID序列
+            attention_mask: [batch_size, seq_len] 注意力掩码  
+            labels: [batch_size, num_labels] 多标签（浮点数，0或1）
+            
+        Returns:
+            包含logits和loss（如果提供labels）的字典
+        """
+        # BERT编码
+        bert_outputs = self.bert(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            return_dict=True
+        )
+        
+        # 池化
+        sequence_output = bert_outputs.last_hidden_state
+        pooled_output = self._pool_sequence(sequence_output, attention_mask)
+        
+        # 多标签分类预测: [batch_size, hidden_size] -> [batch_size, num_labels]
+        logits = self.classification_head(pooled_output)
+        
+        outputs: Dict[str, torch.Any] = {'logits': logits, 'pooled': pooled_output}
+        
+        # 计算损失
+        if labels is not None:
+            loss_fct = nn.BCEWithLogitsLoss()
+            loss = loss_fct(logits, labels.float())
+            outputs['loss'] = loss
+        
+        return outputs
+    
+    def predict_proba(self, input_ids: torch.Tensor, 
+                     attention_mask: torch.Tensor) -> torch.Tensor:
+        """预测每个标签的概率"""
+        with torch.no_grad():
+            outputs = self.forward(input_ids, attention_mask)
+            return torch.sigmoid(outputs['logits'])
+
+
+class BertMultiTargetRegression(nn.Module):
+    """BERT多目标回归模型 - 对整个序列预测多个连续数值"""
+    
+    def __init__(self, config: BertConfig, vocab_manager: VocabManager,
+                 num_targets: int, pooling_method: str = 'mean'):
+        super().__init__()
+        
+        self.config = config
+        self.vocab_manager = vocab_manager
+        self.num_targets = num_targets
+        self.pooling_method = pooling_method
+        
+        # 更新配置中的词表大小
+        self.config.vocab_size = vocab_manager.vocab_size
+        
+        # 创建HuggingFace BERT模型
+        hf_config = config.to_hf_config()
+        self.bert = BertModel(hf_config)
+        
+        # 多目标回归头：[B, d] -> [B, num_targets]
+        self.regression_head = nn.Sequential(
+            nn.Linear(config.hidden_size, config.hidden_size // 2),
+            nn.ReLU(),
+            nn.Dropout(0.1),
+            nn.Linear(config.hidden_size // 2, num_targets)
+        )
+        
+        # 初始化权重
+        self._init_weights()
+    
+    def _init_weights(self):
+        """初始化权重"""
+        for module in self.regression_head:
+            if isinstance(module, nn.Linear):
+                nn.init.normal_(module.weight, mean=0.0, std=0.02)
+                nn.init.zeros_(module.bias)
+    
+    def _pool_sequence(self, sequence_output: torch.Tensor, 
+                      attention_mask: torch.Tensor) -> torch.Tensor:
+        """序列池化"""
+        if self.pooling_method == 'mean':
+            # 平均池化 (忽略padding)
+            lengths = attention_mask.sum(dim=1, keepdim=True).float()  # [batch_size, 1]
+            masked_output = sequence_output * attention_mask.unsqueeze(-1)  # [batch_size, seq_len, hidden_size]
+            pooled = masked_output.sum(dim=1) / lengths  # [batch_size, hidden_size]
+            return pooled
+        elif self.pooling_method == 'cls':
+            # 使用[CLS] token的表示
+            return sequence_output[:, 0, :]  # [batch_size, hidden_size]
+        else:
+            raise ValueError(f"不支持的池化方法: {self.pooling_method}")
+    
+    def forward(self, input_ids: torch.Tensor, attention_mask: torch.Tensor,
+                labels: Optional[torch.Tensor] = None) -> Dict[str, torch.Tensor]:
+        """前向传播
+        
+        Args:
+            input_ids: [batch_size, seq_len] token ID序列
+            attention_mask: [batch_size, seq_len] 注意力掩码  
+            labels: [batch_size, num_targets] 多目标回归值
+            
+        Returns:
+            包含predictions和loss（如果提供labels）的字典
+        """
+        # BERT编码
+        bert_outputs = self.bert(
+            input_ids=input_ids,
+            attention_mask=attention_mask,
+            return_dict=True
+        )
+        
+        # 池化
+        sequence_output = bert_outputs.last_hidden_state
+        pooled_output = self._pool_sequence(sequence_output, attention_mask)
+        
+        # 多目标回归预测: [batch_size, hidden_size] -> [batch_size, num_targets]
+        predictions = self.regression_head(pooled_output)
+        
+        outputs: Dict[str, torch.Any] = {'predictions': predictions, 'pooled': pooled_output}
+        
+        # 计算损失
+        if labels is not None:
+            loss_fct = nn.L1Loss()  # 使用MAE损失
+            loss = loss_fct(predictions, labels.float())
+            outputs['loss'] = loss
+        
+        return outputs
+    
+    def predict(self, input_ids: torch.Tensor, 
+                attention_mask: torch.Tensor) -> torch.Tensor:
+        """预测多个回归目标"""
+        with torch.no_grad():
+            outputs = self.forward(input_ids, attention_mask)
+            return outputs['predictions']
+
+
+class BertClassification(nn.Module):
+    """BERT分类模型 - 支持单标签和多标签分类"""
+    
+    def __init__(self, config: BertConfig, vocab_manager: VocabManager,
+                 num_classes: int, is_multi_label: bool = False, pooling_method: str = 'mean'):
         super().__init__()
         
         self.config = config
         self.vocab_manager = vocab_manager
         self.num_classes = num_classes
+        self.is_multi_label = is_multi_label
         self.pooling_method = pooling_method
         
         # 更新配置中的词表大小
@@ -572,8 +772,14 @@ class BertClassification(nn.Module):
         
         # 计算损失
         if labels is not None:
-            loss_fct = nn.CrossEntropyLoss()
-            classification_loss = loss_fct(logits, labels.long())
+            if self.is_multi_label:
+                # 多标签分类：使用BCEWithLogitsLoss
+                loss_fct = nn.BCEWithLogitsLoss()
+                classification_loss = loss_fct(logits, labels.float())
+            else:
+                # 单标签分类：使用CrossEntropyLoss
+                loss_fct = nn.CrossEntropyLoss()
+                classification_loss = loss_fct(logits, labels.long())
             outputs['loss'] = classification_loss
         
         return outputs
@@ -591,7 +797,12 @@ class BertClassification(nn.Module):
         with torch.no_grad():
             outputs = self.forward(input_ids, attention_mask)
             logits = outputs['logits']
-            return torch.softmax(logits, dim=-1)
+            if self.is_multi_label:
+                # 多标签分类：每个标签独立的sigmoid概率
+                return torch.sigmoid(logits)
+            else:
+                # 单标签分类：softmax概率分布
+                return torch.softmax(logits, dim=-1)
     
     def predict_classes(self, input_ids: torch.Tensor, 
                        attention_mask: torch.Tensor) -> torch.Tensor:

@@ -179,6 +179,12 @@ def _lazy_import_loader(loader_name: str):
     elif loader_name == "molhiv":
         from .loader.molhiv_loader import MOLHIVLoader
         return MOLHIVLoader
+    elif loader_name == "peptides_func":
+        from .loader.peptides_func_loader import PeptidesFuncLoader
+        return PeptidesFuncLoader
+    elif loader_name == "peptides_struct":
+        from .loader.peptides_struct_loader import PeptidesStructLoader
+        return PeptidesStructLoader
     elif loader_name == "code2":
         from .loader.code2_loader import CODE2Loader
         return CODE2Loader
@@ -188,7 +194,7 @@ def _lazy_import_loader(loader_name: str):
 def _register_all_loaders():
     """注册所有数据加载器 - 使用字符串注册，延迟导入"""
     # 注册所有支持的加载器名称，实际类在使用时才导入
-    loader_names = ["qm9", "qm9test", "zinc", "aqsol", "colors3", "proteins", "synthetic", "mutagenicity", "coildel", "dblp", "dd", "twitter", "molhiv", "code2"]
+    loader_names = ["qm9", "qm9test", "zinc", "aqsol", "colors3", "proteins", "synthetic", "mutagenicity", "coildel", "dblp", "dd", "twitter", "molhiv", "peptides_func", "peptides_struct", "code2"]
     
     for name in loader_names:
         # 注册延迟导入函数而不是直接导入类

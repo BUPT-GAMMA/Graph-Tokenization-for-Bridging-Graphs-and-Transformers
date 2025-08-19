@@ -149,9 +149,125 @@ def load_dataset(dataset_name: str) -> Dataset:
 
 如果确有需要的fallback处理，则应该与用户/主管确认。通过后再相应位置添加注释说明
 
-## 5. 配置管理
+## 5. 数据处理严格编程原则
 
-### 5.1 单一配置源
+### 5.1 核心原则：预处理与加载的严格一致性
+
+**❌ 错误做法：假设性编程**
+```python
+def process_labels(label_obj):
+    if isinstance(label_obj, np.ndarray):
+        if label_obj.ndim == 0:
+            # 处理标量
+            return label_obj.item()
+        elif label_obj.size == 1:
+            # 处理单元素
+            return label_obj.item()
+        else:
+            # 处理多元素，可能是one-hot
+            return np.argmax(label_obj)
+    elif isinstance(label_obj, (list, tuple)):
+        # 处理列表，可能是...
+        if len(label_obj) == 1:
+            return label_obj[0]
+        else:
+            return np.argmax(label_obj)
+    else:
+        # 其他情况，猜测处理
+        return int(label_obj)
+```
+
+**✅ 正确做法：严格契约**
+```python
+def process_labels(label_obj):
+    # 预处理阶段明确定义：输出shape=(10,)的numpy数组
+    assert isinstance(label_obj, np.ndarray) and label_obj.shape == (10,), \
+        f"标签格式错误，期望shape=(10,)的numpy数组，得到: {type(label_obj)}, shape={getattr(label_obj, 'shape', 'no-shape')}"
+    return label_obj.tolist()
+```
+
+### 5.2 数据处理黄金规则
+
+1. **单一数据源原则**
+   - 预处理阶段定义唯一的数据格式
+   - 加载器严格按照预处理定义的格式处理
+   - 禁止在加载器中处理多种可能的格式
+
+2. **无回退逻辑原则**
+   - 不写"如果A不行就试B"的代码
+   - 数据格式不符合预期直接报错
+   - 避免使用`.get(key, default_value)`处理关键数据字段
+
+3. **fail-fast原则**
+   - 使用`assert`而不是`if-else`处理预期格式
+   - 数据格式错误立即抛异常，不要静默处理
+   - 及时暴露数据问题，而不是掩盖
+
+4. **严格类型验证**
+   ```python
+   # ❌ 错误：多种兼容性处理
+   if isinstance(data, list):
+       # 处理列表
+   elif isinstance(data, np.ndarray):
+       # 处理数组
+   elif hasattr(data, 'tolist'):
+       # 处理其他可转换类型
+   
+   # ✅ 正确：严格验证预期格式
+   assert isinstance(data, np.ndarray) and data.shape == (expected_shape), \
+       f"数据格式错误，期望{expected_shape}的numpy数组"
+   ```
+
+5. **数据存储契约原则**
+   - 预处理脚本明确定义存储格式
+   - 加载器严格按照存储格式读取
+   - 存储路径、文件名、数据结构都应该确定
+
+### 5.3 实践指导
+
+**预处理阶段 (prepare_*.py)**：
+- 明确定义输出数据的类型、形状、命名
+- 保存数据格式说明（如token_mappings.json）
+- 使用确定性的算法和固定种子
+
+**数据加载器 (src/data/loader/*_loader.py)**：
+- 严格按照预处理定义的格式读取
+- 对预期外的数据格式直接报错
+- 不要写兼容性代码处理多种可能格式
+
+**示例对比**：
+```python
+# ❌ 错误：充满假设的兼容性代码
+def load_graph_data(file_path):
+    if file_path.suffix == '.gz':
+        with gzip.open(file_path, 'rb') as f:
+            data = pickle.load(f)
+    elif file_path.suffix == '.pkl':
+        with open(file_path, 'rb') as f:
+            data = pickle.load(f)
+    else:
+        # 尝试其他格式...
+        
+    # 处理多种可能的数据结构...
+    if isinstance(data, list) and len(data) > 0:
+        if isinstance(data[0], tuple):
+            # 处理tuple格式
+        elif isinstance(data[0], dict):
+            # 处理dict格式
+        # ... 更多假设
+
+# ✅ 正确：严格按照预处理契约
+def load_graph_data(file_path):
+    # 预处理明确定义：保存为data.pkl.gz的gzip压缩pickle文件
+    # 格式：List[Tuple[lightweight_graph_dict, label_array]]
+    with gzip.open(file_path, 'rb') as f:
+        data: List[Tuple[Dict[str, Any], np.ndarray]] = pickle.load(f)
+    return data
+```
+
+## 6. 配置管理
+
+### 6.1 单一配置源
 ```python
 # config.py - 所有配置的单一来源
 @dataclass
