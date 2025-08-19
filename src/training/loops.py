@@ -24,7 +24,7 @@ def train_epoch(
     scheduler,
     device,
     max_grad_norm: float,
-    task_handler,
+    task_handler=None,
     on_step: Optional[Callable[[int, float, Optional[float]], None]] = None,
     log_interval: int = 100,
     epoch_num: int = 1,
@@ -41,14 +41,20 @@ def train_epoch(
     pbar = tqdm(dataloader, desc=progress_desc) if log_style == "online" else None
     next_percent_checkpoint = 10 if log_style == "offline" else None
     for batch in dataloader:
-        if steps==10: break;
+        # if steps==10: break;
         input_ids = batch['input_ids'].to(device)
         attention_mask = batch['attention_mask'].to(device)
         labels = batch['labels'].to(device)
 
         optimizer.zero_grad()
-        outputs = model(input_ids, attention_mask)
-        loss = task_handler.compute_loss(outputs['outputs'], labels)
+        if task_handler is not None:
+            # 统一架构：不传递labels，用task_handler计算损失
+            outputs = model(input_ids, attention_mask)
+            loss = task_handler.compute_loss(outputs['outputs'], labels)
+        else:
+            # 预训练模式：传递labels给模型，让模型内部计算损失
+            outputs = model(input_ids, attention_mask, labels)
+            loss = outputs['loss']
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
         optimizer.step()

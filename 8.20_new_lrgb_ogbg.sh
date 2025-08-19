@@ -1,7 +1,7 @@
 python batch_pretrain_simple.py \
   --experiment_group 820_new_lrgb_ogbg \
   --datasets molhiv \
-  --epochs 50 \
+  --epochs 30 \
   --batch_size 256 \
   --learning_rate 5e-4 \
   --gpus 0 \
@@ -51,7 +51,7 @@ python batch_pretrain_simple.py \
 python batch_finetune_simple.py \
   --experiment_group 820_new_lrgb_ogbg \
   --datasets molhiv \
-  --epochs 30 \
+  --epochs 15 \
   --batch_size 256 \
   --learning_rate 5e-5 \
   --gpus 0 \
