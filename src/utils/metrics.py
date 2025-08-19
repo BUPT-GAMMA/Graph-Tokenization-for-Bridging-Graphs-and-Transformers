@@ -72,6 +72,97 @@ def compute_classification_metrics(
     return out
 
 
+def compute_multi_label_classification_metrics(
+    y_true: np.ndarray, 
+    y_score: np.ndarray
+) -> Dict[str, float]:
+    """
+    计算多标签分类指标
+    
+    Args:
+        y_true: [N, num_labels] 真实标签（0或1）
+        y_score: [N, num_labels] 预测概率
+        
+    Returns:
+        包含AP等指标的字典
+    """
+    assert y_true.shape == y_score.shape, f"标签和预测形状不匹配: {y_true.shape} vs {y_score.shape}"
+    
+    # 计算每个标签的AP
+    label_aps = []
+    for i in range(y_true.shape[1]):
+        try:
+            ap = average_precision_score(y_true[:, i], y_score[:, i])
+            label_aps.append(ap)
+        except ValueError:
+            # 如果某个标签全为0或全为1，AP无法计算
+            label_aps.append(0.0)
+    
+    # 计算macro平均AP
+    macro_ap = float(np.mean(label_aps))
+    
+    # 计算其他多标签指标
+    y_pred = (y_score > 0.5).astype(int)  # 阈值0.5转换为预测标签
+    
+    # 样本级准确率（exact match）
+    exact_match = float(np.mean(np.all(y_true == y_pred, axis=1)))
+    
+    # Hamming准确率（元素级准确率）
+    hamming_acc = float(np.mean(y_true == y_pred))
+    
+    return {
+        'macro_ap': macro_ap,
+        'label_aps': label_aps,
+        'exact_match': exact_match,
+        'hamming_accuracy': hamming_acc,
+    }
+
+
+def compute_multi_target_regression_metrics(
+    y_true: np.ndarray,
+    y_pred: np.ndarray
+) -> Dict[str, float]:
+    """
+    计算多目标回归指标
+    
+    Args:
+        y_true: [N, num_targets] 真实目标值
+        y_pred: [N, num_targets] 预测目标值
+        
+    Returns:
+        包含平均MAE等指标的字典
+    """
+    assert y_true.shape == y_pred.shape, f"标签和预测形状不匹配: {y_true.shape} vs {y_pred.shape}"
+    
+    # 计算每个目标的MAE
+    target_maes = []
+    target_mses = []
+    for i in range(y_true.shape[1]):
+        mae = mean_absolute_error(y_true[:, i], y_pred[:, i])
+        mse = mean_squared_error(y_true[:, i], y_pred[:, i])
+        target_maes.append(mae)
+        target_mses.append(mse)
+    
+    # 计算平均指标
+    macro_mae = float(np.mean(target_maes))
+    macro_mse = float(np.mean(target_mses))
+    macro_rmse = float(np.sqrt(macro_mse))
+    
+    # 整体指标（flatten所有目标）
+    overall_mae = float(mean_absolute_error(y_true.flatten(), y_pred.flatten()))
+    overall_mse = float(mean_squared_error(y_true.flatten(), y_pred.flatten()))
+    
+    return {
+        'macro_mae': macro_mae,
+        'macro_mse': macro_mse,
+        'macro_rmse': macro_rmse,
+        'overall_mae': overall_mae,
+        'overall_mse': overall_mse,
+        'target_maes': target_maes,
+        'target_mses': target_mses,
+    }
+
+
 
 
 

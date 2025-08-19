@@ -1,18 +1,19 @@
+"""
+统一模型创建接口
+================
+
+创建统一的BERT模型，任务相关逻辑由TaskHandler处理。
+"""
+
 from __future__ import annotations
+from typing import Optional
 
-from typing import Literal, Optional
-
-from src.models.bert.model import (
-    BertRegression,
-    BertClassification,
-    BertConfig,
-)
+from src.models.bert.unified_model import BertUnified
+from src.models.bert import BertConfig
+from src.training.task_handler import create_task_handler
 
 
-
-# todo 注意这个地方写的完全不对。既然名称是create task head，那么他创建的自然应该只是一个head。然后把这个孩子可能在上层用来接在整个bert微调的模型里面去。但是现在它实际上是创建了一整个bert微调的模型，而它的参数则是一从完整的预训练模型中取得的。这不对。
-def create_task_head(
-    task: Literal["regression", "classification"],
+def create_unified_model(
     *,
     vocab_manager,
     hidden_size: int,
@@ -23,46 +24,80 @@ def create_task_head(
     dropout: float,
     max_position_embeddings: int,
     layer_norm_eps: float,
-    num_classes: Optional[int] = None,
+    output_dim: int,
 ):
-    if task == "regression":
-        cfg = BertConfig(
-            vocab_size=vocab_manager.vocab_size,
-            hidden_size=hidden_size,
-            num_hidden_layers=num_hidden_layers,
-            num_attention_heads=num_attention_heads,
-            intermediate_size=intermediate_size,
-            dropout=dropout,
-            max_position_embeddings=max_position_embeddings,
-            layer_norm_eps=layer_norm_eps,
-            pad_token_id=vocab_manager.pad_token_id,
-        )
-        return BertRegression(
-            config=cfg,
-            vocab_manager=vocab_manager,
-            pooling_method=pooling_method,
-        )
-    elif task == "classification":
-        if num_classes is None:
-            raise ValueError("num_classes must be provided for classification task head")
-        cfg = BertConfig(
-            vocab_size=vocab_manager.vocab_size,
-            hidden_size=hidden_size,
-            num_hidden_layers=num_hidden_layers,
-            num_attention_heads=num_attention_heads,
-            intermediate_size=intermediate_size,
-            dropout=dropout,
-            max_position_embeddings=max_position_embeddings,
-            layer_norm_eps=layer_norm_eps,
-            pad_token_id=vocab_manager.pad_token_id,
-        )
-        return BertClassification(
-            config=cfg,
-            vocab_manager=vocab_manager,
-            num_classes=num_classes,
-            pooling_method=pooling_method,
-        )
-    else:
-        raise ValueError(f"Unsupported task head: {task}")
+    """
+    创建统一的BERT模型
+    
+    这个函数创建一个真正的统一模型，不区分任务类型。
+    任务相关的逻辑（损失函数、指标等）由TaskHandler处理。
+    """
+    cfg = BertConfig(
+        vocab_size=vocab_manager.vocab_size,
+        hidden_size=hidden_size,
+        num_hidden_layers=num_hidden_layers,
+        num_attention_heads=num_attention_heads,
+        intermediate_size=intermediate_size,
+        dropout=dropout,
+        max_position_embeddings=max_position_embeddings,
+        layer_norm_eps=layer_norm_eps,
+        pad_token_id=vocab_manager.pad_token_id,
+    )
+    
+    return BertUnified(
+        config=cfg,
+        vocab_manager=vocab_manager,
+        output_dim=output_dim,
+        pooling_method=pooling_method,
+    )
 
 
+def create_model_from_udi(udi, pretrained_model, pooling_method: str = 'mean'):
+    """
+    根据UDI创建模型（推荐方式）
+    
+    Args:
+        udi: UnifiedDataInterface实例
+        pretrained_model: 预训练的BERT模型
+        pooling_method: 池化方法
+        
+    Returns:
+        (model, task_handler) 元组
+    """
+    # 从UDI获取任务信息
+    task_handler = create_task_handler(udi)
+    
+    # 创建统一模型
+    model = create_unified_model(
+        vocab_manager=pretrained_model.vocab_manager,
+        hidden_size=pretrained_model.config.hidden_size,
+        num_hidden_layers=pretrained_model.config.num_hidden_layers,
+        num_attention_heads=pretrained_model.config.num_attention_heads,
+        intermediate_size=pretrained_model.config.intermediate_size,
+        pooling_method=pooling_method,
+        dropout=pretrained_model.config.dropout,
+        max_position_embeddings=pretrained_model.config.max_position_embeddings,
+        layer_norm_eps=pretrained_model.config.layer_norm_eps,
+        output_dim=task_handler.output_dim,
+    )
+    
+    # 复制预训练权重到新模型
+    if hasattr(pretrained_model, 'bert'):
+        model.bert.load_state_dict(pretrained_model.bert.state_dict())
+    
+    return model, task_handler
+
+
+# 兼容旧接口（将被废弃）
+def create_task_head(*args, **kwargs):
+    """
+    废弃警告：请使用 create_model_from_udi
+    """
+    import warnings
+    warnings.warn(
+        "create_task_head 已废弃，请使用 create_model_from_udi",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    # 这里可以添加向后兼容的代码
+    raise NotImplementedError("请使用新的 create_model_from_udi 接口")

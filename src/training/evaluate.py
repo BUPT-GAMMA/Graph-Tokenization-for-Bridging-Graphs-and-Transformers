@@ -6,7 +6,12 @@ import time
 import numpy as np
 import torch
 
-from src.utils.metrics import compute_regression_metrics, compute_classification_metrics
+from src.utils.metrics import (
+    compute_regression_metrics, 
+    compute_classification_metrics,
+    compute_multi_label_classification_metrics,
+    compute_multi_target_regression_metrics
+)
 logger = get_logger('tokenizerGraph.training.evaluate')
 
 
@@ -15,8 +20,9 @@ def evaluate_model(
     model,
     dataloader,
     device,
-    task: Literal["regression", "classification"],
+    task: Literal["regression", "classification", "multi_label_classification", "multi_target_regression"],
     *,
+    task_handler,
     label_normalizer=None,
     aggregation_mode: Literal["avg", "best", "learned"] = "avg",
     epoch_num: int | None = None,
@@ -43,10 +49,8 @@ def evaluate_model(
         labels = batch['labels'].to(device)
         graph_ids = batch['graph_id'].cpu().numpy()
 
-        outputs = model(input_ids, attention_mask, labels)
-        # outputs 应该总是包含 loss 字段，这是模型设计保证的
-        assert 'loss' in outputs, "模型输出缺少 loss 字段"
-        loss = outputs['loss']
+        outputs = model(input_ids, attention_mask)
+        loss = task_handler.compute_loss(outputs['outputs'], labels)
         total_loss += loss.item()
         steps += 1
 
@@ -65,13 +69,20 @@ def evaluate_model(
                 while next_percent_checkpoint is not None and progress_pct >= next_percent_checkpoint:
                     next_percent_checkpoint += 10
 
-        if task == "regression":
+        # 使用task_handler统一获取预测和概率
+        if task_handler.is_regression_task():
             # 预测值是标准化的，在聚合前不要反向转换
-            y_pred = outputs['predictions'].detach().cpu().numpy().reshape(-1)
+            y_pred = task_handler.get_predictions(outputs['outputs'])  # 已经是numpy数组
             # original_label 未被标准化
-            y_true = batch['original_label'].numpy().reshape(-1)
-            all_preds.extend(y_pred.tolist())
-            all_trues.extend(y_true.tolist())
+            y_true = batch['original_label'].numpy()
+            if y_pred.ndim > 1:  # 多目标回归
+                all_preds.extend(y_pred.tolist())
+                all_trues.extend(y_true.tolist())
+            else:  # 单目标回归
+                y_pred = y_pred.reshape(-1)
+                y_true = y_true.reshape(-1)
+                all_preds.extend(y_pred.tolist())
+                all_trues.extend(y_true.tolist())
             all_gids.extend(graph_ids.tolist())
             # 采集序列池化向量
             if 'pooled' in outputs:
@@ -79,15 +90,22 @@ def evaluate_model(
                 # 与 y_pred 一一对应
                 for row in pooled_np:
                     all_pooled.append(row)
-        else: # classification
-            logits = outputs['logits']
-            y_pred = torch.argmax(logits, dim=-1).detach().cpu().numpy().reshape(-1)
-            y_true = labels.detach().cpu().numpy().reshape(-1)
-            all_preds.extend(y_pred.tolist())
+        else: # classification tasks  
+            y_true = labels.detach().cpu().numpy()
             all_trues.extend(y_true.tolist())
             all_gids.extend(graph_ids.tolist())
-            # 采集 logits 与 pooled
-            all_logits.extend(logits.detach().cpu().numpy().tolist())
+            
+            if task_handler.is_multi_label():
+                # 多标签：直接用概率计算AP
+                probs = task_handler.get_probabilities(outputs['outputs'])
+                all_logits.extend(probs.tolist())
+            else:
+                # 单标签：用类别索引计算accuracy，用概率计算AUC
+                preds = task_handler.get_predictions(outputs['outputs'])
+                probs = task_handler.get_probabilities(outputs['outputs'])
+                all_preds.extend(preds.reshape(-1).tolist())
+                all_logits.extend(probs.tolist())
+                
             if 'pooled' in outputs:
                 pooled_np = outputs['pooled'].detach().cpu().numpy()
                 for row in pooled_np:
@@ -101,7 +119,7 @@ def evaluate_model(
     grouped_pooled = {}
     grouped_logits = {}  # 仅分类任务
     # 为了与 all_pooled 对齐，需要同时迭代 pooled 索引
-    if task == "regression":
+    if task_handler.is_regression_task():
         pooled_iter = iter(all_pooled)
         for gid, pred, true in zip(all_gids, all_preds, all_trues):
             if gid not in grouped_preds:
@@ -115,37 +133,59 @@ def evaluate_model(
             except StopIteration:
                 pass
     else:
-        # 分类：需要与 logits 对齐
+        # 分类任务聚合
         pooled_iter = iter(all_pooled)
         logits_iter = iter(all_logits)
-        for gid, pred, true in zip(all_gids, all_preds, all_trues):
-            if gid not in grouped_preds:
-                grouped_preds[gid] = []
-                grouped_trues[gid] = true
-                grouped_pooled[gid] = []
-                grouped_logits[gid] = []
-            grouped_preds[gid].append(pred)
-            try:
-                grouped_pooled[gid].append(next(pooled_iter))
-            except StopIteration:
-                pass
-            try:
-                grouped_logits[gid].append(next(logits_iter))
-            except StopIteration:
-                pass
-        if gid not in grouped_preds:
-            grouped_preds[gid] = []
-            grouped_trues[gid] = true # 同一个gid的true label是相同的
-        grouped_preds[gid].append(pred)
+        
+        if task_handler.is_multi_label():
+            # 多标签：只有概率，没有预测类别
+            for gid, true, logit in zip(all_gids, all_trues, all_logits):
+                if gid not in grouped_trues:
+                    grouped_trues[gid] = true
+                    grouped_pooled[gid] = []
+                    grouped_logits[gid] = []
+                grouped_logits[gid].append(logit)
+                try:
+                    grouped_pooled[gid].append(next(pooled_iter))
+                except StopIteration:
+                    pass
+        else:
+            # 单标签：有预测类别和概率
+            for gid, pred, true in zip(all_gids, all_preds, all_trues):
+                if gid not in grouped_preds:
+                    grouped_preds[gid] = []
+                    grouped_trues[gid] = true
+                    grouped_pooled[gid] = []
+                    grouped_logits[gid] = []
+                grouped_preds[gid].append(pred)
+                try:
+                    grouped_pooled[gid].append(next(pooled_iter))
+                except StopIteration:
+                    pass
+                try:
+                    grouped_logits[gid].append(next(logits_iter))
+                except StopIteration:
+                    pass
 
     # 聚合每个组的预测
     final_preds, final_trues = [], []
     final_scores = []  # 若可得，保存按 gid 聚合后的概率分布（用于 AUC/AP）
-    for gid in grouped_preds:
-        preds_for_gid = np.array(grouped_preds[gid])
+    
+    # 确定聚合的键集合（回归和单标签分类用grouped_preds，多标签用grouped_trues）
+    gid_keys = grouped_preds if not task_handler.is_multi_label() else grouped_trues
+    
+    for gid in gid_keys:
         true_for_gid = grouped_trues[gid]
         
-        if task == "regression":
+        # 根据任务类型获取预测数据
+        if task_handler.is_multi_label():
+            # 多标签：只有概率数据
+            preds_for_gid = np.array(grouped_logits[gid])
+        else:
+            # 回归和单标签分类：有预测数据
+            preds_for_gid = np.array(grouped_preds[gid])
+        
+        if task_handler.is_regression_task():
             if aggregation_mode == 'learned' and aggregator is not None:
                 # 使用可学习聚合（在标准化空间加权，再反标准化）
                 preds_norm = preds_for_gid.reshape(-1)
@@ -184,78 +224,81 @@ def evaluate_model(
                 else:
                     raise ValueError(f"Unknown aggregation mode: {aggregation_mode}")
         else: # classification
-            agg_prob_np = None
-            if aggregation_mode == 'learned' and aggregator is not None:
-                logits_mat = np.array(grouped_logits.get(gid, []), dtype=np.float32)
-                pooled_list = grouped_pooled.get(gid, [])
-                if logits_mat.shape[0] == 0 or len(pooled_list) != logits_mat.shape[0]:
-                    # 回退到投票
-                    agg_pred = np.bincount(preds_for_gid.astype(int)).argmax()
+            if task_handler.is_multi_label():
+                # 多标签分类：preds_for_gid是概率数组，直接聚合
+                if aggregation_mode in ['avg', 'learned']:
+                    agg_pred = np.mean(preds_for_gid, axis=0)  # 概率平均
+                elif aggregation_mode == 'best':
+                    # 选择与真实标签距离最近的预测
+                    distances = np.sum(np.abs(preds_for_gid - true_for_gid), axis=1)
+                    best_idx = np.argmin(distances)
+                    agg_pred = preds_for_gid[best_idx]
                 else:
-                    feats = np.stack(pooled_list, axis=0).astype(np.float32)
-                    feats_t = torch.from_numpy(feats).unsqueeze(0)
-                    mask_t = torch.ones(1, feats_t.shape[1], dtype=torch.bool)
-                    agg_dev = next(aggregator.parameters()).device if hasattr(aggregator, 'parameters') else torch.device('cpu')
-                    feats_t = feats_t.to(agg_dev)
-                    mask_t = mask_t.to(agg_dev)
-                    with torch.no_grad():
-                        weights = aggregator(feats_t, mask=mask_t)  # [1, K]
-                        logits_t = torch.from_numpy(logits_mat).unsqueeze(0).to(agg_dev)  # [1, K, C]
-                        probs_t = torch.softmax(logits_t, dim=-1)  # [1, K, C]
-                        weights_exp = weights.unsqueeze(-1)  # [1, K, 1]
-                        p_agg = (weights_exp * probs_t).sum(dim=1).squeeze(0)  # [C]
-                        agg_pred = int(torch.argmax(p_agg).item())
-                        agg_prob_np = p_agg.detach().cpu().numpy()
+                    raise ValueError(f"Unknown aggregation mode: {aggregation_mode}")
             else:
+                # 单标签分类：preds_for_gid是类别索引，有单独的概率数据
+                agg_prob_np = None
                 logits_mat = np.array(grouped_logits.get(gid, []), dtype=np.float32)
-                if logits_mat.shape[0] == 0:
-                    # 没有 logits 时只能做投票
-                    if aggregation_mode == 'avg':
-                        agg_pred = np.bincount(preds_for_gid.astype(int)).argmax()
-                    elif aggregation_mode == 'best':
-                        correct_preds = preds_for_gid[preds_for_gid == true_for_gid]
-                        agg_pred = correct_preds[0] if len(correct_preds) > 0 else np.bincount(preds_for_gid.astype(int)).argmax()
+                
+                if aggregation_mode == 'avg':
+                    if len(logits_mat) > 0:
+                        # 概率平均后argmax
+                        p_agg = np.mean(logits_mat, axis=0)
+                        agg_pred = int(np.argmax(p_agg))
+                        agg_prob_np = p_agg
                     else:
-                        raise ValueError(f"Unknown aggregation mode: {aggregation_mode}")
-                else:
-                    # 计算概率矩阵并进行聚合
-                    logits_t = torch.from_numpy(logits_mat)
-                    probs_t = torch.softmax(logits_t, dim=-1)  # [K, C]
-                    if aggregation_mode == 'avg':
-                        prob_avg = probs_t.mean(dim=0)  # [C]
-                        agg_prob_np = prob_avg.detach().cpu().numpy()
-                        agg_pred = int(torch.argmax(prob_avg).item())
-                    elif aggregation_mode == 'best':
-                        # 若存在正确预测，选择其对应概率；否则回退为平均概率
+                        # 投票
+                        agg_pred = np.bincount(preds_for_gid.astype(int)).argmax()
+                elif aggregation_mode == 'best':
+                    # 选择正确的预测，如果没有则投票
+                    correct_preds = preds_for_gid[preds_for_gid == true_for_gid]
+                    agg_pred = correct_preds[0] if len(correct_preds) > 0 else np.bincount(preds_for_gid.astype(int)).argmax()
+                    if len(logits_mat) > 0:
                         correct_indices = np.where(preds_for_gid == true_for_gid)[0]
                         if len(correct_indices) > 0:
-                            idx0 = int(correct_indices[0])
-                            prob_sel = probs_t[idx0]
-                            agg_prob_np = prob_sel.detach().cpu().numpy()
-                            agg_pred = int(torch.argmax(prob_sel).item())
+                            agg_prob_np = logits_mat[correct_indices[0]]
                         else:
-                            prob_avg = probs_t.mean(dim=0)
-                            agg_prob_np = prob_avg.detach().cpu().numpy()
-                            agg_pred = int(torch.argmax(prob_avg).item())
-                    else:
-                        raise ValueError(f"Unknown aggregation mode: {aggregation_mode}")
+                            agg_prob_np = np.mean(logits_mat, axis=0)
+                else:
+                    raise ValueError(f"Unknown aggregation mode: {aggregation_mode}")
 
         final_preds.append(agg_pred)
         final_trues.append(true_for_gid)
-        if task == "classification" and agg_prob_np is not None:
+        
+        # 保存概率数据用于指标计算
+        if task_handler.is_multi_label():
+            # 多标签：agg_pred本身就是概率
+            final_scores.append(agg_pred.tolist())
+        elif task_handler.is_classification_task() and agg_prob_np is not None:
+            # 单标签：使用单独的概率数据
             final_scores.append(agg_prob_np.tolist())
     
     y_pred_agg = np.array(final_preds)
     y_true_agg = np.array(final_trues)
     
     metrics_out = {'val_loss': float(avg_loss)}
-    if task == "regression":
+    
+    if task_handler.is_regression_task():
         metrics = compute_regression_metrics(y_true_agg, y_pred_agg)
         metrics_out.update(metrics)
-    else:
+    elif task_handler.is_classification_task() and not task_handler.is_multi_label():
         y_score_agg = np.array(final_scores) if len(final_scores) == len(y_true_agg) and len(final_scores) > 0 else None
         metrics = compute_classification_metrics(y_true_agg, y_pred_agg, y_score=y_score_agg)
         metrics_out.update(metrics)
+    elif task_handler.is_multi_label():
+        # 多标签分类：y_true_agg和y_pred_agg都是[N, num_labels]格式
+        y_score_agg = np.array(final_scores) if len(final_scores) == len(y_true_agg) and len(final_scores) > 0 else None
+        if y_score_agg is not None:
+            metrics = compute_multi_label_classification_metrics(y_true_agg, y_score_agg)
+            metrics_out.update(metrics)
+        else:
+            logger.warning("多标签分类缺少概率分数，无法计算AP指标")
+    elif task_handler.is_multi_target():
+        # 多目标回归：y_true_agg和y_pred_agg都是[N, num_targets]格式
+        metrics = compute_multi_target_regression_metrics(y_true_agg, y_pred_agg)
+        metrics_out.update(metrics)
+    else:
+        raise ValueError(f"不支持的任务类型: {task}")
         
     return metrics_out
 

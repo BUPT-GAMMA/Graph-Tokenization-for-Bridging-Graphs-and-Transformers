@@ -5,6 +5,7 @@
 - 固定划分：统一采用 `data.pkl + train_index.json/val_index.json/test_index.json`，缺失即报错，不做隐式回退。
 - 统一接口：通过 `UnifiedDataInterface` 提供图、序列化结果、BPE 压缩结果的统一读取与（显式）构建。
 - 工厂与职责：`UnifiedDataFactory` 选择数据集 loader；token 规则由数据层暴露，序列化器只读取不介入。
+- **严格数据契约**：预处理与加载器之间建立严格的数据格式契约，不做兼容性假设（详见 CODING_STANDARDS.md 第5章）。
 
 ## 目录结构（现状）
 

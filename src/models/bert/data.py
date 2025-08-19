@@ -234,12 +234,22 @@ class LabelNormalizer:
         拟合标准化器
         
         Args:
-            labels: 原始标签列表
+            labels: 原始标签列表（单目标：List[float]，多目标：List[List[float]]）
             
         Returns:
             self: 链式调用
         """
-        labels_array = np.array(labels).reshape(-1, 1)
+        labels_array = np.array(labels)
+        
+        # 检查是否为多目标回归
+        if labels_array.ndim == 1:
+            # 单目标回归：reshape为[N, 1]
+            labels_array = labels_array.reshape(-1, 1)
+        elif labels_array.ndim == 2:
+            # 多目标回归：保持[N, num_targets]形状
+            pass
+        else:
+            raise ValueError(f"标签数组维度不支持: {labels_array.ndim}")
         
         # 检查方差是否接近0
         if np.var(labels_array) < 1e-8:
@@ -260,32 +270,55 @@ class LabelNormalizer:
         标准化标签
         
         Args:
-            labels: 原始标签列表
+            labels: 原始标签列表（单目标：List[float]，多目标：List[List[float]]）
             
         Returns:
-            标准化后的标签列表
+            标准化后的标签列表（保持原有格式）
         """
         assert self.is_fitted, "标准化器尚未拟合，请先调用fit()方法"
         
-        labels_array = np.array(labels).reshape(-1, 1)
-        normalized_array = self.scaler.transform(labels_array)
-        return normalized_array.flatten().tolist()
+        labels_array = np.array(labels)
+        original_shape = labels_array.shape
+        
+        # 处理不同维度
+        if labels_array.ndim == 1:
+            # 单目标回归：reshape为[N, 1]
+            labels_array = labels_array.reshape(-1, 1)
+            normalized_array = self.scaler.transform(labels_array)
+            return normalized_array.flatten().tolist()
+        elif labels_array.ndim == 2:
+            # 多目标回归：直接transform
+            normalized_array = self.scaler.transform(labels_array)
+            return normalized_array.tolist()
+        else:
+            raise ValueError(f"标签数组维度不支持: {labels_array.ndim}")
     
     def inverse_transform(self, normalized_labels: List[float]) -> List[float]:
         """
         反标准化标签
         
         Args:
-            normalized_labels: 标准化后的标签列表
+            normalized_labels: 标准化后的标签列表（单目标：List[float]，多目标：List[List[float]]）
             
         Returns:
-            原始空间的标签列表
+            原始空间的标签列表（保持原有格式）
         """
         assert self.is_fitted, "标准化器尚未拟合，请先调用fit()方法"
         
-        labels_array = np.array(normalized_labels).reshape(-1, 1)
-        original_array = self.scaler.inverse_transform(labels_array)
-        return original_array.flatten().tolist()
+        labels_array = np.array(normalized_labels)
+        
+        # 处理不同维度
+        if labels_array.ndim == 1:
+            # 单目标回归：reshape为[N, 1]
+            labels_array = labels_array.reshape(-1, 1)
+            original_array = self.scaler.inverse_transform(labels_array)
+            return original_array.flatten().tolist()
+        elif labels_array.ndim == 2:
+            # 多目标回归：直接transform
+            original_array = self.scaler.inverse_transform(labels_array)
+            return original_array.tolist()
+        else:
+            raise ValueError(f"标签数组维度不支持: {labels_array.ndim}")
     
     def save(self, path: str):
         """保存标准化器"""
@@ -335,8 +368,25 @@ class NormalizedRegressionDataset:
         self._bpe_transform = None
         self._bpe_checked = False  # 标记是否已检查过BPE Transform
         
+        # 检查是否为多目标回归
+        self.is_multi_target = isinstance(labels[0], (list, tuple, torch.Tensor)) if len(labels) > 0 else False
+        
         logger.info(f"📊 回归数据集创建完成: {len(token_sequences)} 个序列")
-        logger.info(f"   原始标签范围: [{min(labels):.6f}, {max(labels):.6f}]")
+        
+        if self.is_multi_target:
+            # 多目标回归：显示目标维度信息
+            num_targets = len(labels[0]) if len(labels) > 0 else 1
+            logger.info(f"   多目标回归，目标维度: {num_targets}")
+            # 计算每个目标的范围（转换为numpy数组便于计算）
+            import numpy as np
+            labels_array = np.array(labels)
+            min_vals = labels_array.min(axis=0)
+            max_vals = labels_array.max(axis=0)
+            logger.info(f"   各目标范围: min={min_vals[:3]}..., max={max_vals[:3]}...")
+        else:
+            # 单目标回归：原有逻辑
+            logger.info(f"   原始标签范围: [{min(labels):.6f}, {max(labels):.6f}]")
+        
         logger.info(f"   数据增强: {type(transforms).__name__}")
     
     def _apply_bpe_if_enabled(self, token_sequence: List[int]) -> List[int]:
@@ -357,7 +407,12 @@ class NormalizedRegressionDataset:
         """应用标准化（在normalizer已拟合后调用）"""
         if self.normalizer is not None and self.normalizer.is_fitted:
             self.normalized_labels = self.normalizer.transform(self.original_labels)
-            logger.info(f"   标准化后范围: [{min(self.normalized_labels):.6f}, {max(self.normalized_labels):.6f}]")
+            
+            # 处理多目标vs单目标的日志记录
+            if self.is_multi_target:
+                logger.info(f"   多目标标准化完成，目标维度: {len(self.normalized_labels[0])}")
+            else:
+                logger.info(f"   标准化后范围: [{min(self.normalized_labels):.6f}, {max(self.normalized_labels):.6f}]")
         elif self.normalizer is not None and not self.normalizer.is_fitted:
             raise ValueError("❌ 标准化器未拟合！请先调用normalizer.fit()")
         else:
@@ -465,13 +520,23 @@ class ClassificationDataset(Dataset):
         # 验证数据
         assert len(token_sequences) == len(labels), "序列数量和标签数量不匹配"
         
-        # 统计类别信息
-        unique_labels = sorted(set(labels))
-        self.num_classes = len(unique_labels)
-        self.class_distribution = {label: labels.count(label) for label in unique_labels}
+        # 检查标签类型：多标签 vs 单标签
+        self.is_multi_label = isinstance(labels[0], (list, tuple, torch.Tensor)) if len(labels) > 0 else False
         
-        print(f"分类数据集创建完成，共 {len(token_sequences)} 个样本")
-        print(f"类别数量: {self.num_classes}, 类别分布: {self.class_distribution}")
+        if self.is_multi_label:
+            # 多标签分类：标签是向量
+            self.num_classes = len(labels[0]) if len(labels) > 0 else 1
+            self.class_distribution = "多标签分类"
+            print(f"多标签分类数据集创建完成，共 {len(token_sequences)} 个样本")
+            print(f"标签维度: {self.num_classes}")
+        else:
+            # 单标签分类：统计类别信息
+            unique_labels = sorted(set(labels))
+            self.num_classes = len(unique_labels)
+            self.class_distribution = {label: labels.count(label) for label in unique_labels}
+            print(f"分类数据集创建完成，共 {len(token_sequences)} 个样本")
+            print(f"类别数量: {self.num_classes}, 类别分布: {self.class_distribution}")
+        
         print(f"序列长度固定为: {self.max_length}") 
         
         # BPE Transform将在worker_init_fn中初始化，这里先设为None
@@ -510,22 +575,35 @@ class ClassificationDataset(Dataset):
             token_sequence, add_special_tokens=True, max_length=self.max_length
         )
         
+        # 根据标签类型选择合适的dtype
+        if self.is_multi_label:
+            # 多标签分类：使用float类型
+            label_tensor = torch.tensor(label, dtype=torch.float)
+        else:
+            # 单标签分类：使用long类型
+            label_tensor = torch.tensor(label, dtype=torch.long)
+        
         return {
             'input_ids': encoded['input_ids'],
             'attention_mask': encoded['attention_mask'],
-            'labels': torch.tensor(label, dtype=torch.long),
+            'labels': label_tensor,
             'graph_id': torch.tensor(self.graph_ids[idx], dtype=torch.long)
         }
     
     def get_class_weights(self) -> torch.Tensor:
         """计算类别权重（用于处理类别不平衡）"""
-        total_samples = len(self.labels)
-        class_weights = torch.zeros(self.num_classes)
-        
-        for label, count in self.class_distribution.items():
-            class_weights[label] = total_samples / (self.num_classes * count)
-        
-        return class_weights
+        if self.is_multi_label:
+            # 多标签分类：返回均匀权重
+            return torch.ones(self.num_classes)
+        else:
+            # 单标签分类：计算基于频率的权重
+            total_samples = len(self.labels)
+            class_weights = torch.zeros(self.num_classes)
+            
+            for label, count in self.class_distribution.items():
+                class_weights[label] = total_samples / (self.num_classes * count)
+            
+            return class_weights
 
 def create_classification_dataloader(token_sequences: List[List[int]], 
                                    labels: List[int],

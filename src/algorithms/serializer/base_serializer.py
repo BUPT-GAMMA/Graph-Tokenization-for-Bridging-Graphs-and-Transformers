@@ -953,11 +953,11 @@ class BaseGraphSerializer(ABC):
             else:
                 shift = _torch.zeros(P, dtype=_torch.long)
             pos_nodes = _torch.arange(P, dtype=_torch.long) + shift
-            node_flat = selected_node_tok.view(-1)
+            node_flat = selected_node_tok.view(-1).to(_torch.long)  # 确保数据类型匹配
             seq[pos_nodes] = node_flat
             if include_edges and Ke > 0:
                 pos_edges = pos_nodes[:-1][keep_mask_bool] + 1
-                seq[pos_edges] = selected_edge_tok.view(-1)
+                seq[pos_edges] = selected_edge_tok.view(-1).to(_torch.long)  # 确保数据类型匹配
             token_list = seq.tolist()
             element_list = [""] * len(token_list)
             return token_list, element_list

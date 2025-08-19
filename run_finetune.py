@@ -163,14 +163,19 @@ def infer_task_and_targets(config: ProjectConfig, udi: UnifiedDataInterface,
         if config.task.target_property:
             print(f"🎯 自动设置回归目标属性: {config.task.target_property}")
     
-    # 推断分类类别数
+    # 推断分类类别数和多目标维度
     num_classes = num_classes_cli
-    if task == 'classification' and num_classes is None:
-        assert 'num_classes' in meta, "分类任务需要 num_classes，但数据集元数据中未找到此字段"
+    if task in ['classification', 'multi_label_classification', 'multi_target_regression'] and num_classes is None:
+        assert 'num_classes' in meta, f"{task}任务需要 num_classes，但数据集元数据中未找到此字段"
         n = meta['num_classes']
         assert isinstance(n, int) and n > 1, f"数据集元数据中 num_classes 应为大于1的整数，实际值: {n}"
         num_classes = n
-        print(f"🏷️ 自动设置分类类别数: {num_classes}")
+        if task == 'classification':
+            print(f"🏷️ 自动设置分类类别数: {num_classes}")
+        elif task == 'multi_label_classification':
+            print(f"🏷️ 自动设置多标签分类标签数: {num_classes}")
+        elif task == 'multi_target_regression':
+            print(f"🏷️ 自动设置多目标回归目标数: {num_classes}")
     
     return task, num_classes
 
@@ -250,10 +255,10 @@ def run_finetuning(
     # 运行微调
     print("🎓 开始微调...")
     try:
+        # 统一架构会自动从UDI推断任务类型和维度，不需要显式传递num_classes等参数
         result = run_finetune(
             config,
             task=task,
-            num_classes=num_classes,
             aggregation_mode=aggregation_mode,
             save_name_prefix=save_name_prefix,
             save_name_suffix=save_name_suffix,

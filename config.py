@@ -269,8 +269,9 @@ class ProjectConfig:
             assert self.vocab_size > 5, f"vocab_size({self.vocab_size})必须大于特殊token数量(5)"
         
         # 任务类型验证
-        assert self.task.type in ["regression", "classification"], \
-            f"task_type必须是'regression'或'classification'，当前为'{self.task.type}'"
+        supported_tasks = ["regression", "classification", "multi_label_classification", "multi_target_regression"]
+        assert self.task.type in supported_tasks, \
+            f"task_type必须是{supported_tasks}之一，当前为'{self.task.type}'"
         
         # QM9限制验证
         if self.dataset.limit is not None:
