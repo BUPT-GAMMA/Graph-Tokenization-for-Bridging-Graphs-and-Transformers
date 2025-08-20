@@ -84,7 +84,7 @@ def compute_multi_label_classification_metrics(
         y_score: [N, num_labels] 预测概率
         
     Returns:
-        包含AP等指标的字典
+        包含经典指标的字典：ap, accuracy, precision, recall, f1
     """
     assert y_true.shape == y_score.shape, f"标签和预测形状不匹配: {y_true.shape} vs {y_score.shape}"
     
@@ -98,23 +98,37 @@ def compute_multi_label_classification_metrics(
             # 如果某个标签全为0或全为1，AP无法计算
             label_aps.append(0.0)
     
-    # 计算macro平均AP
+    # macro平均AP
     macro_ap = float(np.mean(label_aps))
     
-    # 计算其他多标签指标
-    y_pred = (y_score > 0.5).astype(int)  # 阈值0.5转换为预测标签
+    # 转换为预测标签
+    y_pred = (y_score > 0.5).astype(int)
     
-    # 样本级准确率（exact match）
-    exact_match = float(np.mean(np.all(y_true == y_pred, axis=1)))
+    # 计算经典指标
+    # 使用macro平均（每个标签单独计算后平均）
+    precisions, recalls, f1s = [], [], []
+    for i in range(y_true.shape[1]):
+        # 计算每个标签的precision, recall, f1
+        prec, rec, f1, _ = precision_recall_fscore_support(
+            y_true[:, i], y_pred[:, i], average='binary', zero_division=0
+        )
+        precisions.append(prec)
+        recalls.append(rec)
+        f1s.append(f1)
     
-    # Hamming准确率（元素级准确率）
-    hamming_acc = float(np.mean(y_true == y_pred))
+    macro_precision = float(np.mean(precisions))
+    macro_recall = float(np.mean(recalls))
+    macro_f1 = float(np.mean(f1s))
+    
+    # 准确率使用Hamming accuracy（元素级准确率）
+    accuracy = float(np.mean(y_true == y_pred))
     
     return {
-        'macro_ap': macro_ap,
-        'label_aps': label_aps,
-        'exact_match': exact_match,
-        'hamming_accuracy': hamming_acc,
+        'ap': macro_ap,
+        'accuracy': accuracy,
+        'precision': macro_precision,
+        'recall': macro_recall,
+        'f1': macro_f1,
     }
 
 

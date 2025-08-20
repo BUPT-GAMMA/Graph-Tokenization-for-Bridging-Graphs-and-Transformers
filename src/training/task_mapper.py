@@ -99,7 +99,7 @@ class TaskMapper:
             "regression": "mae",
             "multi_target_regression": "macro_mae", 
             "classification": "roc_auc",  # molhiv用ROC-AUC
-            "multi_label_classification": "macro_ap",  # peptides_func用AP
+            "multi_label_classification": "ap",  # peptides_func用AP
         }
         
         return metric_mapping.get(task, "loss")

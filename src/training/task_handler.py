@@ -213,7 +213,7 @@ class TaskHandler:
             "multi_target_regression": "macro_mae",
             "binary_classification": "roc_auc",
             "classification": "accuracy",
-            "multi_label_classification": "macro_ap"
+            "multi_label_classification": "ap"
         }
         return metric_map.get(self.task_type, "loss")
     
