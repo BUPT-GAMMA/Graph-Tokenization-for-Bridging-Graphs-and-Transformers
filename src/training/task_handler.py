@@ -6,7 +6,7 @@
 保持简洁，避免过度设计。
 """
 
-from typing import Dict, Any, Optional, Tuple
+from typing import Optional
 import torch
 import torch.nn as nn
 import numpy as np
@@ -26,14 +26,16 @@ class TaskHandler:
     3. 提供任务特定的预测方法
     """
     
-    def __init__(self, task_type: str, output_dim: int):
+    def __init__(self, task_type: str, output_dim: int, dataset_name: str = None):
         """
         Args:
             task_type: 任务类型（从UDI获取）
             output_dim: 输出维度
+            dataset_name: 数据集名称（用于特定数据集的指标配置）
         """
         self.task_type = task_type
         self.output_dim = output_dim
+        self.dataset_name = dataset_name
         self.loss_fn = self._get_loss_function()
     
     def is_regression_task(self) -> bool:
@@ -208,13 +210,19 @@ class TaskHandler:
     @property
     def primary_metric(self) -> str:
         """获取主要评价指标"""
+        # 基本指标映射
         metric_map = {
             "regression": "mae",
             "multi_target_regression": "macro_mae",
             "binary_classification": "roc_auc",
-            "classification": "accuracy",
+            "classification": "accuracy",  # 默认用accuracy
             "multi_label_classification": "ap"
         }
+        
+        # 特殊数据集的指标配置
+        if self.task_type == "classification" and self.dataset_name == "molhiv":
+            return "roc_auc"  # molhiv特例使用AUC
+        
         return metric_map.get(self.task_type, "loss")
     
     @property
@@ -255,6 +263,8 @@ def create_task_handler(udi) -> TaskHandler:
     else:
         raise ValueError(f"无法确定输出维度: {task_type}")
     
-    logger.info(f"📋 创建任务处理器: {task_type} (输出维度={output_dim})")
+    dataset_name = udi.dataset  # 从UDI获取数据集名称
     
-    return TaskHandler(task_type, output_dim)
+    logger.info(f"📋 创建任务处理器: {task_type} (输出维度={output_dim}, 数据集={dataset_name})")
+    
+    return TaskHandler(task_type, output_dim, dataset_name)
