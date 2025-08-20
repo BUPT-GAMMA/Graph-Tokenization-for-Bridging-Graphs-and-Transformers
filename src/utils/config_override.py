@@ -67,7 +67,7 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
     
     # 微调参数
     finetune_group = parser.add_argument_group('微调参数')
-    finetune_group.add_argument("--task", choices=["regression", "classification"], help="任务类型")
+    finetune_group.add_argument("--task", choices=["regression", "classification", "multi_label_classification", "multi_target_regression"], help="任务类型")
     finetune_group.add_argument("--target_property", type=str, help="回归目标属性")
     finetune_group.add_argument("--finetune_epochs", type=int, help="微调轮数")
     finetune_group.add_argument("--finetune_batch_size", type=int, help="微调批次大小")
@@ -398,7 +398,7 @@ def add_all_args(parser: argparse.ArgumentParser, include_finetune: bool = True)
     # 微调特有参数（保留 finetune_* 作为别名，向后兼容）
     if include_finetune:
         ft_group = parser.add_argument_group('微调配置')
-        ft_group.add_argument("--task", type=str, choices=["regression", "classification"], 
+        ft_group.add_argument("--task", type=str, choices=["regression", "classification", "multi_label_classification", "multi_target_regression"], 
                              help="任务类型")
         ft_group.add_argument("--target_property", type=str, help="目标属性名称")
         ft_group.add_argument("--finetune_epochs", type=int, help="微调轮数（别名）")

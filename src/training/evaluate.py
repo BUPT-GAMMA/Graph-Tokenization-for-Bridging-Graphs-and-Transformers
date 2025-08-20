@@ -135,37 +135,39 @@ def evaluate_model(
     else:
         # 分类任务聚合
         pooled_iter = iter(all_pooled)
-        logits_iter = iter(all_logits)
         
         if task_handler.is_multi_label():
             # 多标签：只有概率，没有预测类别
-            for gid, true, logit in zip(all_gids, all_trues, all_logits):
+            # 确保数据长度一致
+            assert len(all_gids) == len(all_trues) == len(all_logits), \
+                f"多标签数据长度不一致: gids={len(all_gids)}, trues={len(all_trues)}, logits={len(all_logits)}"
+            
+            for i, (gid, true, logit) in enumerate(zip(all_gids, all_trues, all_logits)):
                 if gid not in grouped_trues:
                     grouped_trues[gid] = true
                     grouped_pooled[gid] = []
                     grouped_logits[gid] = []
                 grouped_logits[gid].append(logit)
-                try:
-                    grouped_pooled[gid].append(next(pooled_iter))
-                except StopIteration:
-                    pass
+                # 处理pooled数据（如果存在）
+                if i < len(all_pooled):
+                    grouped_pooled[gid].append(all_pooled[i])
         else:
             # 单标签：有预测类别和概率
-            for gid, pred, true in zip(all_gids, all_preds, all_trues):
+            # 确保所有数据长度一致
+            assert len(all_gids) == len(all_preds) == len(all_trues) == len(all_logits), \
+                f"数据长度不一致: gids={len(all_gids)}, preds={len(all_preds)}, trues={len(all_trues)}, logits={len(all_logits)}"
+            
+            for i, (gid, pred, true, logit) in enumerate(zip(all_gids, all_preds, all_trues, all_logits)):
                 if gid not in grouped_preds:
                     grouped_preds[gid] = []
                     grouped_trues[gid] = true
                     grouped_pooled[gid] = []
                     grouped_logits[gid] = []
                 grouped_preds[gid].append(pred)
-                try:
-                    grouped_pooled[gid].append(next(pooled_iter))
-                except StopIteration:
-                    pass
-                try:
-                    grouped_logits[gid].append(next(logits_iter))
-                except StopIteration:
-                    pass
+                grouped_logits[gid].append(logit)
+                # 处理pooled数据（如果存在）
+                if i < len(all_pooled):
+                    grouped_pooled[gid].append(all_pooled[i])
 
     # 聚合每个组的预测
     final_preds, final_trues = [], []
@@ -237,28 +239,26 @@ def evaluate_model(
                     raise ValueError(f"Unknown aggregation mode: {aggregation_mode}")
             else:
                 # 单标签分类：preds_for_gid是类别索引，有单独的概率数据
-                agg_prob_np = None
                 logits_mat = np.array(grouped_logits.get(gid, []), dtype=np.float32)
                 
+                if len(logits_mat) == 0:
+                    raise ValueError(f"Graph ID {gid} 缺少概率数据，无法计算AUC/AP指标")
+                
                 if aggregation_mode == 'avg':
-                    if len(logits_mat) > 0:
-                        # 概率平均后argmax
-                        p_agg = np.mean(logits_mat, axis=0)
-                        agg_pred = int(np.argmax(p_agg))
-                        agg_prob_np = p_agg
-                    else:
-                        # 投票
-                        agg_pred = np.bincount(preds_for_gid.astype(int)).argmax()
+                    # 概率平均后argmax
+                    p_agg = np.mean(logits_mat, axis=0)
+                    agg_pred = int(np.argmax(p_agg))
+                    agg_prob_np = p_agg
                 elif aggregation_mode == 'best':
                     # 选择正确的预测，如果没有则投票
                     correct_preds = preds_for_gid[preds_for_gid == true_for_gid]
                     agg_pred = correct_preds[0] if len(correct_preds) > 0 else np.bincount(preds_for_gid.astype(int)).argmax()
-                    if len(logits_mat) > 0:
-                        correct_indices = np.where(preds_for_gid == true_for_gid)[0]
-                        if len(correct_indices) > 0:
-                            agg_prob_np = logits_mat[correct_indices[0]]
-                        else:
-                            agg_prob_np = np.mean(logits_mat, axis=0)
+                    # 选择正确预测对应的概率，如果没有则使用平均概率
+                    correct_indices = np.where(preds_for_gid == true_for_gid)[0]
+                    if len(correct_indices) > 0:
+                        agg_prob_np = logits_mat[correct_indices[0]]
+                    else:
+                        agg_prob_np = np.mean(logits_mat, axis=0)
                 else:
                     raise ValueError(f"Unknown aggregation mode: {aggregation_mode}")
 
@@ -269,8 +269,10 @@ def evaluate_model(
         if task_handler.is_multi_label():
             # 多标签：agg_pred本身就是概率
             final_scores.append(agg_pred.tolist())
-        elif task_handler.is_classification_task() and agg_prob_np is not None:
-            # 单标签：使用单独的概率数据
+        elif task_handler.is_classification_task():
+            # 单标签：使用单独的概率数据（现在应该始终存在）
+            if agg_prob_np is None:
+                raise ValueError(f"Graph ID {gid} 缺少概率数据")
             final_scores.append(agg_prob_np.tolist())
     
     y_pred_agg = np.array(final_preds)

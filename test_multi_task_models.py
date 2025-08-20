@@ -120,7 +120,7 @@ def test_metrics_computation():
     
     try:
         metrics = compute_multi_label_classification_metrics(y_true_multi, y_score_multi)
-        logger.info(f"    ✅ 多标签分类指标: macro_ap={metrics['macro_ap']:.4f}, exact_match={metrics['exact_match']:.4f}")
+        logger.info(f"    ✅ 多标签分类指标: ap={metrics['ap']:.4f}, accuracy={metrics['accuracy']:.4f}, f1={metrics['f1']:.4f}")
     except Exception as e:
         logger.error(f"    ❌ 多标签分类指标计算失败: {e}")
     
