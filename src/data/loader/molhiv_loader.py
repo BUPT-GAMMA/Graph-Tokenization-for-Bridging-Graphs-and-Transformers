@@ -122,7 +122,7 @@ class MOLHIVLoader(BaseDataLoader):
         self._cache_built = True
 
     def get_dataset_task_type(self) -> str:
-        return "binary_classification"
+        return "classification"
 
     def get_num_classes(self) -> int:
         return 2
