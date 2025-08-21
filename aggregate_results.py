@@ -184,7 +184,7 @@ def collect_results(log_dir, group_names, prefix_names):
                 
                 # 确定任务类型
                 task = metrics.get('task', '')
-                if task == 'regression':
+                if task in ['regression','multi_target_regression']:
                     task_type = 'regression'
                 elif task in ['classification', 'multi_label_classification']:
                     task_type = 'classification'
@@ -217,7 +217,7 @@ def create_tables(results, group_name, prefix_name):
                              'coildel', 'dblp', 'dd', 'twitter', 'molhiv', 'peptides_func']
     
     # 定义模型排序 (method, bpe)
-    method_order = ['cpp', 'eulerian', 'fcpp', 'feuler', 'smiles', 'topo']
+    method_order = ['cpp', 'eulerian', 'fcpp', 'feuler', 'topo', 'smiles']
     bpe_order = ['all', 'gaussian', 'random', 'raw']
     
     def get_model_order_key(model_key):
