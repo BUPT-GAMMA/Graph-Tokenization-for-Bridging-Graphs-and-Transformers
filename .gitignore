@@ -33,4 +33,6 @@ nohup.out
 *.log*
 *.tar.gz
 
+/agg/
+
 /tests/
