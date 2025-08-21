@@ -157,23 +157,29 @@ def compute_multi_target_regression_metrics(
         target_maes.append(mae)
         target_mses.append(mse)
     
-    # 计算平均指标
-    macro_mae = float(np.mean(target_maes))
-    macro_mse = float(np.mean(target_mses))
-    macro_rmse = float(np.sqrt(macro_mse))
+    # 计算平均指标（使用标准名称）
+    mae = float(np.mean(target_maes))
+    mse = float(np.mean(target_mses))
+    rmse = float(np.sqrt(mse))
     
-    # 整体指标（flatten所有目标）
-    overall_mae = float(mean_absolute_error(y_true.flatten(), y_pred.flatten()))
-    overall_mse = float(mean_squared_error(y_true.flatten(), y_pred.flatten()))
+    # 计算R2和相关系数（平均）
+    target_r2s = []
+    target_corrs = []
+    for i in range(y_true.shape[1]):
+        r2 = r2_score(y_true[:, i], y_pred[:, i])
+        corr = np.corrcoef(y_true[:, i], y_pred[:, i])[0, 1]
+        target_r2s.append(r2)
+        target_corrs.append(corr if not np.isnan(corr) else 0.0)
+    
+    r2 = float(np.mean(target_r2s))
+    correlation = float(np.mean(target_corrs))
     
     return {
-        'macro_mae': macro_mae,
-        'macro_mse': macro_mse,
-        'macro_rmse': macro_rmse,
-        'overall_mae': overall_mae,
-        'overall_mse': overall_mse,
-        'target_maes': target_maes,
-        'target_mses': target_mses,
+        'mae': mae,
+        'mse': mse,
+        'rmse': rmse,
+        'r2': r2,
+        'correlation': correlation,
     }
 
 

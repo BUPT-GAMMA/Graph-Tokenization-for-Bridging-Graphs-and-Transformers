@@ -213,7 +213,7 @@ class TaskHandler:
         # 基本指标映射
         metric_map = {
             "regression": "mae",
-            "multi_target_regression": "macro_mae",
+            "multi_target_regression": "mae",  # 多目标回归也使用mae（平均计算）
             "binary_classification": "roc_auc",
             "classification": "accuracy",  # 默认用accuracy
             "multi_label_classification": "ap"
