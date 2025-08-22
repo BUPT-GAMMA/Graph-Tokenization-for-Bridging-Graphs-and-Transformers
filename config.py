@@ -154,12 +154,17 @@ class ProjectConfig:
         """
         # 处理设备配置
         if self.system.device == 'auto':
-            try:
-                import importlib
-                _t = importlib.import_module('torch')
-                self.device = 'cuda' if _t.cuda.is_available() else 'cpu'
-            except Exception:
-                self.device = 'cpu'
+            import importlib
+            _t = importlib.import_module('torch')
+            assert _t.cuda.is_available()
+            self.device = 'cuda'
+
+            # try:
+            #     import importlib
+            #     _t = importlib.import_module('torch')
+            #     self.device = 'cuda' if _t.cuda.is_available() else 'cpu'
+            # except Exception:
+            #     self.device = 'cpu'
         else:
             self.device = self.system.device
         

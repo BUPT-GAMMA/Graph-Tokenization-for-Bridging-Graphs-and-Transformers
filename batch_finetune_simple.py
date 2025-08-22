@@ -238,7 +238,7 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
 
     # 🆕 收集微调参数 - 任务类型等由数据集自动推断，无需指定
     finetune_extras: list[str] = []
-    finetune_extras.extend(["--aggregation_mode", aggregation_mode])
+    # finetune_extras.操shouldextend(["--aggregation_mode", aggregation_mode])
     if save_name_prefix:
         finetune_extras.extend(["--save_name_prefix", save_name_prefix])
     if save_name_suffix:
