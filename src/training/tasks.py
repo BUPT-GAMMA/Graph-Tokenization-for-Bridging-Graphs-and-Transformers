@@ -28,7 +28,8 @@ def _effective_max_len(seqs, max_pos: int, config=None) -> int:
 
 def build_regression_datasets(
     config,
-    pretrained,
+    udi,
+    method,
     train_sequences, val_sequences, test_sequences,
     train_labels, val_labels, test_labels,
     train_gids, val_gids, test_gids,
@@ -36,24 +37,27 @@ def build_regression_datasets(
     normalizer = LabelNormalizer(method=config.task.normalization)
     normalizer.fit(train_labels)
 
-    max_pos = int(pretrained.config.max_position_embeddings)
+    # 🆕 直接从配置和UDI获取所需信息
+    max_pos = int(config.bert.architecture.max_position_embeddings)
+    vocab_manager = udi.get_vocab(method=method)
+    
     train_eff = _effective_max_len(train_sequences, max_pos, config)
     val_eff = _effective_max_len(val_sequences, max_pos, config)
     test_eff = _effective_max_len(test_sequences, max_pos, config)
 
     # 创建统一的transforms
-    transforms = create_transforms_from_config(config, pretrained.vocab_manager.get_valid_tokens(), "regression")
+    transforms = create_transforms_from_config(config, vocab_manager.get_valid_tokens(), "regression")
     
     train_ds = NormalizedRegressionDataset(
-        train_sequences, train_labels, pretrained.vocab_manager, transforms, train_eff,
+        train_sequences, train_labels, vocab_manager, transforms, train_eff,
         graph_ids=train_gids
     )
     val_ds = NormalizedRegressionDataset(
-        val_sequences, val_labels, pretrained.vocab_manager, transforms, val_eff,
+        val_sequences, val_labels, vocab_manager, transforms, val_eff,
         graph_ids=val_gids
     )
     test_ds = NormalizedRegressionDataset(
-        test_sequences, test_labels, pretrained.vocab_manager, transforms, test_eff,
+        test_sequences, test_labels, vocab_manager, transforms, test_eff,
         graph_ids=test_gids
     )
 
@@ -68,30 +72,33 @@ def build_regression_datasets(
 
 def build_classification_datasets(
     config,
-    pretrained,
+    udi,
+    method,
     train_sequences, val_sequences, test_sequences,
     train_labels, val_labels, test_labels,
     train_gids, val_gids, test_gids,
     *,
     num_classes: int,
 ):
-    max_pos = int(pretrained.config.max_position_embeddings)
+    # 🆕 直接从配置和UDI获取所需信息
+    max_pos = int(config.bert.architecture.max_position_embeddings)
+    vocab_manager = udi.get_vocab(method=method)
+    
     train_eff = _effective_max_len(train_sequences, max_pos, config)
     val_eff = _effective_max_len(val_sequences, max_pos, config)
     test_eff = _effective_max_len(test_sequences, max_pos, config)
 
     # 创建统一的transforms
-    transforms = create_transforms_from_config(config, pretrained.vocab_manager.get_valid_tokens(), "classification")
+    transforms = create_transforms_from_config(config, vocab_manager.get_valid_tokens(), "classification")
     
-    train_ds = ClassificationDataset(train_sequences, train_labels, pretrained.vocab_manager, transforms, train_eff, train_gids)
-    val_ds = ClassificationDataset(val_sequences, val_labels, pretrained.vocab_manager, transforms, val_eff, val_gids)
-    test_ds = ClassificationDataset(test_sequences, test_labels, pretrained.vocab_manager, transforms, test_eff, test_gids)
+    train_ds = ClassificationDataset(train_sequences, train_labels, vocab_manager, transforms, train_eff, train_gids)
+    val_ds = ClassificationDataset(val_sequences, val_labels, vocab_manager, transforms, val_eff, val_gids)
+    test_ds = ClassificationDataset(test_sequences, test_labels, vocab_manager, transforms, test_eff, test_gids)
     return train_ds, val_ds, test_ds
 
 
 def build_regression_loaders(
     config,
-    pretrained,
     udi,
     method,
 ) -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader, torch.utils.data.DataLoader, LabelNormalizer]:
@@ -120,7 +127,7 @@ def build_regression_loaders(
     test_gids = [gid for gid, _ in test_seqs_with_id]
     
     train_ds, val_ds, test_ds, normalizer = build_regression_datasets(
-        config, pretrained,
+        config, udi, method,
         train_sequences, val_sequences, test_sequences,
         train_labels, val_labels, test_labels,
         train_gids, val_gids, test_gids,
@@ -169,7 +176,6 @@ def build_regression_loaders(
 
 def build_classification_loaders(
     config,
-    pretrained,
     udi: UnifiedDataInterface,
     method,
 ) -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
@@ -197,7 +203,7 @@ def build_classification_loaders(
     test_gids = [gid for gid, _ in test_seqs_with_id]
     assert num_classes > 1, "分类任务需要至少2个类别"
     train_ds, val_ds, test_ds = build_classification_datasets(
-        config, pretrained,
+        config, udi, method,
         train_sequences, val_sequences, test_sequences,
         train_labels, val_labels, test_labels,
         train_gids, val_gids, test_gids,

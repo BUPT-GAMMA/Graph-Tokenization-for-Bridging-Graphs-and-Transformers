@@ -59,19 +59,22 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
     arch_group.add_argument("--num_layers", type=int, help="层数")
     arch_group.add_argument("--num_heads", type=int, help="注意力头数")
     
-    # 训练参数
+    # 训练参数 (根据脚本自动映射到预训练或微调)
     train_group = parser.add_argument_group('训练参数')
     train_group.add_argument("--epochs", type=int, help="训练轮数")
     train_group.add_argument("--batch_size", type=int, help="批次大小")
     train_group.add_argument("--learning_rate", "--lr", type=float, help="学习率")
     
-    # 微调参数
-    finetune_group = parser.add_argument_group('微调参数')
-    finetune_group.add_argument("--task", choices=["regression", "classification", "multi_label_classification", "multi_target_regression"], help="任务类型")
-    finetune_group.add_argument("--target_property", type=str, help="回归目标属性")
-    finetune_group.add_argument("--finetune_epochs", type=int, help="微调轮数")
-    finetune_group.add_argument("--finetune_batch_size", type=int, help="微调批次大小")
-    finetune_group.add_argument("--finetune_learning_rate", "--ft_lr", type=float, help="微调学习率")
+    # 任务参数
+    task_group = parser.add_argument_group('任务参数')
+    task_group.add_argument("--task", choices=["mlm", "regression", "classification", "multi_label_classification", "multi_target_regression"], 
+                           help="任务类型（可选，不指定时从数据集自动推断）")
+    task_group.add_argument("--target_property", type=str, help="回归目标属性")
+    
+    # 编码器参数
+    encoder_group = parser.add_argument_group('编码器参数')
+    encoder_group.add_argument("--encoder_type", type=str, choices=["bert", "Alibaba-NLP/gte-multilingual-base"], help="编码器类型")
+    encoder_group.add_argument("--reinit_weights", action="store_true", help="重新初始化编码器权重(用于GTE MLM预训练)")
 
 
 def add_json_override_args(parser: argparse.ArgumentParser) -> None:
@@ -178,36 +181,30 @@ def apply_args_to_config(config: ProjectConfig, args: argparse.Namespace, *, com
         config.bert.architecture.num_attention_heads = args.num_heads
         print(f"🎯 bert.architecture.num_attention_heads = {args.num_heads}")
     
-    # 通用训练参数（根据 common_to 映射到对应阶段）
+    # 🆕 简化的训练参数处理
     if hasattr(args, 'epochs') and args.epochs:
-        target_path = 'bert.finetuning.epochs' if common_to == 'finetune' else 'bert.pretraining.epochs'
-        if not _json_has_path(json_dict_for_presence, target_path):
-            if common_to == "finetune":
-                config.bert.finetuning.epochs = args.epochs
-                print(f"🎯 bert.finetuning.epochs = {args.epochs}")
-            else:
-                config.bert.pretraining.epochs = args.epochs
-                print(f"🎯 bert.pretraining.epochs = {args.epochs}")
+        if common_to == "finetune":
+            config.bert.finetuning.epochs = args.epochs
+            print(f"🎯 bert.finetuning.epochs = {args.epochs}")
+        else:
+            config.bert.pretraining.epochs = args.epochs
+            print(f"🎯 bert.pretraining.epochs = {args.epochs}")
     
     if hasattr(args, 'batch_size') and args.batch_size:
-        target_path = 'bert.finetuning.batch_size' if common_to == 'finetune' else 'bert.pretraining.batch_size'
-        if not _json_has_path(json_dict_for_presence, target_path):
-            if common_to == "finetune":
-                config.bert.finetuning.batch_size = args.batch_size
-                print(f"🎯 bert.finetuning.batch_size = {args.batch_size}")
-            else:
-                config.bert.pretraining.batch_size = args.batch_size
-                print(f"🎯 bert.pretraining.batch_size = {args.batch_size}")
+        if common_to == "finetune":
+            config.bert.finetuning.batch_size = args.batch_size
+            print(f"🎯 bert.finetuning.batch_size = {args.batch_size}")
+        else:
+            config.bert.pretraining.batch_size = args.batch_size
+            print(f"🎯 bert.pretraining.batch_size = {args.batch_size}")
     
     if hasattr(args, 'learning_rate') and args.learning_rate:
-        target_path = 'bert.finetuning.learning_rate' if common_to == 'finetune' else 'bert.pretraining.learning_rate'
-        if not _json_has_path(json_dict_for_presence, target_path):
-            if common_to == "finetune":
-                config.bert.finetuning.learning_rate = args.learning_rate
-                print(f"🎯 bert.finetuning.learning_rate = {args.learning_rate}")
-            else:
-                config.bert.pretraining.learning_rate = args.learning_rate
-                print(f"🎯 bert.pretraining.learning_rate = {args.learning_rate}")
+        if common_to == "finetune":
+            config.bert.finetuning.learning_rate = args.learning_rate
+            print(f"🎯 bert.finetuning.learning_rate = {args.learning_rate}")
+        else:
+            config.bert.pretraining.learning_rate = args.learning_rate
+            print(f"🎯 bert.pretraining.learning_rate = {args.learning_rate}")
     
     # 任务参数
     if hasattr(args, 'task') and args.task:
@@ -217,6 +214,18 @@ def apply_args_to_config(config: ProjectConfig, args: argparse.Namespace, *, com
     if hasattr(args, 'target_property') and args.target_property:
         config.task.target_property = args.target_property
         print(f"🎯 task.target_property = {args.target_property}")
+    
+    # 🆕 编码器参数
+    if hasattr(args, 'encoder_type') and args.encoder_type:
+        config.encoder.type = args.encoder_type
+        print(f"🎯 encoder.type = {args.encoder_type}")
+    
+    if hasattr(args, 'reinit_weights') and args.reinit_weights:
+        # 通过临时属性传递给模型工厂
+        config._reinit_weights = True
+        print(f"🎯 reinit_weights = True (GTE权重重新初始化)")
+    
+# 删除冗余的finetune_*参数处理，统一使用--epochs等通用参数
 
 
 def apply_json_config(config: ProjectConfig, json_input: str) -> None:
@@ -275,38 +284,8 @@ def create_experiment_name(config: ProjectConfig) -> None:
 
 def print_config_summary(config: ProjectConfig) -> None:
     """打印配置摘要"""
-    print("\n" + "="*60)
-    print("📋 配置摘要")
-    print("="*60)
-    print(f"数据集: {config.dataset.name}")
-    print(f"序列化方法: {config.serialization.method}")
-    print(f"实验分组: {config.experiment_group}")
-    print(f"实验名称: {config.experiment_name}")
-    print(f"设备: {config.system.device}")
-    
-    # BERT配置
-    print("\nBERT架构:")
-    print(f"  隐藏层大小: {config.bert.architecture.hidden_size}")
-    print(f"  层数: {config.bert.architecture.num_hidden_layers}")
-    print(f"  注意力头数: {config.bert.architecture.num_attention_heads}")
-    
-    # 训练配置
-    print("\n训练配置:")
-    print(f"  预训练轮数: {config.bert.pretraining.epochs}")
-    print(f"  预训练批次: {config.bert.pretraining.batch_size}")
-    print(f"  预训练学习率: {config.bert.pretraining.learning_rate}")
-    
-    # 任务配置
-    if hasattr(config.task, 'type') and config.task.type:
-        print("\n任务配置:")
-        print(f"  任务类型: {config.task.type}")
-        if hasattr(config.task, 'target_property') and config.task.target_property:
-            print(f"  目标属性: {config.task.target_property}")
-        print(f"  微调轮数: {config.bert.finetuning.epochs}")
-        print(f"  微调批次: {config.bert.finetuning.batch_size}")
-        print(f"  微调学习率: {config.bert.finetuning.learning_rate}")
-    
-    print("="*60)
+    show_full_config(config)
+
 
 
 def show_full_config(config: ProjectConfig) -> None:
@@ -395,14 +374,16 @@ def add_all_args(parser: argparse.ArgumentParser, include_finetune: bool = True)
     arch_group.add_argument("--num_layers", type=int, help="层数")
     arch_group.add_argument("--num_heads", type=int, help="注意力头数")
 
-    # 微调特有参数（保留 finetune_* 作为别名，向后兼容）
+    # 编码器参数 (预训练和微调都需要)
+    encoder_group = parser.add_argument_group('编码器配置')
+    encoder_group.add_argument("--encoder_type", type=str, choices=["bert", "Alibaba-NLP/gte-multilingual-base"], help="编码器类型")
+    encoder_group.add_argument("--reinit_weights", action="store_true", help="重新初始化编码器权重")
+    
+    # 任务参数 (仅微调需要)
     if include_finetune:
-        ft_group = parser.add_argument_group('微调配置')
-        ft_group.add_argument("--task", type=str, choices=["regression", "classification", "multi_label_classification", "multi_target_regression"], 
-                             help="任务类型")
-        ft_group.add_argument("--target_property", type=str, help="目标属性名称")
-        ft_group.add_argument("--finetune_epochs", type=int, help="微调轮数（别名）")
-        ft_group.add_argument("--finetune_batch_size", type=int, help="微调批次大小（别名）")
-        ft_group.add_argument("--finetune_learning_rate", type=float, help="微调学习率（别名）")
+        task_group = parser.add_argument_group('任务配置')
+        task_group.add_argument("--task", type=str, choices=["mlm", "regression", "classification", "multi_label_classification", "multi_target_regression"], 
+                             help="任务类型（可选，不指定时从数据集自动推断）")
+        task_group.add_argument("--target_property", type=str, help="目标属性名称")
     
     add_json_override_args(parser)

@@ -128,19 +128,22 @@ def run_infer(
 
     udi = UnifiedDataInterface(config=config, dataset=dataset_name)
 
-    # 构建任务模型并加载 finetuned 权重
-    pretrained = load_pretrained_backbone(config, pretrained_dir=None)
-    model = build_task_model(config, task, pretrained=pretrained, num_classes=num_classes)
+    # 🆕 构建任务模型 - 使用重构后的接口
+    model, task_handler = build_task_model(
+        config=config,
+        udi=udi,
+        method=method
+    )
 
     finetuned_dir = resolve_finetuned_model_dir(config, model_dir=model_dir, save_name=save_name)
     logger.info(f"加载微调模型权重: {finetuned_dir}")
     state = torch.load(finetuned_dir / 'pytorch_model.bin', map_location='cpu')
     model.load_state_dict(state)
 
-    # DataLoader
+    # 🆕 DataLoader - 使用重构后的接口
     if task == "regression":
         train_dl, val_dl, test_dl, normalizer = build_regression_loaders(
-            config, pretrained, udi, method
+            config, udi, method
         )
         # 优先使用微调保存的 normalizer（确保与训练一致）
         try:
@@ -152,7 +155,7 @@ def run_infer(
             pass
     else:
         train_dl, val_dl, test_dl = build_classification_loaders(
-            config, pretrained, udi, method, num_classes=num_classes
+            config, udi, method
         )
         normalizer = None
 
