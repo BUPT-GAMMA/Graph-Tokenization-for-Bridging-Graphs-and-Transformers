@@ -106,7 +106,8 @@ def _mp_stats_count_range(args: Tuple[int, int, int, int]) -> "torch.Tensor":
     import torch as _torch
     Vdim1 = Vdim0
     flat_len = Vdim0 * Edim * Vdim1
-    flat = _torch.zeros(flat_len, dtype=_torch.long)
+    # 使用 int32 降低内存占用；bincount 输出为 int64，后续转为 int32 再累加
+    flat = _torch.zeros(flat_len, dtype=_torch.int32)
     for i in range(lo, hi):
         assert 'dgl_graph' in lst[i], f"图数据缺少必需字段 'dgl_graph': 索引 {i}"
         g = lst[i]['dgl_graph']
@@ -125,8 +126,44 @@ def _mp_stats_count_range(args: Tuple[int, int, int, int]) -> "torch.Tensor":
             raise ValueError("统计计数阶段出现类型ID越界，请检查维度推断逻辑。")
         lin = src_t * (Edim * Vdim1) + et_t * Vdim1 + dst_t
         cnt = _torch.bincount(lin, minlength=flat_len)
-        flat.add_(cnt)
+        flat.add_(cnt.to(_torch.int32))
     return flat
+
+
+def _mp_stats_count_range_sparse(args: Tuple[int, int, int, int]) -> Dict[int, int]:
+    """多进程统计（稀疏）：返回线性键 -> 计数 的字典。
+    为避免构建致密张量，此路径仅对出现过的键累加。
+    """
+    lo, hi, Vdim0, Edim = args
+    ser = _MP_STATS_SERIALIZER
+    lst = _MP_STATS_GRAPH_LIST
+    assert ser is not None and lst is not None
+    import torch as _torch
+    Vdim1 = Vdim0
+    counts: Dict[int, int] = {}
+    for i in range(lo, hi):
+        assert 'dgl_graph' in lst[i], f"图数据缺少必需字段 'dgl_graph': 索引 {i}"
+        g = lst[i]['dgl_graph']
+        edge_type_ids = ser._dataset_loader.get_graph_edge_type_ids(g)
+        if edge_type_ids.numel() == 0:
+            continue
+        node_type_ids = ser._dataset_loader.get_graph_node_type_ids(g)
+        src, dst = ser._get_all_edges_from_heterograph(g)
+        src_t = node_type_ids.index_select(0, src).long()
+        dst_t = node_type_ids.index_select(0, dst).long()
+        et_t = edge_type_ids.long()
+        if src_t.numel() == 0:
+            continue
+        if src_t.max() >= Vdim0 or dst_t.max() >= Vdim1 or et_t.max() >= Edim:
+            raise ValueError("统计计数阶段出现类型ID越界，请检查维度推断逻辑。")
+        lin = (src_t * (Edim * Vdim1) + et_t * Vdim1 + dst_t).to(_torch.long)
+        if lin.numel() == 0:
+            continue
+        lin_sorted, _ = _torch.sort(lin)
+        uniq, cts = _torch.unique_consecutive(lin_sorted, return_counts=True)
+        for k, v in zip(uniq.tolist(), cts.tolist()):
+            counts[k] = counts.get(k, 0) + int(v)
+    return counts
 
 class GlobalIDMapping:
     """全局ID映射管理器"""
@@ -285,9 +322,13 @@ class BaseGraphSerializer(ABC):
         # 数值型三元组频率张量及其维度 (V, E, V)
         self._triplet_frequency_tensor = None
         self._triplet_tensor_dims = None
+        # 稀疏三元组统计（线性键 -> 计数），以及稀疏键、值向量缓存
+        self._triplet_sparse_counts: Dict[int, int] = {}
+        self._triplet_sparse_keys = None  # torch.Tensor[int64], sorted
+        self._triplet_sparse_vals = None  # torch.Tensor[int32]
         # 并发与统计配置（成员级控制，不通过方法传参）
         self.stats_parallel_enabled: bool = True
-        self.stats_num_workers: int = os.cpu_count() or 1
+        self.parallel_num: int = max(os.cpu_count()//2, 1)
         self.enable_string_stats: bool = False  # 默认关闭字符串统计热路径
     
     # ==================== 统一接口规范 ====================
@@ -351,7 +392,7 @@ class BaseGraphSerializer(ABC):
         # 调用子类的具体序列化逻辑
         return self._serialize_single_graph(graph_data, **kwargs)
     
-    def multiple_serialize(self, graph_data: Dict[str, Any], num_samples: int = 1, *, parallel: bool = False, max_workers: Optional[int] = None, **kwargs) -> SerializationResult:
+    def multiple_serialize(self, graph_data: Dict[str, Any], num_samples: int = 1, *, parallel: bool = False,**kwargs) -> SerializationResult:
         """
         对单个图进行多次序列化（统一接口）
         
@@ -406,9 +447,8 @@ class BaseGraphSerializer(ABC):
         else:
             # 并行：同一实例 + 线程本地状态，避免实例级共享数据冲突
             # 并行度采用内置自动检测的 CPU 核心数，忽略外部配置
-            max_workers = os.cpu_count() or 1
-            futures = []
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = []  # type: list
+            with ThreadPoolExecutor(max_workers=self.parallel_num) as executor:
                 for start_node in start_nodes:
                     def _make_task(sn: int):
                         def _task() -> Tuple[List[int], List[str]]:
@@ -428,7 +468,7 @@ class BaseGraphSerializer(ABC):
         
         return SerializationResult(token_sequences, element_sequences, id_mapping)
     
-    def batch_serialize(self, graph_data_list: List[Dict[str, Any]], desc: str = None, *, parallel: bool = True, max_workers: Optional[int] = None, **kwargs) -> List[SerializationResult]:
+    def batch_serialize(self, graph_data_list: List[Dict[str, Any]], desc: str = None, *, parallel: bool = True, **kwargs) -> List[SerializationResult]:
         """
         批量序列化多个图（统一接口）
         
@@ -460,11 +500,10 @@ class BaseGraphSerializer(ABC):
         else:
             # 并行：使用多进程（fork），严格保序；不提供线程并发路径
             # 并行度采用内置自动检测的 CPU 核心数，忽略外部配置
-            max_workers = os.cpu_count() or 1
             n = len(graph_data_list)
             if n == 0:
                 return []
-            workers = min(max_workers, n)
+            workers = min(self.parallel_num, n)
             # 切分为 workers 个分片
             chunk_sizes = [(n // workers) + (1 if i < (n % workers) else 0) for i in range(workers)]
             indices = []
@@ -489,7 +528,7 @@ class BaseGraphSerializer(ABC):
                         results[i] = res
             return [r for r in results if r is not None]
     
-    def batch_multiple_serialize(self, graph_data_list: List[Dict[str, Any]], num_samples: int = 1, desc: str = None, *, parallel: bool = True, max_workers: Optional[int] = None, **kwargs) -> List[SerializationResult]: 
+    def batch_multiple_serialize(self, graph_data_list: List[Dict[str, Any]], num_samples: int = 1, desc: str = None, *, parallel: bool = True, **kwargs) -> List[SerializationResult]: 
         """
         批量对多个图进行多次序列化（统一接口）
         
@@ -519,11 +558,10 @@ class BaseGraphSerializer(ABC):
             return results
         else:
             # 并行：使用多进程（fork），严格保序；不提供线程并发路径
-            max_workers = os.cpu_count() or 1
             n = len(graph_data_list)
             if n == 0:
                 return []
-            workers = min(max_workers, n)
+            workers = min(self.parallel_num, n)
 
             # 切分为 workers 个分片
             chunk_sizes = [(n // workers) + (1 if i < (n % workers) else 0) for i in range(workers)]
@@ -842,7 +880,28 @@ class BaseGraphSerializer(ABC):
             try:
                 edge_ids_tensor_full = dgl_graph.edge_ids(src_tensor, dst_tensor)  # [P-1]
             except Exception as e:
-                raise ValueError(f"获取边ID失败: {e}")
+                # 兼容多重边（同一 (u,v) 存在多条边）或异构情况导致的标量转换失败
+                # 回退到逐对查询，取首个匹配的边ID，以确保稳定且可序列化
+                import torch as _torch
+                eid_list: List[int] = []
+                src_list = src_tensor.tolist()
+                dst_list = dst_tensor.tolist()
+                for u, v in zip(src_list, dst_list):
+                    try:
+                        # 单对查询：若存在多条边，DGL 返回 1D 张量；我们取第一个
+                        eids = dgl_graph.edge_ids(int(u), int(v), return_uv=False)
+                        if hasattr(eids, 'numel') and eids.numel() > 1:
+                            eid_list.append(int(eids[0].item()))
+                        else:
+                            eid_list.append(int(eids.item()))
+                    except Exception:
+                        # 最后兜底：构建 (u,v)->eid 映射，选第一个遍历到的边
+                        mapping = self._build_edge_id_mapping(dgl_graph)
+                        eid = mapping.get((int(u), int(v)))
+                        if eid is None:
+                            raise ValueError(f"获取边ID失败: (src={u}, dst={v}) 无对应边")
+                        eid_list.append(int(eid))
+                edge_ids_tensor_full = _torch.as_tensor(eid_list, dtype=_torch.long)
 
             # 掩码：省略最高频边
             keep_mask = None
@@ -894,11 +953,11 @@ class BaseGraphSerializer(ABC):
             else:
                 shift = _torch.zeros(P, dtype=_torch.long)
             pos_nodes = _torch.arange(P, dtype=_torch.long) + shift
-            node_flat = selected_node_tok.view(-1)
+            node_flat = selected_node_tok.view(-1).to(_torch.long)  # 确保数据类型匹配
             seq[pos_nodes] = node_flat
             if include_edges and Ke > 0:
                 pos_edges = pos_nodes[:-1][keep_mask_bool] + 1
-                seq[pos_edges] = selected_edge_tok.view(-1)
+                seq[pos_edges] = selected_edge_tok.view(-1).to(_torch.long)  # 确保数据类型匹配
             token_list = seq.tolist()
             element_list = [""] * len(token_list)
             return token_list, element_list
@@ -998,7 +1057,7 @@ class BaseGraphSerializer(ABC):
         if self.stats_parallel_enabled:
             if mp.get_start_method(allow_none=True) not in ("fork", None):
                 raise RuntimeError("统计并行需要 fork 平台（Linux/posix）")
-            W = max(1, int(self.stats_num_workers))
+            W = max(1, int(self.parallel_num))
             W = min(W, N)
             chunk_sizes = [(N // W) + (1 if i < (N % W) else 0) for i in range(W)]
             ranges = []
@@ -1038,12 +1097,13 @@ class BaseGraphSerializer(ABC):
             raise ValueError("无法推断类型空间维度。请检查数据集的类型 id 特征。")
 
         Vdim1 = Vdim0
-        flat_len = Vdim0 * Edim * Vdim1
 
-        # 阶段2：计数（可并行）
-        parts: List[_torch.Tensor] = []
+        # 阶段2：计数（稀疏），不再构建致密三维张量
+        sparse_counts: Dict[int, int] = {}
         if self.stats_parallel_enabled:
-            W = max(1, int(self.stats_num_workers))
+            if mp.get_start_method(allow_none=True) not in ("fork", None):
+                raise RuntimeError("统计并行需要 fork 平台（Linux/posix）")
+            W = max(1, int(self.parallel_num))
             W = min(W, N)
             chunk_sizes = [(N // W) + (1 if i < (N % W) else 0) for i in range(W)]
             ranges = []
@@ -1052,13 +1112,16 @@ class BaseGraphSerializer(ABC):
                 if sz > 0:
                     ranges.append((s, s + sz))
                 s += sz
+            # 这里不需要再次声明 global，直接复用上一段已声明的全局引用
+            _MP_STATS_SERIALIZER = self
+            _MP_STATS_GRAPH_LIST = graph_data_list
             with mp.Pool(processes=W, initializer=_mp_stats_init, initargs=(self, graph_data_list)) as pool:
                 args_list = [(lo, hi, Vdim0, Edim) for (lo, hi) in ranges]
-                for flat in pool.imap_unordered(_mp_stats_count_range, args_list, chunksize=1):
-                    parts.append(flat)
+                for part in pool.imap_unordered(_mp_stats_count_range_sparse, args_list, chunksize=1):
+                    for k, v in part.items():
+                        sparse_counts[k] = sparse_counts.get(k, 0) + int(v)
         else:
-            # 串行计数
-            flat = _torch.zeros(flat_len, dtype=_torch.long)
+            # 串行稀疏计数
             for i in range(N):
                 g = graph_data_list[i].get('dgl_graph')
                 if g is None:
@@ -1077,41 +1140,34 @@ class BaseGraphSerializer(ABC):
                     continue
                 if src_t.max() >= Vdim0 or dst_t.max() >= Vdim1 or et_t.max() >= Edim:
                     raise ValueError("统计计数阶段出现类型ID越界，请检查维度推断逻辑。")
-                lin = src_t * (Edim * Vdim1) + et_t * Vdim1 + dst_t
-                cnt = _torch.bincount(lin, minlength=flat_len)
-                flat.add_(cnt)
-            parts.append(flat)
+                lin = (src_t * (Edim * Vdim1) + et_t * Vdim1 + dst_t).to(_torch.long)
+                if lin.numel() == 0:
+                    continue
+                lin_sorted, _ = _torch.sort(lin)
+                uniq, cts = _torch.unique_consecutive(lin_sorted, return_counts=True)
+                for k, v in zip(uniq.tolist(), cts.tolist()):
+                    sparse_counts[k] = sparse_counts.get(k, 0) + int(v)
 
-        # 归并
-        total_flat = None
-        for p in parts:
-            total_flat = p if total_flat is None else (total_flat.add_(p))
-        total = total_flat.view(Vdim0, Edim, Vdim1)
-        self._triplet_frequency_tensor = total
+        # 保存维度与稀疏键值缓存；不再使用致密张量
         self._triplet_tensor_dims = (Vdim0, Edim, Vdim1)
-
-        # 归一化（仅对 >0）
-        self._triplet_frequency_normalized_tensor = None
-        freq = total.to(_torch.float32)
-        mask = freq > 0
-        if mask.any():
-            vals = freq[mask]
-            vmin = vals.min()
-            vmax = vals.max()
-            if (vmax - vmin) > 0:
-                norm = _torch.zeros_like(freq, dtype=_torch.float32)
-                norm[mask] = (freq[mask] - vmin) / (vmax - vmin)
-            else:
-                norm = _torch.zeros_like(freq, dtype=_torch.float32)
-                norm[mask] = 0.5
-            self._triplet_frequency_normalized_tensor = norm
+        self._triplet_frequency_tensor = None
+        if len(sparse_counts) == 0:
+            self._triplet_sparse_counts = {}
+            self._triplet_sparse_keys = None
+            self._triplet_sparse_vals = None
+        else:
+            keys = _torch.tensor(sorted(sparse_counts.keys()), dtype=_torch.long)
+            vals = _torch.tensor([sparse_counts[int(k)] for k in keys.tolist()], dtype=_torch.int32)
+            self._triplet_sparse_counts = sparse_counts
+            self._triplet_sparse_keys = keys
+            self._triplet_sparse_vals = vals
 
         # 与旧接口对齐（字符串表为空；保留字段）
         self.triplet_frequencies = {}
         self.two_hop_frequencies = {}
         self.statistics_collected = True
-        logger.info("✅ GraphSeq统计收集完成(并行=%s): V=%d, E=%d, 总计数=%d",
-                    str(self.stats_parallel_enabled), Vdim0, Edim, int(total.sum().item()))
+        logger.info("✅ GraphSeq稀疏统计收集完成(并行=%s): V=%d, E=%d, 非零=%d, 总计数=%d",
+                    str(self.stats_parallel_enabled), Vdim0, Edim, len(self._triplet_sparse_counts), int(sum(self._triplet_sparse_counts.values())))
         
     def _extract_all_statistics(self, dgl_graph: dgl.DGLGraph) -> Tuple[Dict[Tuple[str, str, str], int], Dict[Tuple[str, str, str, str, str], int]]:
         """一次性提取所有统计信息：三元组和两跳路径"""
@@ -1158,7 +1214,7 @@ class BaseGraphSerializer(ABC):
     
     def _calculate_edge_weights(self, dgl_graph: dgl.DGLGraph) -> Dict[Tuple[int, int], float]:
         """
-        直接从DGL图计算边权重，优先使用三元组频率张量（向量化）。
+        直接从DGL图计算边权重，优先使用稀疏三元组统计；如无则回退到致密张量；再无则回退到字符串频率表。
         """
         import torch as _torch
         src_nodes, dst_nodes = self._get_all_edges_from_heterograph(dgl_graph)
@@ -1169,19 +1225,46 @@ class BaseGraphSerializer(ABC):
         dst_t = node_type_ids.index_select(0, dst_nodes)
         et_t = edge_type_ids
 
-        if self._triplet_frequency_tensor is None:
-            # 严格模式：使用字符串统计并要求完备
-            edge_weights: Dict[Tuple[int, int], float] = {}
-            for s, d, etid in zip(src_nodes.tolist(), dst_nodes.tolist(), et_t.tolist()):
-                s_name = self._get_node_type(dgl_graph, int(s))
-                d_name = self._get_node_type(dgl_graph, int(d))
-                e_name = self._get_edge_type(dgl_graph, int(s), int(d))
-                triplet = (s_name, e_name, d_name)
-                if triplet not in self.triplet_frequencies:
-                    raise ValueError(f"统计缺失: 三元组{triplet}未在频率表中。请在初始化时传入更多图以收集充分统计。")
-                edge_weights[(int(s), int(d))] = log10(self.triplet_frequencies[triplet])
-            return edge_weights
+        # 1) 优先使用稀疏统计
+        if self._triplet_sparse_keys is not None and self._triplet_sparse_vals is not None:
+            V0, E0, V1 = self._triplet_tensor_dims
+            if src_t.numel() == 0:
+                return {}
+            if src_t.max().item() >= V0 or dst_t.max().item() >= V1 or et_t.max().item() >= E0:
+                raise ValueError("类型ID超出频率统计的维度，请使用完整数据集进行统计构建")
+            lin = (src_t.long() * (E0 * V1) + et_t.long() * V1 + dst_t.long())
+            # searchsorted 查表
+            pos = _torch.searchsorted(self._triplet_sparse_keys, lin)
+            # 等值掩码（避免不存在键时误取）
+            valid = (pos < self._triplet_sparse_keys.shape[0]) & (self._triplet_sparse_keys.index_select(0, pos) == lin)
+            counts = _torch.zeros_like(lin, dtype=_torch.int32)
+            if valid.any():
+                counts[valid] = self._triplet_sparse_vals.index_select(0, pos[valid])
+            weights = _torch.log10(counts.clamp(min=1).to(_torch.float32))
+            return {(int(s), int(d)): float(w) for s, d, w in zip(src_nodes.tolist(), dst_nodes.tolist(), weights.tolist())}
 
+        # 2) 次选致密张量
+        if self._triplet_frequency_tensor is not None:
+            V0, E0, V1 = self._triplet_tensor_dims
+            if src_t.numel() == 0:
+                return {}
+            if src_t.max().item() >= V0 or dst_t.max().item() >= V1 or et_t.max().item() >= E0:
+                raise ValueError("类型ID超出频率张量的维度，请使用完整数据集进行统计构建")
+            freq_vals = self._triplet_frequency_tensor[src_t.long(), et_t.long(), dst_t.long()].clamp_min_(1).to(_torch.float32)
+            weights = _torch.log10(freq_vals)
+            return {(int(s), int(d)): float(w) for s, d, w in zip(src_nodes.tolist(), dst_nodes.tolist(), weights.tolist())}
+
+        # 3) 最后回退到字符串频率表（需要完备）
+        edge_weights: Dict[Tuple[int, int], float] = {}
+        for s, d, etid in zip(src_nodes.tolist(), dst_nodes.tolist(), et_t.tolist()):
+            s_name = self._get_node_type(dgl_graph, int(s))
+            d_name = self._get_node_type(dgl_graph, int(d))
+            e_name = self._get_edge_type(dgl_graph, int(s), int(d))
+            triplet = (s_name, e_name, d_name)
+            if triplet not in self.triplet_frequencies:
+                raise ValueError(f"统计缺失: 三元组{triplet}未在频率表中。请在初始化时传入更多图以收集充分统计。")
+            edge_weights[(int(s), int(d))] = log10(self.triplet_frequencies[triplet])
+        return edge_weights
         V0, E0, V1 = self._triplet_tensor_dims
         if src_t.numel() == 0:
             return {}

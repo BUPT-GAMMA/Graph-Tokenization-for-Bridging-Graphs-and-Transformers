@@ -6,15 +6,11 @@
 使用NetworkX的成熟算法来实现高效的CCP求解。
 """
 
-from typing import Dict, Any, List, Optional, Tuple
-from collections import defaultdict
+from typing import Dict, Any, List, Tuple
 import dgl
-from dgl.init import F
-import torch
 import networkx as nx
 from .base_serializer import BaseGraphSerializer, SerializationResult, GlobalIDMapping
 from utils.logger import get_logger
-import networkx as nx
 
 # 设置logger
 logger = get_logger(__name__)
@@ -49,30 +45,48 @@ class FCPPSerializer(BaseGraphSerializer):
         })
     
     def _preprocess_frequency_weights(self):
-        """预处理：标准化频率权重到0~1范围（基于基类构建的张量），不依赖字符串频率表。"""
+        """预处理：记录稀疏频率的基本统计（如果存在），用于日志与诊断。"""
         import torch as _torch
-        # 优先使用张量路径（基类在 _collect_statistics_from_graphs 中已构建并归一化）
-        if getattr(self, '_triplet_frequency_tensor', None) is None:
-            raise AssertionError("❌ 频率计数张量未初始化")
-        freq_tensor = self._triplet_frequency_tensor
-        if freq_tensor.numel() == 0:
-            raise AssertionError("❌ 频率计数张量为空")
-        # 统计 min/max（仅>0）
-        mask = freq_tensor > 0
-        if not mask.any():
-            min_freq = 0.0
-            max_freq = 0.0
+        if getattr(self, '_triplet_sparse_keys', None) is not None and getattr(self, '_triplet_sparse_vals', None) is not None:
+            vals = self._triplet_sparse_vals.to(_torch.float32)
+            if vals.numel() == 0:
+                min_freq = 0.0
+                max_freq = 0.0
+                nnz = 0
+            else:
+                min_freq = float(vals.min().item())
+                max_freq = float(vals.max().item())
+                nnz = int(vals.numel())
+            logger.info(f"📊 freq_cpp三元组频率(稀疏): 最小值={min_freq}, 最大值={max_freq}, 非零={nnz}")
+            self._dataset_stats.update({
+                'freq_min': min_freq,
+                'freq_max': max_freq,
+                'freq_normalized': False,
+                'sparse_nnz': nnz
+            })
+        elif getattr(self, '_triplet_frequency_tensor', None) is not None:
+            freq_tensor = self._triplet_frequency_tensor
+            if freq_tensor.numel() == 0:
+                min_freq = 0.0
+                max_freq = 0.0
+                nnz = 0
+                mask_sum = 0
+            else:
+                mask = freq_tensor > 0
+                vals = freq_tensor[mask].to(_torch.float32)
+                min_freq = float(vals.min().item()) if vals.numel() > 0 else 0.0
+                max_freq = float(vals.max().item()) if vals.numel() > 0 else 0.0
+                mask_sum = int(mask.sum().item())
+                nnz = mask_sum
+            logger.info(f"📊 freq_cpp三元组频率(致密): 最小值={min_freq}, 最大值={max_freq}, 非零={nnz}")
+            self._dataset_stats.update({
+                'freq_min': min_freq,
+                'freq_max': max_freq,
+                'freq_normalized': True,
+                'dense_nnz': nnz
+            })
         else:
-            vals = freq_tensor[mask].to(_torch.float32)
-            min_freq = float(vals.min().item())
-            max_freq = float(vals.max().item())
-        logger.info(f"📊 freq_cpp三元组频率统计: 最小值={min_freq}, 最大值={max_freq}, 样本数={(mask.sum().item())}")
-        # 标记已归一化（归一化张量由基类维护并在后续 _calculate_edge_weights 中使用）
-        self._dataset_stats.update({
-            'freq_min': min_freq,
-            'freq_max': max_freq,
-            'freq_normalized': True
-        })
+            logger.warning("⚠️ 未找到任何频率统计（稀疏/致密均为空）")
     
     def _serialize_single_graph(self, graph_data: Dict[str, Any], **kwargs) -> SerializationResult:
         """序列化单个图"""
@@ -208,22 +222,20 @@ class FCPPSerializer(BaseGraphSerializer):
         return G
     
     def _calculate_edge_weights(self, dgl_graph: dgl.DGLGraph) -> Dict[Tuple[int, int], float]:
-        """计算图的边权重，使用归一化三元组频率张量（向量化）。"""
-        assert self._triplet_frequency_normalized_tensor is not None, "❌ 标准化频率张量未初始化"
-
+        """计算图的边权重。优先使用基类的统一权重计算（已兼容稀疏/致密）。"""
         src_nodes, dst_nodes = self._get_all_edges_from_heterograph(dgl_graph)
-        node_type_ids = self._dataset_loader.get_graph_node_type_ids(dgl_graph)
-        edge_type_ids = self._dataset_loader.get_graph_edge_type_ids(dgl_graph)
-        src_t = node_type_ids.index_select(0, src_nodes)
-        dst_t = node_type_ids.index_select(0, dst_nodes)
-        et_t = edge_type_ids
-
-        V0, E0, V1 = self._triplet_tensor_dims
-        if src_t.max().item() >= V0 or dst_t.max().item() >= V1 or et_t.max().item() >= E0:
-            raise ValueError("类型ID超出频率张量的维度，请使用完整数据集进行统计构建")
-
-        norm_vals = self._triplet_frequency_normalized_tensor[src_t.long(), et_t.long(), dst_t.long()]
-        return {(int(s), int(d)): float(v) for s, d, v in zip(src_nodes.tolist(), dst_nodes.tolist(), norm_vals.tolist())}
+        base_weights = super()._calculate_edge_weights(dgl_graph)
+        # 归一化到 0~1：按图内的最小/最大计数对 log10(count) 做线性缩放（仅用于 CPP 权重）
+        if len(base_weights) == 0:
+            return {}
+        vals = list(base_weights.values())
+        vmin = min(vals)
+        vmax = max(vals)
+        if vmax - vmin > 1e-12:
+            norm = {k: (w - vmin) / (vmax - vmin) for k, w in base_weights.items()}
+        else:
+            norm = {k: 0.5 for k in base_weights.keys()}
+        return norm
     
     def _chinese_postman_networkx(self, graph: nx.MultiGraph, start_node: int = 0) -> Tuple[float, List[Tuple[int, int]]]:
         """
@@ -244,9 +256,9 @@ class FCPPSerializer(BaseGraphSerializer):
             
             try:
                 circuit = list(nx.eulerian_circuit(graph, source=start_node))
-                total_weight = len(circuit)  # 理论上现在边权不为1，所以应该真实计算。但是因为图是多重图，要计算的话得进行一个比较复杂的处理，所以暂时先这样
+                total_weight = len(circuit)
                 return total_weight, circuit
-            except:
+            except Exception:
                 # 如果指定起始点失败，使用默认起始点
                 circuit = list(nx.eulerian_circuit(graph))
                 total_weight = len(circuit)  
@@ -263,12 +275,18 @@ class FCPPSerializer(BaseGraphSerializer):
             # 构建稀疏邻接矩阵（按 node index 顺序）
             nodes = list(graph.nodes())
             index_of = {n: i for i, n in enumerate(nodes)}
-            I = []; J = []; W = []
+            rows = []
+            cols = []
+            weights = []
             for u, v, d in graph.edges(data=True):
-                I.append(index_of[u]); J.append(index_of[v]); W.append(float(d.get('weight', 1.0)))
-                I.append(index_of[v]); J.append(index_of[u]); W.append(float(d.get('weight', 1.0)))
+                rows.append(index_of[u])
+                cols.append(index_of[v])
+                weights.append(float(d.get('weight', 1.0)))
+                rows.append(index_of[v])
+                cols.append(index_of[u])
+                weights.append(float(d.get('weight', 1.0)))
             n = len(nodes)
-            mat = _sp.csr_matrix((_np.array(W), (_np.array(I), _np.array(J))), shape=(n, n))
+            mat = _sp.csr_matrix((_np.array(weights), (_np.array(rows), _np.array(cols))), shape=(n, n))
 
             # 仅对奇点做源点，批量最短路
             sources = [index_of[u] for u in odd_nodes]

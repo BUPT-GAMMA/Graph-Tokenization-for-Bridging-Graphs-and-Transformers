@@ -585,7 +585,16 @@ class UnifiedDataInterface:
         else:
             self._loader = get_dataloader(self.dataset, self.config)
             return self._loader
-
+    
+    def get_num_classes(self) -> int:
+        loader = self.get_dataset_loader()
+        return loader.get_num_classes()
+    
+    def get_dataset_task_type(self) -> str:
+        """获取数据集任务类型"""
+        loader = self.get_dataset_loader()
+        return loader.get_dataset_task_type()
+    
     def create_empty_dataset_loader(self) -> BaseDataLoader:
         """
         创建“空”的数据集加载器实例：

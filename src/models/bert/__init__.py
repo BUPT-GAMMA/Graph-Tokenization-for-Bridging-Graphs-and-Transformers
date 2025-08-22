@@ -9,10 +9,8 @@ BERT训练Pipeline - Token ID序列支持
 """
 
 from .vocab_manager import VocabManager, build_vocab_from_sequences
-from .model import (
-    BertConfig, BertMLM, BertRegression,
-    create_bert_mlm, create_bert_regression
-)
+from .config import BertConfig  # 🆕 BertConfig从单独文件导入
+# BertMLM已迁移到备份目录，现在使用 src.models.universal_model.UniversalModel
 from .data import (
     MLMDataset,
     create_mlm_dataloader
@@ -25,12 +23,12 @@ __all__ = [
     # 词表管理
     "VocabManager", "build_vocab_from_sequences",
     
-    # 模型
-    "BertConfig", "BertMLM", "BertRegression",
-    "create_bert_mlm", "create_bert_regression",
+    # 配置
+    "BertConfig",
     
     # 数据处理  
     "MLMDataset",
     "create_mlm_dataloader",
     
+    # 注意：BertMLM已迁移到 src.models.universal_model.UniversalModel
 ] 

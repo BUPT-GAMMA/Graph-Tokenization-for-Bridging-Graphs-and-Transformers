@@ -278,10 +278,10 @@ def main():
     parser = argparse.ArgumentParser(description="完整数据预处理脚本 - 序列化 + BPE训练 + 词表构建（简化版）")
     parser.add_argument("--datasets", type=str, default="qm9test", help="逗号分隔的数据集列表，默认 qm9test")
     parser.add_argument("--methods", type=str, default=None, help="逗号分隔的方法列表；未提供则使用全部可用方法")
-    parser.add_argument("--workers", type=int, default=32, help="方法级并发数（用于子进程或线程并行）")
+    parser.add_argument("--workers", type=int, default=64, help="方法级并发数（用于子进程或线程并行）")
     parser.add_argument("--child", action="store_true", help="子进程模式：仅输出方法结果，不生成汇总报告")
-    parser.add_argument("--bpe_merges", type=int, default=3000, help="BPE 合并次数")
-    parser.add_argument("--bpe_min_freq", type=int, default=100, help="BPE 最小频率阈值")
+    parser.add_argument("--bpe_merges", type=int, default=2000, help="BPE 合并次数")
+    parser.add_argument("--bpe_min_freq", type=int, default=2, help="BPE 最小频率阈值")
     parser.add_argument("--multiple_samples", type=int, default=None, help="每个图的多重采样次数")
     parser.add_argument("--experiment_name", type=str, default=None, help="实验名称")
     parser.add_argument("--experiment_group", type=str, default=None, help="实验分组")
@@ -295,6 +295,8 @@ def main():
         datasets: List[str] = [d.strip() for d in args_ns.datasets.split(",") if d.strip()]
     else:
         datasets = ["qm9test"]
+        
+    
 
     if args_ns.methods:
         methods: List[str] = [m.strip() for m in args_ns.methods.split(",") if m.strip()]
@@ -333,6 +335,8 @@ def main():
                 'multiple_samples': args_ns.multiple_samples,
             }
             results_file = results_dir / f"prepare_results_{dataset}.json"
+            # 确保目录存在（子进程可能看不到主进程创建的目录）
+            results_file.parent.mkdir(parents=True, exist_ok=True)
             with results_file.open('w') as f:
                 json.dump({'results': results, 'config': cfg_dump, 'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')}, f, indent=2)
             # 子进程到此结束
@@ -349,6 +353,8 @@ def main():
     tasks: List[Tuple[str, List[str], Path]] = []
     for dataset in datasets:
         for method in methods:
+            if dataset not in ["qm9test", "zinc","qm9","aqsol"] and method == "smiles":
+                continue
             task_key = f"{dataset}_{method}"
             child_out = results_dir / f"task_{task_key}"
             child_out.mkdir(parents=True, exist_ok=True)
@@ -408,7 +414,9 @@ def main():
                 if rc != 0:
                     results[task_key] = {"task": task_key, "error": f"child failed ({rc})"}
                 else:
-                    child_json = cdir / f"prepare_results_{task_key.split('_')[0]}.json"
+                    # 提取数据集名称 (去掉最后的方法名)
+                    dataset_name = '_'.join(task_key.split('_')[:-1])
+                    child_json = cdir / f"prepare_results_{dataset_name}.json"
                     try:
                         with child_json.open('r') as f:
                             child = json.load(f)
