@@ -24,7 +24,7 @@ def train_epoch(
     scheduler,
     device,
     max_grad_norm: float,
-    task_handler=None,
+    task_handler,  # 🆕 必需参数，统一架构要求
     on_step: Optional[Callable[[int, float, Optional[float]], None]] = None,
     log_interval: int = 100,
     epoch_num: int = 1,
@@ -47,14 +47,12 @@ def train_epoch(
         labels = batch['labels'].to(device)
 
         optimizer.zero_grad()
-        if task_handler is not None:
-            # 统一架构：不传递labels，用task_handler计算损失
-            outputs = model(input_ids, attention_mask)
-            loss = task_handler.compute_loss(outputs['outputs'], labels)
-        else:
-            # 预训练模式：传递labels给模型，让模型内部计算损失
-            outputs = model(input_ids, attention_mask, labels)
-            loss = outputs['loss']
+        # 🆕 统一架构：所有模型都使用TaskHandler计算损失
+        if task_handler is None:
+            raise ValueError("统一架构要求提供task_handler参数")
+            
+        outputs = model(input_ids, attention_mask)
+        loss = task_handler.compute_loss(outputs['outputs'], labels)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
         optimizer.step()
@@ -102,7 +100,7 @@ def train_epoch(
 
 
 @torch.no_grad()
-def evaluate_epoch(model, dataloader, device, epoch_num: int = 1, desc: str = "Validation", log_style: Literal["online", "offline"] = "online") -> Dict[str, Any]:
+def evaluate_epoch(model, dataloader, device, task_handler, epoch_num: int = 1, desc: str = "Validation", log_style: Literal["online", "offline"] = "online") -> Dict[str, Any]:
     model.eval()
     total_loss = 0.0
     steps = 0
@@ -117,8 +115,11 @@ def evaluate_epoch(model, dataloader, device, epoch_num: int = 1, desc: str = "V
         input_ids = batch['input_ids'].to(device)
         attention_mask = batch['attention_mask'].to(device)
         labels = batch['labels'].to(device)
-        outputs = model(input_ids, attention_mask, labels)
-        loss = outputs['loss']
+        
+        # 🆕 统一架构：所有模型都使用TaskHandler计算损失
+        outputs = model(input_ids, attention_mask)
+        loss = task_handler.compute_loss(outputs['outputs'], labels)
+            
         total_loss += loss.item()
         steps += 1
 

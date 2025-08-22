@@ -37,3 +37,4 @@ nohup.out
 
 /tests/
 /sbatch_scripts/
+*.safetensors

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Dict, Any, Literal, Optional
 import time
 import pickle
 import torch
 import json
-
 from config import ProjectConfig
 from src.data.unified_data_interface import UnifiedDataInterface
 # 直接使用UDI接口，不再需要common中的包装函数
@@ -20,54 +20,94 @@ logger = get_logger('tokenizerGraph.training.finetune_pipeline')
 logger.propagate = False
 
 
-def load_pretrained_backbone(config: ProjectConfig, pretrained_dir: Optional[str] = None):
-    from src.models.bert.model import BertMLM, create_bert_mlm
-    from pathlib import Path
+def load_pretrained_backbone(config: ProjectConfig, pretrained_dir: Optional[str] = None, pretrain_exp_name: Optional[str] = None):
+    """统一的预训练模型加载接口 - 重构版"""
+    
+    # 🆕 使用新的配置属性
+    encoder_type = config.encoder.type
+    logger.info(f"🔧 加载编码器类型: {encoder_type}")
+    
+    # 🆕 解析预训练模型路径
+    pretrained_path = _resolve_pretrained_model_path(config, pretrained_dir, pretrain_exp_name)
+    
+    if pretrained_path is None:
+        logger.warning("⚠️ 未找到预训练模型，将使用随机初始化")
+        return None
+    
+    try:
+        # 🆕 尝试加载UniversalModel格式
+        from src.models.universal_model import UniversalModel
+        from src.models.unified_encoder import create_encoder
+        from src.models.model_factory import _build_encoder_config
+        
+        # 检查是否为UniversalModel格式
+        config_path = pretrained_path / 'config.bin'
+        if config_path.exists():
+            # 加载配置，检查格式
+            saved_config = torch.load(config_path, map_location='cpu')
+            
+            if 'task_type' in saved_config:
+                # 新格式：UniversalModel
+                logger.info(f"🔄 加载UniversalModel格式: {pretrained_path}")
+                
+                # 重新创建encoder  
+                udi = UnifiedDataInterface(config=config, dataset=config.dataset.name)
+                vocab_manager = udi.get_vocab(method=config.serialization.method)
+                encoder_config = _build_encoder_config(config, encoder_type)
+                encoder = create_encoder(encoder_type, encoder_config, vocab_manager)
+                
+                # 加载UniversalModel
+                model = UniversalModel.load_model(str(pretrained_path), encoder)
+                logger.info(f"✅ UniversalModel加载成功: {model.task_type}任务")
+                return model
+            else:
+                # 旧格式，跳过加载
+                logger.warning("⚠️ 检测到旧格式预训练模型，跳过加载，使用随机初始化")
+                return None
+        else:
+            logger.warning(f"⚠️ 预训练模型配置文件不存在: {config_path}")
+            return None
+            
+    except Exception as e:
+        logger.warning(f"⚠️ 预训练模型加载失败: {e}，使用随机初始化")
+        return None
 
-    # 显式提供的预训练目录优先
+
+def _resolve_pretrained_model_path(
+    config: ProjectConfig, 
+    pretrained_dir: Optional[str] = None,
+    pretrain_exp_name: Optional[str] = None
+) -> Optional[Path]:
+    """解析预训练模型路径"""    
+    # 1. 显式指定的目录优先
     if pretrained_dir is not None:
         p = Path(pretrained_dir)
-        if (p / 'config.bin').exists() and (p / 'pytorch_model.bin').exists():
-            return BertMLM.load_model(str(p), config)
-        raise FileNotFoundError(f"预训练目录无效或缺少必要文件: {pretrained_dir}")
-
-    # 优先使用主目录结构：model/<group>/<exp_name>/<dataset>/<method-variant>/(best|final)
-    # 注意：config.get_model_dir() 已经返回到 ".../<dataset>/<method-variant>" 层级
+        if p.exists() and (p / 'config.bin').exists():
+            return p
+        logger.warning(f"⚠️ 指定的预训练目录无效: {pretrained_dir}")
+        return None
+    
+    # 2. 使用pretrain_exp_name (如果提供)
+    if pretrain_exp_name is not None:
+        pretrain_path = config.get_model_dir().parent / pretrain_exp_name / config.dataset.name / config.serialization.method
+        for subdir in ['best', 'final']:
+            candidate = pretrain_path / subdir
+            if candidate.exists() and (candidate / 'config.bin').exists():
+                logger.info(f"🔄 从指定预训练实验加载: {pretrain_exp_name}")
+                return candidate
+    
+    # 3. 使用当前experiment_name
     base_dir = config.get_model_dir()
-    best_dir = base_dir / "best"
-    final_dir = base_dir / "final"
+    for subdir in ['best', 'final']:
+        candidate = base_dir / subdir
+        if candidate.exists() and (candidate / 'config.bin').exists():
+            return candidate
+    
+    # 4. 未找到任何预训练模型
+    return None
 
-    def _has_model(d: Path) -> bool:
-        return (d / 'config.bin').exists() and (d / 'pytorch_model.bin').exists()
 
-    if _has_model(best_dir):
-        return BertMLM.load_model(str(best_dir), config)
-    if _has_model(final_dir):
-        return BertMLM.load_model(str(final_dir), config)
-
-    # 兼容路径：model/pretrain_bert/<dataset>/<experiment_name>/<method_variant>/
-    compat_dir = config.get_bert_model_path("pretrained").parent
-    if Path(compat_dir, 'config.bin').exists():
-        return BertMLM.load_model(str(compat_dir), config)
-
-    # 容忍无预训练：根据配置创建未加载权重的 BERT backbone
-    # 说明：词表从 UDI 读取，架构参数来自 config
-    udi_fallback = UnifiedDataInterface(config=config, dataset=config.dataset.name)
-    vocab_manager = udi_fallback.get_vocab(method=config.serialization.method)
-    backbone = create_bert_mlm(
-        vocab_manager=vocab_manager,
-        hidden_size=config.bert.architecture.hidden_size,
-        num_hidden_layers=config.bert.architecture.num_hidden_layers,
-        num_attention_heads=config.bert.architecture.num_attention_heads,
-        intermediate_size=config.bert.architecture.intermediate_size,
-        hidden_dropout_prob=config.bert.architecture.hidden_dropout_prob,
-        attention_probs_dropout_prob=config.bert.architecture.attention_probs_dropout_prob,
-        max_position_embeddings=config.bert.architecture.max_position_embeddings,
-        layer_norm_eps=config.bert.architecture.layer_norm_eps,
-        type_vocab_size=config.bert.architecture.type_vocab_size,
-        initializer_range=config.bert.architecture.initializer_range,
-    )
-    return backbone
+# 旧的加载函数已重构到新的load_pretrained_backbone中
 
 
 
@@ -75,7 +115,7 @@ def load_pretrained_backbone(config: ProjectConfig, pretrained_dir: Optional[str
 def run_finetune(
     config: ProjectConfig,
     *,
-    task: Literal["regression", "classification", "multi_label_classification", "multi_target_regression"],
+    task: Optional[Literal["mlm", "regression", "classification", "multi_label_classification", "multi_target_regression"]] = None,
     num_classes: Optional[int] = None,
     num_labels: Optional[int] = None,
     num_targets: Optional[int] = None,
@@ -83,35 +123,47 @@ def run_finetune(
     save_name_prefix: Optional[str] = None,
     save_name_suffix: Optional[str] = None,
     pretrained_dir: Optional[str] = None,
+    pretrain_exp_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     dataset_name = config.dataset.name
     method = config.serialization.method
 
     udi = UnifiedDataInterface(config=config, dataset=dataset_name)
+    
+    # 🆕 自动从UDI推断任务类型（如果未指定）
+    if task is None:
+        task = udi.get_dataset_task_type()
+        logger.info(f"📋 自动推断任务类型: {task} (来源: {dataset_name})")
+    else:
+        logger.info(f"📋 使用指定任务类型: {task}")
+        # 验证指定的任务类型与数据集是否匹配
+        auto_task = udi.get_dataset_task_type()
+        if task != auto_task:
+            logger.warning(f"⚠️  指定任务类型 '{task}' 与数据集自动推断类型 '{auto_task}' 不匹配")
 
-    # 加载预训练 backbone 并构建统一任务模型
-    pretrained = load_pretrained_backbone(config, pretrained_dir=pretrained_dir)
+    # 🆕 简化：直接创建微调模型，支持灵活的预训练加载
     model, task_handler = build_task_model(
         config=config,
-        pretrained=pretrained,
         udi=udi,
-        method=method
+        method=method,
+        pretrained_dir=pretrained_dir,
+        pretrain_exp_name=pretrain_exp_name
     )
-
-
+    
+    # 🆕 创建数据加载器 - 直接使用统一架构
     if task == "regression":
         train_dl, val_dl, test_dl, normalizer = build_regression_loaders(
-            config, pretrained, udi, method
+            config, udi, method
         )
     elif task == "multi_target_regression":
         # 多目标回归：复用回归数据加载器，但标签格式不同
         train_dl, val_dl, test_dl, normalizer = build_regression_loaders(
-            config, pretrained, udi, method
+            config, udi, method
         )
     elif task in ["classification", "multi_label_classification"]:
         # 单标签和多标签分类：复用分类数据加载器
         train_dl, val_dl, test_dl = build_classification_loaders(
-            config, pretrained, udi, method
+            config, udi, method
         )
         normalizer = None  # 分类任务不需要normalizer
     else:

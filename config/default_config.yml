@@ -60,6 +60,10 @@ encoding:
     omp_num_threads: 1
     mkl_num_threads: 1
 
+# 编码器配置
+encoder:
+  type: bert  # bert | Alibaba-NLP/gte-multilingual-base | 其他编码器
+  
 # BERT模型配置
 bert:
   # 模型架构 (基于BERT-Small)
@@ -79,6 +83,11 @@ bert:
     type_vocab_size: 2
     initializer_range: 0.02
     pooling_method: mean
+    # 任务头配置
+    task_head:
+      hidden_ratio: 0.5  # 中间层大小比例 (替代硬编码的 //2)
+      activation: relu   # relu | gelu
+      dropout: 0.1       # dropout率
   
   # 预训练配置
   pretraining:
@@ -119,9 +128,9 @@ bert:
       # - random_swap
       # - random_truncation
 
-# 任务配置
+# 任务配置 - 统一管理预训练和微调
 task:
-  type: regression  # regression, classification
+  type: mlm  # mlm | regression | classification | binary_classification | multi_label_classification
   target_property: null  # 留空表示从数据集元信息自动推断（QM9默认 homo）
   normalization: standard  # standard, minmax, robust
 

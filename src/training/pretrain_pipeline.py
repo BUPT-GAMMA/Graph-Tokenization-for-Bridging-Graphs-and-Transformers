@@ -14,7 +14,6 @@ BERT预训练Pipeline (简化重构版)
 from __future__ import annotations
 
 import time
-import logging
 from typing import Dict, List, Any
 # from pathlib import Path  # unused
 import json
@@ -25,7 +24,7 @@ from torch.utils.tensorboard import SummaryWriter
 from config import ProjectConfig
 from src.data.unified_data_interface import UnifiedDataInterface
 from src.data.bpe_transform import create_bpe_worker_init_fn_from_udi
-from src.models.bert.model import create_bert_mlm, print_model_info
+from src.models.model_factory import create_universal_model
 from src.models.bert.data import compute_effective_max_length
 from src.models.bert.vocab_manager import VocabManager
 from src.training.loops import train_epoch, evaluate_epoch
@@ -83,34 +82,38 @@ def train_bert_mlm(
     effective_max_length = compute_effective_max_length(all_sequences, config)
     logger.info(f"📏 计算得到有效最大长度: {effective_max_length}")
     
-    # 创建模型
-    logger.info("🏗️ 创建BERT MLM模型...")
-    mlm_model = create_bert_mlm(
+    # 🆕 创建统一模型（MLM任务）
+    logger.info("🏗️ 创建统一MLM模型...")
+    
+    # 确保配置中的位置嵌入大小与有效长度一致
+    config.bert.architecture.max_position_embeddings = int(effective_max_length)
+    
+    # 使用统一模型创建接口
+    mlm_model, task_handler = create_universal_model(
+        config=config,
         vocab_manager=vocab_manager,
-        hidden_size=config.bert.architecture.hidden_size,
-        num_hidden_layers=config.bert.architecture.num_hidden_layers,
-        num_attention_heads=config.bert.architecture.num_attention_heads,
-        intermediate_size=config.bert.architecture.intermediate_size,
-        hidden_dropout_prob=config.bert.architecture.hidden_dropout_prob,
-        attention_probs_dropout_prob=config.bert.architecture.attention_probs_dropout_prob,
-        max_position_embeddings=effective_max_length,
-        layer_norm_eps=config.bert.architecture.layer_norm_eps,
-        type_vocab_size=config.bert.architecture.type_vocab_size,
-        initializer_range=config.bert.architecture.initializer_range
+        task_type='mlm'  # 🎯 MLM作为任务类型
     )
     
-    # 确保保存到checkpoint的配置与模型权重一致（位置嵌入大小）
-    config.bert.architecture.max_position_embeddings = int(effective_max_length)
+    logger.info(f"✅ MLM模型创建完成: 编码器({mlm_model.encoder.get_hidden_size()}维) + MLM头({mlm_model.output_dim})")
     
     device = torch.device(config.device)
     mlm_model.to(device)
     
+    # 打印模型信息（适配UniversalModel）
     try:
-        print_model_info(mlm_model, mlm_model.config)
+        hidden_size = mlm_model.encoder.get_hidden_size()
+        vocab_size = vocab_manager.vocab_size
+        logger.info("📊 模型信息:")
+        logger.info(f"  - 编码器类型: {config.encoder.type}")
+        logger.info(f"  - 隐藏维度: {hidden_size}")
+        logger.info(f"  - 词表大小: {vocab_size}")
+        logger.info("  - 任务类型: MLM")
+        logger.info(f"  - 输出维度: {mlm_model.output_dim}")
     except Exception as e:
         logger.warning(f"打印模型信息失败: {e}")
     
-    logger.info(f"✅ BERT模型创建完成: {config.d_model}d_{config.n_layers}l_{config.n_heads}h")
+    logger.info(f"✅ 统一MLM模型创建完成: {config.bert.architecture.hidden_size}d_{config.bert.architecture.num_hidden_layers}l_{config.bert.architecture.num_attention_heads}h")
     
     # 创建BPE Transform worker初始化函数（统一创建，mode控制行为）
     try:
@@ -265,6 +268,7 @@ def train_bert_mlm(
                 scheduler=scheduler,
                 device=device,
                 max_grad_norm=config.bert.pretraining.max_grad_norm,
+                task_handler=task_handler,  # 🆕 使用TaskHandler计算MLM损失
                 on_step=_on_step,
                 log_interval=log_interval,
                 epoch_num=epoch,
@@ -277,6 +281,7 @@ def train_bert_mlm(
                 model=mlm_model,
                 dataloader=val_dataloader,
                 device=device,
+                task_handler=task_handler,  # 🆕 使用TaskHandler计算MLM损失
                 epoch_num=epoch,
                 desc="Validation",
                 log_style=getattr(config.system, 'log_style', 'online')

@@ -112,7 +112,7 @@ def evaluate_model(
     model,
     dataloader,
     device,
-    task: Literal["regression", "classification", "multi_label_classification", "multi_target_regression"],
+    task: Literal["mlm", "regression", "classification", "multi_label_classification", "multi_target_regression"],
     *,
     task_handler,
     label_normalizer=None,

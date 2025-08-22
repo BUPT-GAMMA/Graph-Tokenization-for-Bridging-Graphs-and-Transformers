@@ -220,18 +220,20 @@ def check_pretrained_model(config: ProjectConfig) -> bool:
 
 def run_finetuning(
     config: ProjectConfig,
-    task: str,
+    task: str | None = None,
     num_classes: int | None = None,
     aggregation_mode: str = "avg",
     save_name_prefix: str | None = None,
     save_name_suffix: str | None = None,
+    pretrained_dir: str | None = None,
+    pretrain_exp_name: str | None = None,
 ) -> dict:
     """
     运行BERT微调
     
     Args:
         config: 项目配置
-        task: 任务类型
+        task: 任务类型（可选，不指定时从数据集自动推断）
         num_classes: 分类类别数（仅分类任务需要）
         aggregation_mode: 测试时增强的聚合模式
         
@@ -239,7 +241,10 @@ def run_finetuning(
         微调结果字典
     """
     print("🚀 开始BERT微调...")
-    print(f"📋 任务类型: {task}")
+    if task is not None:
+        print(f"📋 任务类型: {task}")
+    else:
+        print("📋 任务类型: 将从数据集自动推断")
     
     if task == "regression" and config.task.target_property:
         print(f"📋 回归目标: {config.task.target_property}")
@@ -262,6 +267,8 @@ def run_finetuning(
             aggregation_mode=aggregation_mode,
             save_name_prefix=save_name_prefix,
             save_name_suffix=save_name_suffix,
+            pretrained_dir=pretrained_dir,
+            pretrain_exp_name=pretrain_exp_name,
         )
         print("✅ 微调完成!")
         print(f"📊 最优验证损失: {result['best_val_loss']:.4f}")
@@ -333,6 +340,10 @@ def main():
     parser.add_argument("--pretrained_dir", type=str, default=None,
                         help="显式指定预训练权重目录（包含 config.bin 与 pytorch_model.bin）；优先于按 experiment_name 推断")
     
+    # 🆕 新增：灵活的预训练实验名指定
+    parser.add_argument("--pretrain_exp_name", type=str, default=None,
+                        help="预训练模型实验名（如果与微调实验名不同）；用于从指定的预训练实验加载模型")
+    
     # 可选：分类任务显式指定类别数（否则从数据集元信息自动推断）
     parser.add_argument(
         "--num_classes",
@@ -392,8 +403,9 @@ def main():
             aggregation_mode=args.aggregation_mode,
             save_name_prefix=args.save_name_prefix,
             save_name_suffix=args.save_name_suffix,
+            pretrained_dir=getattr(args, 'pretrained_dir', None),
+            pretrain_exp_name=getattr(args, 'pretrain_exp_name', None),
         )
-        # 注意：如需显式指定预训练目录，请在上方 run_finetuning 中加入 pretrained_dir=args.pretrained_dir 并在 pipeline 中接收
         
         print("\n" + "="*60)
         print("🎉 微调完成!")
