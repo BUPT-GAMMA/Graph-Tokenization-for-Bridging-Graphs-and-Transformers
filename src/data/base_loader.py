@@ -274,9 +274,11 @@ class BaseDataLoader(ABC):
                    self._train_labels, self._val_labels, self._test_labels)
         
         logger.info(f"🔄 开始加载 {self.dataset_name} 数据...")
+        logger.info(f"📂 预处理目录: {self.data_dir}")
         
         # 加载预处理数据
         train_data, val_data, test_data = self._load_processed_data()
+        logger.info("📄 预处理数据读取完成，开始组装三分数据...")
         
         if not train_data or not val_data or not test_data:
             raise ValueError(f"加载 {self.dataset_name} 数据失败")
@@ -302,6 +304,7 @@ class BaseDataLoader(ABC):
         logger.info("构建数据集token映射...")
         self.token_map = self.get_token_map()
         self.token_readable = {v: k for k, v in self.token_map.items()}
+        logger.info("✅ 数据加载器就绪")
         
         return train_data, val_data, test_data, train_labels, val_labels, test_labels
       
@@ -394,7 +397,7 @@ class BaseDataLoader(ABC):
 
     def get_downstream_label_keys(self) -> List[str]:
         """返回下游可用的标签键列表。默认空列表，子类可覆盖。"""
-        return []
+        return ['label']
     
     def get_data_statistics(self) -> Dict[str, Any]:
         """

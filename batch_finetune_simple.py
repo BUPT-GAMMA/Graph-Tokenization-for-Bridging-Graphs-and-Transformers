@@ -30,8 +30,9 @@ DEFAULT_EXPERIMENT_GROUP = "test_zinc_10multi_4bpe-way"
 DEFAULT_DATASETS = ["zinc"]
 DEFAULT_METHODS = ["feuler", "eulerian", "cpp", "fcpp", "topo", "smiles"]
 DEFAULT_GPUS = [0,1,2,3]
-DEFAULT_BPE_SCENARIOS = ["raw", "all", "random", "gaussian"]
-DEFAULT_FT_HYPERPARAMS = [{"finetune_epochs": 30, "finetune_batch_size": 1024, "finetune_learning_rate": 5e-5}]
+# DEFAULT_BPE_SCENARIOS = ["raw", "all", "random", "gaussian"]
+DEFAULT_BPE_SCENARIOS = ["all"]
+DEFAULT_FT_HYPERPARAMS = [{"epochs": 60, "batch_size": 128, "learning_rate": 5e-5}]
 DEFAULT_AGGREGATION_MODE = "best"  # or "best"
 DEFAULT_LOG_DIR = "logs/batch_finetune"
 
@@ -109,63 +110,116 @@ def build_bpe_test_configs(scenarios: List[str]) -> List[Dict[str, Any]]:
     return configs
 
 
-def build_hyperparams_list(hp_json: Optional[str], ft_epochs: Optional[int],
-                           ft_batch_size: Optional[int], ft_learning_rate: Optional[float]) -> List[Dict[str, Any]]:
+def build_hyperparams_list(hp_json: Optional[str], epochs: Optional[int],
+                           batch_size: Optional[int], learning_rate: Optional[float]) -> List[Dict[str, Any]]:
     if hp_json:
         loaded = load_json_input(hp_json)
         if not isinstance(loaded, list):
             raise ValueError("--hyperparams_json 必须是包含若干对象的JSON数组")
         for item in loaded:
-            if not isinstance(item, dict) or not {"finetune_epochs", "finetune_batch_size", "finetune_learning_rate"} <= set(item.keys()):
-                raise ValueError("--hyperparams_json 中每个对象必须包含 finetune_epochs, finetune_batch_size, finetune_learning_rate 三个键")
+            if not isinstance(item, dict) or not {"epochs", "batch_size", "learning_rate"} <= set(item.keys()):
+                raise ValueError("--hyperparams_json 中每个对象必须包含 epochs, batch_size, learning_rate 三个键")
         return loaded
-    if ft_epochs is None and ft_batch_size is None and ft_learning_rate is None:
+    # 🆕 支持部分参数指定，缺失的用默认值填充
+    if epochs is None and batch_size is None and learning_rate is None:
         return DEFAULT_FT_HYPERPARAMS
-    if ft_epochs is None or ft_batch_size is None or ft_learning_rate is None:
-        raise ValueError("使用独立参数指定微调超参数时，必须同时提供 --finetune_epochs, --finetune_batch_size, --finetune_learning_rate")
-    return [{"finetune_epochs": int(ft_epochs), "finetune_batch_size": int(ft_batch_size), "finetune_learning_rate": float(ft_learning_rate)}]
+    
+    # 从默认配置中取基准值
+    default_config = DEFAULT_FT_HYPERPARAMS[0]
+    final_epochs = epochs if epochs is not None else default_config["epochs"]
+    final_batch_size = batch_size if batch_size is not None else default_config["batch_size"]
+    final_learning_rate = learning_rate if learning_rate is not None else default_config["learning_rate"]
+    
+    return [{"epochs": int(final_epochs), "batch_size": int(final_batch_size), "learning_rate": float(final_learning_rate)}]
 
 
 def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: List[Dict[str, Any]],
                      hyperparams_list: List[Dict[str, Any]], exp_prefix: str, tag: Optional[str],
-                     aug_label: Optional[str]) -> List[Dict[str, Any]]:
+                     aug_label: Optional[str], finetune_modes: List[str] = None, 
+                     pretrain_exp_prefix: str = "") -> List[Dict[str, Any]]:
+    """创建微调任务列表，支持灵活的微调模式选择"""
     tasks: List[Dict[str, Any]] = []
+    
+    # 默认只使用BERT（向后兼容）
+    if finetune_modes is None:
+        finetune_modes = ["bert"]
+    
+    # 根据指定的微调模式构建配置
+    encoder_configs = []
+    for mode in finetune_modes:
+        if mode == "bert":
+            encoder_configs.append({"type": "bert", "reinit": False, "suffix": "", "direct": True})
+        elif mode == "gte-direct":
+            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "reinit": False, "suffix": "_gte_keep_direct", "direct": True, "pretrain_suffix": "_gte_keep"})
+        elif mode == "gte-pretrain":
+            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "reinit": False, "suffix": "_gte_keep_pretrained", "direct": False, "pretrain_suffix": "_gte_keep"})
+        elif mode == "gte-reset-direct":
+            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "reinit": True, "suffix": "_gte_reinit_direct", "direct": True, "pretrain_suffix": "_gte_reinit"})
+        elif mode == "gte-reset-pretrain":
+            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "reinit": True, "suffix": "_gte_reinit_pretrained", "direct": False, "pretrain_suffix": "_gte_reinit"})
+        else:
+            raise ValueError(f"不支持的微调模式: {mode}。支持: bert, gte-direct, gte-pretrain, gte-reset-direct, gte-reset-pretrain")
+    
     for dataset in datasets:
         for method in methods:
+            if method == "smiles" and dataset not in {"qm9", "zinc", "aqsol", "qm9test"}:
+                continue
             for bpe_config in bpe_test_configs:
-                if hyperparams_list:
-                    for params in hyperparams_list:
+                for encoder_config in encoder_configs:
+                    if hyperparams_list:
+                        for params in hyperparams_list:
+                            bpe_suffix = bpe_config["config_name"]
+                            aug_part = f"_{aug_label}" if aug_label else ""
+                            encoder_suffix = encoder_config["suffix"]
+                            # 删除 _ft_ 和 epoch 标记，确保与预训练阶段的实验名一致
+                            exp_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}{encoder_suffix}"
+                            experiment_name = f"{exp_prefix}{exp_core}{('_' + tag) if tag else ''}"
+                            
+                            # 构建预训练实验名（如果需要）
+                            pretrain_exp_name = None
+                            if not encoder_config["direct"]:  # 需要从预训练模型加载
+                                pretrain_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}{encoder_config['pretrain_suffix']}"
+                                pretrain_exp_name = f"{pretrain_exp_prefix}{pretrain_core}{('_' + tag) if tag else ''}"
+                            
+                            tasks.append({
+                                "dataset": dataset,
+                                "method": method,
+                                "hyperparams": params,
+                                "bpe_config": bpe_config,
+                                "encoder_type": encoder_config["type"],
+                                "reinit_weights": encoder_config["reinit"],
+                                "pretrain_exp_name": pretrain_exp_name,
+                                "experiment_name": experiment_name
+                            })
+                    else:
                         bpe_suffix = bpe_config["config_name"]
                         aug_part = f"_{aug_label}" if aug_label else ""
-                        # 删除 _ft_ 和 epoch 标记，确保与预训练阶段的实验名一致
-                        exp_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}"
+                        encoder_suffix = encoder_config["suffix"]
+                        exp_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}{encoder_suffix}_default"
                         experiment_name = f"{exp_prefix}{exp_core}{('_' + tag) if tag else ''}"
+                        
+                        # 构建预训练实验名（如果需要）
+                        pretrain_exp_name = None
+                        if not encoder_config["direct"]:  # 需要从预训练模型加载
+                            pretrain_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}{encoder_config['pretrain_suffix']}_default"
+                            pretrain_exp_name = f"{pretrain_exp_prefix}{pretrain_core}{('_' + tag) if tag else ''}"
+                        
                         tasks.append({
                             "dataset": dataset,
                             "method": method,
-                            "hyperparams": params,
+                            "hyperparams": None,
                             "bpe_config": bpe_config,
+                            "encoder_type": encoder_config["type"],
+                            "reinit_weights": encoder_config["reinit"],
+                            "pretrain_exp_name": pretrain_exp_name,
                             "experiment_name": experiment_name
                         })
-                else:
-                    bpe_suffix = bpe_config["config_name"]
-                    aug_part = f"_{aug_label}" if aug_label else ""
-                    exp_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}_default"
-                    experiment_name = f"{exp_prefix}{exp_core}{('_' + tag) if tag else ''}"
-                    tasks.append({
-                        "dataset": dataset,
-                        "method": method,
-                        "hyperparams": None,
-                        "bpe_config": bpe_config,
-                        "experiment_name": experiment_name
-                    })
     return tasks
 
 
 def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
-             combined_config_json: Optional[str],
-             task_type: Optional[str], target_property: Optional[str], aggregation_mode: str,
-             num_classes: Optional[int], log_dir: Optional[str],
+             combined_config_json: Optional[str], aggregation_mode: str,
+             log_dir: Optional[str],
              commands_only: bool = False, plain_logs: bool = False,
              commands_file: Optional[str] = None,
              save_name_prefix: Optional[str] = None,
@@ -182,15 +236,9 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
     if os.environ.get("TG_LOG_STYLE", "").lower() in {"online", "offline"}:
         cmd.extend(["--log_style", os.environ["TG_LOG_STYLE"].lower()])
 
-    # 收集微调特有参数，稍后统一追加到末尾，确保前半段与预训练一致
+    # 🆕 收集微调参数 - 任务类型等由数据集自动推断，无需指定
     finetune_extras: list[str] = []
     finetune_extras.extend(["--aggregation_mode", aggregation_mode])
-    if task_type:
-        finetune_extras.extend(["--task", task_type])
-    if target_property:
-        finetune_extras.extend(["--target_property", target_property])
-    if num_classes is not None:
-        finetune_extras.extend(["--num_classes", str(num_classes)])
     if save_name_prefix:
         finetune_extras.extend(["--save_name_prefix", save_name_prefix])
     if save_name_suffix:
@@ -203,10 +251,20 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
     if task["hyperparams"]:
         params = task["hyperparams"]
         cmd.extend([
-            "--epochs", str(params["finetune_epochs"]),
-            "--batch_size", str(params["finetune_batch_size"]),
-            "--learning_rate", str(params["finetune_learning_rate"])
+            "--epochs", str(params["epochs"]),
+            "--batch_size", str(params["batch_size"]),
+            "--learning_rate", str(params["learning_rate"])
         ])
+
+    # 🆕 添加编码器相关参数
+    if task.get("encoder_type") and task["encoder_type"] != "bert":
+        cmd.extend(["--encoder_type", task["encoder_type"]])
+    
+    if task.get("reinit_weights", False):
+        cmd.append("--reinit_weights")
+        
+    if task.get("pretrain_exp_name"):
+        cmd.extend(["--pretrain_exp_name", task["pretrain_exp_name"]])
     
     if combined_config_json:
         cmd.extend(["--config_json", combined_config_json])
@@ -314,20 +372,23 @@ def main():
     parser.add_argument("--bpe_scenarios", type=str, default=','.join(DEFAULT_BPE_SCENARIOS), help="BPE测试场景，逗号分隔: raw,all,random,gaussian（仅选择类型）")
 
     # 微调超参数（单组）或 JSON 多组
-    parser.add_argument("--finetune_epochs", type=int, default=None, help="微调轮数（单组超参用）")
-    parser.add_argument("--finetune_batch_size", type=int, default=None, help="微调批次大小（单组超参用）")
-    parser.add_argument("--finetune_learning_rate", type=float, default=None, help="微调学习率（单组超参用）")
+    parser.add_argument("--epochs", type=int, default=None, help="微调轮数（单组超参用）")
+    parser.add_argument("--batch_size", type=int, default=None, help="微调批次大小（单组超参用）")
+    parser.add_argument("--learning_rate", type=float, default=None, help="微调学习率（单组超参用）")
     parser.add_argument("--hyperparams_json", type=str, default=None, help="多组超参数的JSON（字符串或文件路径），数组形式")
 
-    # 任务与评估
-    parser.add_argument("--task", type=str, default=None, choices=["regression", "classification"], help="任务类型（不指定则自动推断）")
-    parser.add_argument("--target_property", type=str, default=None, help="回归目标属性（可选；不指定则按数据集默认推断）")
+    # 评估配置
     parser.add_argument("--aggregation_mode", type=str, default=DEFAULT_AGGREGATION_MODE, choices=["avg", "best", "learned"], help="测试时增强的聚合模式")
-    parser.add_argument("--num_classes", type=int, default=None, help="分类类别数（可选；不提供则自动推断）")
 
     # 数据增强（回归）
     parser.add_argument("--use_augmentation", type=str, choices=["true", "false"], default=None,
                         help="是否启用回归任务增强（true/false，不指定则保持config默认）")
+    
+    # 🆕 微调模式选择（灵活配置）
+    parser.add_argument("--finetune_modes", type=str, default="bert", 
+                        help="要运行的微调模式，逗号分隔。可选: bert,gte-direct,gte-pretrain,gte-reset-direct,gte-reset-pretrain。默认bert保持向后兼容")
+    parser.add_argument("--pretrain_exp_prefix", type=str, default="", 
+                        help="预训练实验名前缀，用于构建依赖的预训练实验名（仅对*-pretrain模式有效）")
 
     # JSON覆盖
     parser.add_argument("--config_json", type=str, default=None, help="JSON覆盖（字符串或文件路径）。会与增强开关合并")
@@ -350,9 +411,9 @@ def main():
 
     hyperparams_list = build_hyperparams_list(
         hp_json=args.hyperparams_json,
-        ft_epochs=args.finetune_epochs,
-        ft_batch_size=args.finetune_batch_size,
-        ft_learning_rate=args.finetune_learning_rate,
+        epochs=args.epochs,
+        batch_size=args.batch_size,
+        learning_rate=args.learning_rate,
     )
 
     combined_json_obj: Dict[str, Any] = {}
@@ -400,6 +461,9 @@ def main():
         combined_json_obj = merge_dicts(combined_json_obj, {"system": {"log_style": args.log_style}})
         combined_config_json = json.dumps(combined_json_obj, ensure_ascii=False)
 
+    # 🆕 解析微调模式
+    finetune_modes_list = [mode.strip() for mode in args.finetune_modes.split(',') if mode.strip()] if args.finetune_modes else ["bert"]
+    
     tasks = create_task_list(
         datasets=datasets,
         methods=methods,
@@ -408,6 +472,8 @@ def main():
         exp_prefix=args.exp_prefix,
         tag=args.tag,
         aug_label=aug_label,
+        finetune_modes=finetune_modes_list,  # 🆕 传递微调模式列表
+        pretrain_exp_prefix=args.pretrain_exp_prefix,  # 🆕 传递预训练前缀
     )
     print(f"总任务数: {len(tasks)}")
     if args.commands_only:
@@ -441,10 +507,7 @@ def main():
                         gpu_id,
                         experiment_group=args.experiment_group,
                         combined_config_json=combined_config_json,
-                        task_type=args.task,
-                        target_property=args.target_property,
                         aggregation_mode=args.aggregation_mode,
-                        num_classes=args.num_classes,
                         log_dir=args.log_dir,
                         commands_only=args.commands_only,
                         plain_logs=args.plain_logs,

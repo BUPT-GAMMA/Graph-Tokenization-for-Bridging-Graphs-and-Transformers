@@ -17,7 +17,7 @@
 /logs/
 /backup_log/
 /backup/
-/foreign_dataset_files_to_convert/
+# /foreign_dataset_files_to_convert/
 
 __pycache__/
 *.pt
@@ -33,4 +33,8 @@ nohup.out
 *.log*
 *.tar.gz
 
+/agg/
+
 /tests/
+/sbatch_scripts/
+*.safetensors

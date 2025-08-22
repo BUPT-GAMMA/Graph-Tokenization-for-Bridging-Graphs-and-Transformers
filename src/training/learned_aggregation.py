@@ -146,8 +146,9 @@ def _collect_variant_sets(
                 raise RuntimeError("模型输出缺少 'pooled'，请在Bert回归/分类模型的forward中加入该键")
 
             if task == 'regression':
-                # 注意：这里的 predictions 是标准化空间
-                preds = outputs['predictions'].detach().cpu().numpy().reshape(-1, 1)
+                # 注意：这里的预测值是标准化空间的最终任务预测（TaskHead输出）
+                # 修正：使用正确的字段名 'outputs'（而非 'predictions'）
+                preds = outputs['outputs'].detach().cpu().numpy().reshape(-1, 1)
                 pooled_np = pooled.detach().cpu().numpy()
                 # 原始标签需要标准化以后用于监督
                 if label_normalizer is None:
@@ -160,7 +161,9 @@ def _collect_variant_sets(
                     aux_by_gid.setdefault(gid, []).append(p.astype(np.float32))
                     label_by_gid[gid] = float(y[0])
             else:
-                logits = outputs['logits'].detach().cpu().numpy()
+                # 注意：这里的logits是标准化后的最终任务预测（TaskHead输出）
+                # 修正：使用正确的字段名 'outputs'（而非 'logits'）
+                logits = outputs['outputs'].detach().cpu().numpy()
                 pooled_np = pooled.detach().cpu().numpy()
                 y_true = labels.detach().cpu().numpy().reshape(-1)
                 for gid, f, lg, y in zip(graph_ids, pooled_np, logits, y_true):

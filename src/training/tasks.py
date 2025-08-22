@@ -9,16 +9,27 @@ from src.models.bert.data import (
     ClassificationDataset,
     LabelNormalizer,
 )
+from src.data.unified_data_interface import UnifiedDataInterface
 
 
 
-def _effective_max_len(seqs, max_pos: int) -> int:
-    return min(max(len(s) for s in seqs) + 2, max_pos) if seqs else max_pos
+def _effective_max_len(seqs, max_pos: int, config=None) -> int:
+    if not seqs:
+        return max_pos
+    try:
+        # 复用与预训练一致的策略（max 或 sigma_k）
+        from src.models.bert.data import _candidate_len_from_policy
+        cand = _candidate_len_from_policy([len(s) for s in seqs], config)
+        cand_plus2 = int(cand) + 2
+    except Exception:
+        cand_plus2 = max(len(s) for s in seqs) + 2
+    return min(int(cand_plus2), int(max_pos))
 
 
 def build_regression_datasets(
     config,
-    pretrained,
+    udi,
+    method,
     train_sequences, val_sequences, test_sequences,
     train_labels, val_labels, test_labels,
     train_gids, val_gids, test_gids,
@@ -26,24 +37,27 @@ def build_regression_datasets(
     normalizer = LabelNormalizer(method=config.task.normalization)
     normalizer.fit(train_labels)
 
-    max_pos = int(pretrained.config.max_position_embeddings)
-    train_eff = _effective_max_len(train_sequences, max_pos)
-    val_eff = _effective_max_len(val_sequences, max_pos)
-    test_eff = _effective_max_len(test_sequences, max_pos)
+    # 🆕 直接从配置和UDI获取所需信息
+    max_pos = int(config.bert.architecture.max_position_embeddings)
+    vocab_manager = udi.get_vocab(method=method)
+    
+    train_eff = _effective_max_len(train_sequences, max_pos, config)
+    val_eff = _effective_max_len(val_sequences, max_pos, config)
+    test_eff = _effective_max_len(test_sequences, max_pos, config)
 
     # 创建统一的transforms
-    transforms = create_transforms_from_config(config, pretrained.vocab_manager.get_valid_tokens(), "regression")
+    transforms = create_transforms_from_config(config, vocab_manager.get_valid_tokens(), "regression")
     
     train_ds = NormalizedRegressionDataset(
-        train_sequences, train_labels, pretrained.vocab_manager, transforms, train_eff,
+        train_sequences, train_labels, vocab_manager, transforms, train_eff,
         graph_ids=train_gids
     )
     val_ds = NormalizedRegressionDataset(
-        val_sequences, val_labels, pretrained.vocab_manager, transforms, val_eff,
+        val_sequences, val_labels, vocab_manager, transforms, val_eff,
         graph_ids=val_gids
     )
     test_ds = NormalizedRegressionDataset(
-        test_sequences, test_labels, pretrained.vocab_manager, transforms, test_eff,
+        test_sequences, test_labels, vocab_manager, transforms, test_eff,
         graph_ids=test_gids
     )
 
@@ -58,30 +72,33 @@ def build_regression_datasets(
 
 def build_classification_datasets(
     config,
-    pretrained,
+    udi,
+    method,
     train_sequences, val_sequences, test_sequences,
     train_labels, val_labels, test_labels,
     train_gids, val_gids, test_gids,
     *,
     num_classes: int,
 ):
-    max_pos = int(pretrained.config.max_position_embeddings)
-    train_eff = _effective_max_len(train_sequences, max_pos)
-    val_eff = _effective_max_len(val_sequences, max_pos)
-    test_eff = _effective_max_len(test_sequences, max_pos)
+    # 🆕 直接从配置和UDI获取所需信息
+    max_pos = int(config.bert.architecture.max_position_embeddings)
+    vocab_manager = udi.get_vocab(method=method)
+    
+    train_eff = _effective_max_len(train_sequences, max_pos, config)
+    val_eff = _effective_max_len(val_sequences, max_pos, config)
+    test_eff = _effective_max_len(test_sequences, max_pos, config)
 
     # 创建统一的transforms
-    transforms = create_transforms_from_config(config, pretrained.vocab_manager.get_valid_tokens(), "classification")
+    transforms = create_transforms_from_config(config, vocab_manager.get_valid_tokens(), "classification")
     
-    train_ds = ClassificationDataset(train_sequences, train_labels, pretrained.vocab_manager, transforms, train_eff, train_gids)
-    val_ds = ClassificationDataset(val_sequences, val_labels, pretrained.vocab_manager, transforms, val_eff, val_gids)
-    test_ds = ClassificationDataset(test_sequences, test_labels, pretrained.vocab_manager, transforms, test_eff, test_gids)
+    train_ds = ClassificationDataset(train_sequences, train_labels, vocab_manager, transforms, train_eff, train_gids)
+    val_ds = ClassificationDataset(val_sequences, val_labels, vocab_manager, transforms, val_eff, val_gids)
+    test_ds = ClassificationDataset(test_sequences, test_labels, vocab_manager, transforms, test_eff, test_gids)
     return train_ds, val_ds, test_ds
 
 
 def build_regression_loaders(
     config,
-    pretrained,
     udi,
     method,
 ) -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader, torch.utils.data.DataLoader, LabelNormalizer]:
@@ -110,7 +127,7 @@ def build_regression_loaders(
     test_gids = [gid for gid, _ in test_seqs_with_id]
     
     train_ds, val_ds, test_ds, normalizer = build_regression_datasets(
-        config, pretrained,
+        config, udi, method,
         train_sequences, val_sequences, test_sequences,
         train_labels, val_labels, test_labels,
         train_gids, val_gids, test_gids,
@@ -121,7 +138,7 @@ def build_regression_loaders(
     num_workers = 4  # 统一使用多进程
     if udi is not None and method is not None:
         try:
-            from src.data.transforms.bpe_transform import create_bpe_worker_init_fn_from_udi
+            from src.data.bpe_transform import create_bpe_worker_init_fn_from_udi
             bpe_worker_init_fn = create_bpe_worker_init_fn_from_udi(udi, config, method)
         except Exception as e:
             # 如果BPE创建失败，回退到无BPE模式（但不静默忽略错误）
@@ -159,10 +176,7 @@ def build_regression_loaders(
 
 def build_classification_loaders(
     config,
-    pretrained,
-    *,
-    num_classes: int,
-    udi,
+    udi: UnifiedDataInterface,
     method,
 ) -> Tuple[torch.utils.data.DataLoader, torch.utils.data.DataLoader, torch.utils.data.DataLoader]:
   # 获取带graph_id的原始数据
@@ -171,22 +185,25 @@ def build_classification_loaders(
         (val_seqs_with_id, val_props),
         (test_seqs_with_id, test_props),
     ) = udi.get_training_data(method)
+    target_property = udi._resolve_target_property(config.task.target_property)
+    config.task.target_property = target_property # 更新配置
+    num_classes = udi.get_num_classes()
     
     # 准备扁平化数据
     train_sequences = [seq for _, seq in train_seqs_with_id]
-    train_labels = udi._extract_labels_from_properties(train_props, config.task.target_property)
+    train_labels = udi._extract_labels_from_properties(train_props, target_property)
     train_gids = [gid for gid, _ in train_seqs_with_id]
     
     val_sequences = [seq for _, seq in val_seqs_with_id]
-    val_labels = udi._extract_labels_from_properties(val_props, config.task.target_property)
+    val_labels = udi._extract_labels_from_properties(val_props, target_property)
     val_gids = [gid for gid, _ in val_seqs_with_id]
     
     test_sequences = [seq for _, seq in test_seqs_with_id]
-    test_labels = udi._extract_labels_from_properties(test_props, config.task.target_property)
+    test_labels = udi._extract_labels_from_properties(test_props, target_property)
     test_gids = [gid for gid, _ in test_seqs_with_id]
     assert num_classes > 1, "分类任务需要至少2个类别"
     train_ds, val_ds, test_ds = build_classification_datasets(
-        config, pretrained,
+        config, udi, method,
         train_sequences, val_sequences, test_sequences,
         train_labels, val_labels, test_labels,
         train_gids, val_gids, test_gids,
@@ -198,7 +215,7 @@ def build_classification_loaders(
     num_workers = 4  # 统一使用多进程
     if udi is not None and method is not None:
         try:
-            from src.data.transforms.bpe_transform import create_bpe_worker_init_fn_from_udi
+            from src.data.bpe_transform import create_bpe_worker_init_fn_from_udi
             bpe_worker_init_fn = create_bpe_worker_init_fn_from_udi(udi, config, method)
         except Exception as e:
             # 如果BPE创建失败，回退到无BPE模式（但不静默忽略错误）

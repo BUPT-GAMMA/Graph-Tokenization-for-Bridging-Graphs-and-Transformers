@@ -10,22 +10,18 @@
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import argparse
 import json
-import os
-import sys
 import time
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Dict, List, Tuple
+import math
 
 import numpy as np
 import matplotlib.pyplot as plt
-
-# 确保项目根目录在 sys.path 中
-ROOT = Path(__file__).resolve().parent
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
 from config import ProjectConfig
 from src.utils.visualization_helper import setup_plot_style
@@ -130,10 +126,13 @@ def generate_visualization(results: Dict[str, Any], results_dir: Path, dataset: 
         original_total_tokens = []
         compressed_total_tokens = []
         compression_ratios = []
-        tokens_saved = []
         vocab_sizes = []
         serialization_speeds = []
-        decode_accuracies = []
+        # 每序列均值±3σ（压缩前/后）
+        perseq_orig_mean = []
+        perseq_orig_std = []
+        perseq_comp_mean = []
+        perseq_comp_std = []
 
         for method in methods:
             result = successful_methods[method]
@@ -148,10 +147,13 @@ def generate_visualization(results: Dict[str, Any], results_dir: Path, dataset: 
             original_total_tokens.append(orig_stats['total_tokens'] / 1000)
             compressed_total_tokens.append(comp_stats['compressed_total_tokens'] / 1000)
             compression_ratios.append(comp_stats['compression_ratio'])
-            tokens_saved.append(comp_stats['tokens_saved'] / 10000)
             vocab_sizes.append(train_stats['final_vocab_size'])
             serialization_speeds.append(result['serialization_speed'])
-            decode_accuracies.append(result['decode_accuracy'] * 100)
+            ps = result.get('per_sequence_stats', {})
+            perseq_orig_mean.append(ps.get('orig_mean', 0.0))
+            perseq_orig_std.append(ps.get('orig_std', 0.0))
+            perseq_comp_mean.append(ps.get('comp_mean', 0.0))
+            perseq_comp_std.append(ps.get('comp_std', 0.0))
 
         fig, axes = plt.subplots(2, 3, figsize=(20, 12))
         fig.suptitle(f'序列化方法+BPE压缩效果综合对比 - {dataset}', fontsize=16, fontweight='bold')
@@ -183,14 +185,46 @@ def generate_visualization(results: Dict[str, Any], results_dir: Path, dataset: 
             height = bar.get_height()
             axes[0, 1].text(bar.get_x() + bar.get_width()/2., height + max(compression_ratios)*0.01, f'{ratio:.3f}', ha='center', va='bottom', fontweight='bold')
 
-        bars4 = axes[0, 2].bar(methods, tokens_saved, color='gold', alpha=0.8)
-        axes[0, 2].set_ylabel('节省的Token数 (万)')
-        axes[0, 2].set_title('压缩节省的Token数对比')
-        axes[0, 2].tick_params(axis='x', rotation=45)
+        # 新图：每序列长度（均值±1/2/3σ），压缩前后成对柱状
+        width = 0.35
+        x = np.arange(len(methods))
+        axes[0, 2].bar(x - width/2, perseq_orig_mean, width, color='lightslategray', alpha=0.9, label='原始均值')
+        axes[0, 2].bar(x + width/2, perseq_comp_mean, width, color='mediumseagreen', alpha=0.9, label='压缩后均值')
+        # 绘制 ±1/2/3σ 的误差线（用竖直线+上下横线模拟“工”形范围）
+        # 颜色深浅：1σ(浅灰) 2σ(中灰) 3σ(黑)
+        sigma_colors = {1: '#bbbbbb', 2: '#777777', 3: '#000000'}
+        for i in range(len(methods)):
+            mu, sd = perseq_orig_mean[i], perseq_orig_std[i]
+            for k in (1, 2, 3):
+                lo = max(mu - k * sd, 0.0)
+                hi = mu + k * sd
+                axes[0, 2].vlines(x[i] - width/2, lo, hi, colors=sigma_colors[k], linewidth=2 - (0 if k == 3 else 0.5))
+                axes[0, 2].hlines([lo, hi], x[i] - width/2 - width*0.15, x[i] - width/2 + width*0.15, colors=sigma_colors[k], linewidth=2 - (0 if k == 3 else 0.5))
+            mu2, sd2 = perseq_comp_mean[i], perseq_comp_std[i]
+            for k in (1, 2, 3):
+                lo2 = max(mu2 - k * sd2, 0.0)
+                hi2 = mu2 + k * sd2
+                axes[0, 2].vlines(x[i] + width/2, lo2, hi2, colors=sigma_colors[k], linewidth=2 - (0 if k == 3 else 0.5))
+                axes[0, 2].hlines([lo2, hi2], x[i] + width/2 - width*0.15, x[i] + width/2 + width*0.15, colors=sigma_colors[k], linewidth=2 - (0 if k == 3 else 0.5))
+        axes[0, 2].set_ylabel('每序列长度 (均值±1/2/3σ)')
+        axes[0, 2].set_title('每序列长度对比（压缩前后）')
+        axes[0, 2].set_xticks(x)
+        axes[0, 2].set_xticklabels(methods, rotation=45)
         axes[0, 2].grid(True, alpha=0.3)
-        for bar, saved in zip(bars4, tokens_saved):
-            height = bar.get_height()
-            axes[0, 2].text(bar.get_x() + bar.get_width()/2., height + max(tokens_saved)*0.01, f'{saved:.1f}万', ha='center', va='bottom', fontweight='bold')
+        # 为 1/2/3σ 添加图例说明
+        try:
+            from matplotlib.lines import Line2D as _Line2D
+            legend_lines = [
+                _Line2D([0], [0], color=sigma_colors[1], lw=2, label='±1σ'),
+                _Line2D([0], [0], color=sigma_colors[2], lw=1.5, label='±2σ'),
+                _Line2D([0], [0], color=sigma_colors[3], lw=2, label='±3σ'),
+            ]
+            bars_legend = axes[0, 2].legend(loc='upper left')
+            extra_legend = axes[0, 2].legend(handles=legend_lines, loc='upper right')
+            axes[0, 2].add_artist(bars_legend)
+            axes[0, 2].add_artist(extra_legend)
+        except Exception:
+            axes[0, 2].legend()
 
         bars5 = axes[1, 0].bar(methods, vocab_sizes, color='lightcoral', alpha=0.8)
         axes[1, 0].set_ylabel('BPE码本大小')
@@ -210,15 +244,8 @@ def generate_visualization(results: Dict[str, Any], results_dir: Path, dataset: 
             height = bar.get_height()
             axes[1, 1].text(bar.get_x() + bar.get_width()/2., height + max(serialization_speeds)*0.01, f'{speed:.1f}', ha='center', va='bottom', fontweight='bold')
 
-        bars7 = axes[1, 2].bar(methods, decode_accuracies, color='lightgreen', alpha=0.8)
-        axes[1, 2].set_ylabel('解码准确率 (%)')
-        axes[1, 2].set_title('BPE解码准确率对比')
-        axes[1, 2].tick_params(axis='x', rotation=45)
-        axes[1, 2].grid(True, alpha=0.3)
-        axes[1, 2].set_ylim(0, 105)
-        for bar, accuracy in zip(bars7, decode_accuracies):
-            height = bar.get_height()
-            axes[1, 2].text(bar.get_x() + bar.get_width()/2., height + 1, f'{accuracy:.1f}%', ha='center', va='bottom', fontweight='bold')
+        axes[1, 2].axis('off')
+        axes[1, 2].text(0.5, 0.5, 'BPE 解码准确率=100% (已强制校验)', ha='center', va='center', fontsize=12)
 
         plt.tight_layout()
         chart_file = results_dir / f"comprehensive_comparison_chart_{dataset}.png"
@@ -252,7 +279,6 @@ def generate_detailed_charts(methods: list, successful_methods: dict, results_di
             avg_pairs_per_seq.append(pair_stats['avg_pairs_per_sequence'])
             merge_counts.append(train_stats['num_merges_performed'])
 
-        import matplotlib.pyplot as plt
         fig, axes = plt.subplots(2, 2, figsize=(16, 12))
         fig.suptitle(f'序列化方法Pair统计详细分析 - {dataset}', fontsize=16, fontweight='bold')
 
@@ -343,7 +369,8 @@ def _benchmark_one_mp(args_tuple: Tuple[str, str, int, int, int | None, int, int
         from src.algorithms.serializer.serializer_factory import SerializerFactory  # type: ignore
         from src.algorithms.compression.main_bpe import StandardBPECompressor  # type: ignore
 
-        cfg = ProjectConfig(); cfg.dataset.name = dataset
+        cfg = ProjectConfig()
+        cfg.dataset.name = dataset
         udi = UnifiedDataInterface(config=cfg, dataset=dataset)
         loader = udi.get_dataset_loader()
         graphs, _ = loader.get_all_data_with_indices()
@@ -353,8 +380,6 @@ def _benchmark_one_mp(args_tuple: Tuple[str, str, int, int, int | None, int, int
         # 序列化评测（不持久化）
         serializer = SerializerFactory.create_serializer(method)
         # 为内部并发设置每方法 CPU 配额
-        # batch_num_workers 不存在，移除错误的属性设置
-        # stats_num_workers 在基类中定义，所有序列化器都有此属性
         serializer.stats_num_workers = max(1, int(per_method_workers))
         serializer.initialize_with_dataset(loader, graphs)
 
@@ -400,8 +425,26 @@ def _benchmark_one_mp(args_tuple: Tuple[str, str, int, int, int | None, int, int
             if dec == sequences_nonempty[i]:
                 correct += 1
         decode_accuracy = (correct / sample_size) if sample_size > 0 else 0.0
+        # 严格约束：BPE 解码必须完全准确
+        assert correct == sample_size, f"BPE 解码失败: {correct}/{sample_size}"
 
         pair_stats = _compute_pair_stats(sequences_nonempty)
+
+        # 每序列长度统计（均值/标准差），用于可视化的误差线（±3σ）
+        def _mean_std(arr_lens: List[int]) -> Tuple[float, float]:
+            if not arr_lens:
+                return 0.0, 0.0
+            n = float(len(arr_lens))
+            mean = float(sum(arr_lens) / n)
+            if n <= 1:
+                return mean, 0.0
+            var = float(sum((x - mean) ** 2 for x in arr_lens) / (n - 1))
+            return mean, math.sqrt(var)
+
+        orig_len_list = [len(s) for s in sequences_nonempty]
+        comp_len_list = [len(s) for s in encoded]
+        orig_mean, orig_std = _mean_std(orig_len_list)
+        comp_mean, comp_std = _mean_std(comp_len_list)
 
         result = {
             'method': method,
@@ -421,10 +464,16 @@ def _benchmark_one_mp(args_tuple: Tuple[str, str, int, int, int | None, int, int
             'decode_accuracy': decode_accuracy,
             'sample_size': sample_size,
             'pair_stats': pair_stats,
+            'per_sequence_stats': {
+                'orig_mean': orig_mean,
+                'orig_std': orig_std,
+                'comp_mean': comp_mean,
+                'comp_std': comp_std,
+            },
         }
         print(f"✅ {method}: 序列化 {serialization_speed:.1f} 分子/s, 压缩率 {compression_ratio:.3f}")
         return method, result
-    except Exception as e:
+    except Exception:
         import traceback
         traceback.print_exc()
         return method, {'method': method, 'error': traceback.format_exc()}
@@ -436,24 +485,9 @@ def init_worker() -> None:
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
-def main():
-    parser = argparse.ArgumentParser(description="序列化方法+BPE压缩效果对比测试（简化版）")
-    parser.add_argument("--dataset", default="qm9test", help="数据集名称，默认 qm9test")
-    parser.add_argument("--methods", default=None, help="逗号分隔的方法列表；未提供则使用全部可用方法")
-    parser.add_argument("--version", default="latest", help="processed/<dataset>/<version> 目录名，默认 latest")
-    parser.add_argument("--workers", type=int, default=32, help="方法级并发数（用于子进程或线程并行）")
-    parser.add_argument("--per_method_workers", type=int, default=None, help="单方法内部 batch 并发度；为空则按总核数/方法数均分")
-    parser.add_argument("--child", action="store_true", help="子进程模式：仅输出方法结果，不生成汇总报告与图表")
-    parser.add_argument("--bpe_num_merges", type=int, default=2000, help="BPE 合并次数")
-    parser.add_argument("--bpe_min_frequency", type=int, default=10, help="BPE 最小频率阈值")
-    parser.add_argument("--limit", type=int, default=None, help="仅用于基准测试的样本上限（不传则全量）")
-    parser.add_argument("--decode_sample", type=int, default=2000, help="解码准确率抽样数量")
-    parser.add_argument("--out", default=None, help="结果输出目录；默认 comparison_results/<dataset>")
-
-    args_ns = parser.parse_args()
-
+def _run_for_dataset(args_ns, dataset: str) -> None:
     config = ProjectConfig()
-    config.dataset.name = args_ns.dataset
+    config.dataset.name = dataset
 
     # 方法列表
     if args_ns.methods:
@@ -462,11 +496,11 @@ def main():
         from src.algorithms.serializer.serializer_factory import SerializerFactory
         methods = SerializerFactory.get_available_serializers()
 
-    results_dir = Path(args_ns.out or f"comparison_results/{args_ns.dataset}")
+    results_dir = Path(args_ns.out or f"comparison_results/{dataset}")
     results_dir.mkdir(parents=True, exist_ok=True)
 
     print("📋 测试配置:")
-    print(f"   数据集: {args_ns.dataset}")
+    print(f"   数据集: {dataset}")
     print(f"   方法数量: {len(methods)} -> {methods}")
     print(f"   BPE配置: num_merges={args_ns.bpe_num_merges}, min_frequency={args_ns.bpe_min_frequency}")
     print(f"   并行工作数: {args_ns.workers}")
@@ -475,7 +509,7 @@ def main():
     print(f"   结果目录: {results_dir}")
 
     bench_args = BenchmarkArgs(
-        dataset=args_ns.dataset,
+        dataset=dataset,
         methods=methods,
         version=args_ns.version,
         workers=int(args_ns.workers),
@@ -518,7 +552,9 @@ def main():
             # 异常依旧返回非零码供父进程感知
             sys.exit(1)
 
-    import subprocess, os, threading, queue
+    import subprocess
+    import os
+    import threading
     num_methods_workers = max(1, int(args_ns.workers))
     per_method_workers = int(args_ns.per_method_workers) if args_ns.per_method_workers else max(1, (os.cpu_count() or 1) // num_methods_workers)
     # 预构建任务
@@ -529,7 +565,7 @@ def main():
         cmd = [
             sys.executable,
             str(Path(__file__).resolve()),
-            "--dataset", args_ns.dataset,
+            "--dataset", dataset,
             "--methods", m,
             "--workers", "1",
             "--bpe_num_merges", str(args_ns.bpe_num_merges),
@@ -550,10 +586,10 @@ def main():
             assert proc.stdout is not None
             for line in proc.stdout:
                 line = line.rstrip("\n")
-                print(f"[{method_key}] {line}")
+                print(f"[{dataset}:{method_key}] {line}")
         except Exception:
             import traceback
-            print(f"[{method_key}] 输出读取异常:\n{traceback.format_exc()}")
+            print(f"[{dataset}:{method_key}] 输出读取异常:\n{traceback.format_exc()}")
     finished_order: List[str] = []
     def _start_next():
         if not pending:
@@ -577,7 +613,7 @@ def main():
                 if rc != 0:
                     results[m] = {"method": m, "error": f"child failed ({rc})"}
                 else:
-                    child_json = cdir / f"full_results_{args_ns.dataset}.json"
+                    child_json = cdir / f"full_results_{dataset}.json"
                     try:
                         with child_json.open('r') as f:
                             child = json.load(f)
@@ -588,10 +624,10 @@ def main():
                                 results[m] = {"method": m, "error": "missing"}
                         else:
                             results[m] = {"method": m, "error": "malformed child json"}
-                    except Exception as e:
+                    except Exception as ex:
                         import traceback
-                        print(f"[{m}] 结果读取失败:\n{traceback.format_exc()}")
-                        results[m] = {"method": m, "error": str(e)}
+                        print(f"[{dataset}:{m}] 结果读取失败:\n{traceback.format_exc()}")
+                        results[m] = {"method": m, "error": str(ex)}
                 finished_order.append(m)
                 to_remove.append(m)
         for m in to_remove:
@@ -644,6 +680,31 @@ def main():
 
     print(f"💾 所有结果已保存到: {results_dir}/")
     print("🎉 测试完成!")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="序列化方法+BPE压缩效果对比测试（简化版）")
+    parser.add_argument("--dataset", default="qm9test", help="数据集名称，默认 qm9test")
+    parser.add_argument("--methods", default=None, help="逗号分隔的方法列表；未提供则使用全部可用方法")
+    parser.add_argument("--version", default="latest", help="processed/<dataset>/<version> 目录名，默认 latest")
+    parser.add_argument("--workers", type=int, default=64, help="方法级并发数（用于子进程或线程并行）")
+    parser.add_argument("--per_method_workers", type=int, default=None, help="单方法内部 batch 并发度；为空则按总核数/方法数均分")
+    parser.add_argument("--child", action="store_true", help="子进程模式：仅输出方法结果，不生成汇总报告与图表")
+    parser.add_argument("--bpe_num_merges", type=int, default=3000, help="BPE 合并次数")
+    parser.add_argument("--bpe_min_frequency", type=int, default=100, help="BPE 最小频率阈值")
+    parser.add_argument("--limit", type=int, default=None, help="仅用于基准测试的样本上限（不传则全量）")
+    parser.add_argument("--decode_sample", type=int, default=2000, help="解码准确率抽样数量")
+    parser.add_argument("--out", default=None, help="结果输出目录；默认 comparison_results/<dataset>")
+
+    args_ns = parser.parse_args()
+
+    datasets: List[str] = [d.strip() for d in args_ns.dataset.split(',') if d.strip()]
+
+    for ds in datasets:
+        print("\n" + "#"*96)
+        print(f"▶️ 开始数据集: {ds}")
+        print("#"*96)
+        _run_for_dataset(args_ns, ds)
 
 
 if __name__ == "__main__":
