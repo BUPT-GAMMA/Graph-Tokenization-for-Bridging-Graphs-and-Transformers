@@ -200,7 +200,8 @@ def run_finetune(
             wandb_logger = None
 
     # 训练
-    device = config.system.device if config.system.device != "auto" else ("cuda" if torch.cuda.is_available() else "cpu")
+    assert torch.cuda.is_available() 
+    device = config.system.device if config.system.device != "auto" else "cuda"
     model.to(device)
     # 早停监控基线：最小化指标用+inf，最大化指标用-inf
     best_val = float('-inf') if task_handler.should_maximize_metric else float('inf')
