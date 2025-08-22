@@ -41,10 +41,10 @@
     "type": "ntk"
   },
   "rope_theta": 20000,
-  "torch_dtype": "fp16",
+  "torch_dtype": "float16",
   "transformers_version": "4.47.1",
   "type_vocab_size": 1,
-  "unpad_inputs": true,
-  "use_memory_efficient_attention": true,
+  "unpad_inputs": false,
+  "use_memory_efficient_attention": false,
   "vocab_size": 250048
 }

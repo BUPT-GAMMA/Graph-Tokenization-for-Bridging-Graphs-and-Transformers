@@ -193,7 +193,7 @@ class GTEEncoder(BaseEncoder):
 def create_encoder(model_name: str, config: Dict[str, Any], vocab_manager: VocabManager) -> BaseEncoder:
     name = (model_name or '').lower()
     if 'gte' in name or 'alibaba-nlp' in name:
-        return GTEEncoder(model_name, config, vocab_manager)
+        return GTEEncoder('./gte_model', config, vocab_manager)
     # 默认走bert
     return BertEncoder(model_name or 'bert', config, vocab_manager)
 
