@@ -44,7 +44,7 @@
   "torch_dtype": "float16",
   "transformers_version": "4.47.1",
   "type_vocab_size": 1,
-  "unpad_inputs": false,
-  "use_memory_efficient_attention": false,
+  "unpad_inputs": true,
+  "use_memory_efficient_attention": true,
   "vocab_size": 250048
 }
