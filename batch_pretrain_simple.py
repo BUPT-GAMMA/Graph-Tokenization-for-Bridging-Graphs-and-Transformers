@@ -27,7 +27,7 @@ DEFAULT_METHODS = ["feuler", "eulerian", "cpp", "fcpp", "topo", "smiles"]
 DEFAULT_GPUS = [0]
 # DEFAULT_BPE_SCENARIOS = ["raw", "all", "random", "gaussian"]
 DEFAULT_BPE_SCENARIOS = ["all"]
-DEFAULT_HYPERPARAMS = [{"epochs": 100, "batch_size": 256, "learning_rate": 5e-4}]
+DEFAULT_HYPERPARAMS = [{"epochs": 100, "batch_size": 128, "learning_rate": 5e-4}]
 DEFAULT_MLM_AUG_METHODS = [
     "random_deletion",
     "random_insertion",
@@ -137,11 +137,11 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
     encoder_configs = []
     for encoder_name in encoders:
         if encoder_name == "bert":
-            encoder_configs.append({"type": "bert", "reinit": False, "suffix": ""})
+            encoder_configs.append({"type": "bert", "reset": False, "suffix": ""})
         elif encoder_name == "gte":
-            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "reinit": False, "suffix": "_gte_keep"})
+            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "reset": False, "suffix": "_gte_keep"})
         elif encoder_name == "gte-reset":
-            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "reinit": True, "suffix": "_gte_reinit"})
+            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "reset": True, "suffix": "_gte_reset"})
         else:
             raise ValueError(f"不支持的编码器类型: {encoder_name}。支持: bert, gte, gte-reset")
     
@@ -165,7 +165,7 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
                                 "hyperparams": params,
                                 "bpe_config": bpe_config,
                                 "encoder_type": encoder_config["type"],
-                                "reinit_weights": encoder_config["reinit"],
+                                "reset_weights": encoder_config["reset"],
                                 "experiment_name": experiment_name
                             })
                     else:
@@ -180,7 +180,7 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
                             "hyperparams": None,
                             "bpe_config": bpe_config,
                             "encoder_type": encoder_config["type"],
-                            "reinit_weights": encoder_config["reinit"],
+                            "reset_weights": encoder_config["reset"],
                             "experiment_name": experiment_name
                         })
     return tasks
@@ -219,8 +219,8 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
     if task.get("encoder_type") and task["encoder_type"] != "bert":
         cmd.extend(["--encoder_type", task["encoder_type"]])
     
-    if task.get("reinit_weights", False):
-        cmd.append("--reinit_weights")
+    if task.get("reset_weights", False):
+        cmd.append("--reset_weights")
 
     if combined_config_json:
         cmd.extend(["--config_json", combined_config_json])

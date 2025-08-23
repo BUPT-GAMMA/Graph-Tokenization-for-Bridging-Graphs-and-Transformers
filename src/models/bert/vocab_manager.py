@@ -7,7 +7,7 @@ Vocabulary Manager for Custom BERT
 
 import json
 import pickle
-from typing import List, Dict, Set, Optional, Union # type: ignore
+from typing import List, Dict, Optional # type: ignore
 from collections import Counter
 import torch
 import warnings
@@ -113,7 +113,7 @@ class VocabManager:
         for count in self.token_counts.values():
             freq_distribution[count] = freq_distribution.get(count, 0) + 1
         
-        print(f"📊 词频分布统计:")
+        print("📊 词频分布统计:")
         print(f"   总token类型数: {len(self.token_counts)}")
         print(f"   最高频率: {max(self.token_counts.values()) if self.token_counts else 0}")
         print(f"   最低频率: {min(self.token_counts.values()) if self.token_counts else 0}")
@@ -344,7 +344,12 @@ class VocabManager:
         instance.token_counts = Counter(vocab_data['token_counts'])
         instance._built = True
         
-        print(f"词表已从 {load_path} 加载完成，词表大小: {instance.vocab_size}")
+        # 仅首次打印详细加载信息；后续调用以简短提示为主
+        if not hasattr(cls, '_loaded_once'):
+            print(f"词表已从 {load_path} 加载完成，词表大小: {instance.vocab_size}")
+            setattr(cls, '_loaded_once', True)
+        else:
+            print("✅ 词表缓存命中")
         return instance
 
 

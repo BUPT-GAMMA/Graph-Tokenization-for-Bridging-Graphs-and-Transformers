@@ -18,8 +18,17 @@ from abc import ABC, abstractmethod
 import torch
 import torch.nn as nn
 
+
 from src.models.bert.vocab_manager import VocabManager
 from src.models.utils.pooling import pool_sequence
+from src.utils.logger import get_logger
+
+# 模型相关导入
+from transformers import BertModel, AutoModel
+from src.models.bert.config import BertConfig
+
+# 创建模块级logger
+logger = get_logger(__name__)
 
 
 class BaseEncoder(nn.Module, ABC):
@@ -68,10 +77,6 @@ class BertEncoder(BaseEncoder):
 
     def __init__(self, model_name: str, config: Dict[str, Any], vocab_manager: VocabManager):
         super().__init__(model_name, config, vocab_manager)
-
-        # 🔧 直接重构原有逻辑，不再依赖备份代码
-        from transformers import BertModel
-        from src.models.bert.config import BertConfig
         
         # 创建BERT配置（与原create_bert_mlm逻辑一致）
         bert_config = BertConfig(
@@ -97,6 +102,28 @@ class BertEncoder(BaseEncoder):
         # 保存配置和词表管理器
         self.bert_config = bert_config
         self._hidden_size = int(config.get('hidden_size', 512))
+        
+        # 统一从config读取reset标志
+        reset_weights = bool(config.get('reset_weights', False))
+        if reset_weights:
+            self._reinitialize_bert_weights()
+    
+    def _reinitialize_bert_weights(self):
+        """重新初始化BERT权重"""
+        logger.info("🔄 重新初始化BERT权重...")
+        for module in self.bert.modules():
+            if isinstance(module, torch.nn.Linear):
+                torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+                if module.bias is not None:
+                    torch.nn.init.zeros_(module.bias)
+            elif isinstance(module, torch.nn.Embedding):
+                torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+                if hasattr(module, 'padding_idx') and module.padding_idx is not None:
+                    torch.nn.init.zeros_(module.weight[module.padding_idx])
+            elif isinstance(module, torch.nn.LayerNorm):
+                torch.nn.init.ones_(module.weight)
+                torch.nn.init.zeros_(module.bias)
+        logger.info("✅ BERT权重重新初始化完成")
 
     def encode(self, input_ids: torch.Tensor, attention_mask: torch.Tensor | None = None, pooling_method: str = 'mean') -> torch.Tensor:
         """句子级编码 - 获取池化后的表示 [batch, hidden_size]"""
@@ -121,12 +148,9 @@ class GTEEncoder(BaseEncoder):
     def __init__(self, model_name: str, config: Dict[str, Any], vocab_manager: VocabManager):
         super().__init__(model_name, config, vocab_manager)
 
-        from transformers import AutoModel
-        import torch.nn as nn
-
         optimization = config.get('optimization', {})
-        reinit_weights = config.get('reinit_weights', False)  # 🆕 是否重新初始化所有权重
-
+        reset_weights = bool(config.get('reset_weights', False))  # 统一从config读取reset标志
+        
         self.gte_model = AutoModel.from_pretrained(
             model_name,
             trust_remote_code=True,
@@ -144,9 +168,10 @@ class GTEEncoder(BaseEncoder):
         emb = self.gte_model.get_input_embeddings()
         emb.padding_idx = pad_id
         
-        if reinit_weights:
+        if reset_weights:
             # 🆕 重新初始化整个GTE模型的所有权重
-            print(f"🔄 重新初始化GTE整个模型权重，词表大小: {new_vocab_size}")
+            logger.info(f"🔄 重置GTE整个模型权重，词表大小: {new_vocab_size}")
+            logger.warning("⚠️ 警告：这将丢弃GTE的预训练权重！")
             
             # 重新初始化所有参数
             for module in self.gte_model.modules():
@@ -164,11 +189,12 @@ class GTEEncoder(BaseEncoder):
             with torch.no_grad():
                 emb.weight[pad_id].zero_()
                 
-            print(f"✅ GTE整个模型权重已重新初始化，适配token序列预训练")
+            logger.info("✅ GTE整个模型权重已重新初始化，适配token序列预训练")
         else:
-            # 原有逻辑：只清零pad位置
+            # 原有逻辑：只清零pad位置，保持预训练权重
             with torch.no_grad():
                 emb.weight[pad_id].zero_()
+            logger.info("📚 保持GTE预训练权重，仅适配词表")
 
         self._hidden_size = self.gte_model.config.hidden_size
         # 使用底层 config，保持单一数据源

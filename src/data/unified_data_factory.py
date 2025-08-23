@@ -42,7 +42,7 @@ class UnifiedDataFactory:
         """
         # 支持直接注册类或延迟导入的工厂函数
         cls._registry[name] = loader_class_or_factory
-        logger.info(f"📝 注册数据加载器: {name} -> {getattr(loader_class_or_factory, '__name__', 'factory_function')}")
+        # logger.info(f"📝 注册数据加载器: {name} -> {getattr(loader_class_or_factory, '__name__', 'factory_function')}")
     
     @classmethod
     def create(cls, dataset_name: str, config: ProjectConfig, 

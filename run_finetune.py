@@ -112,6 +112,9 @@ def _ensure_utf8_streams():
             except Exception:
                 pass
 
+    # 降噪：静默TensorFlow冗余日志（与本训练流程无关）
+    os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")  # 只显示WARNING及以上
+
 
 def _configure_output_mode(offline: bool):
     """根据 offline 模式配置输出：禁用颜色、去除ANSI、确保UTF-8。"""
