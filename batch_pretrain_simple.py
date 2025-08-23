@@ -189,7 +189,8 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
 def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
              combined_config_json: Optional[str], log_dir: Optional[str],
              commands_only: bool = False, plain_logs: bool = False,
-             commands_file: Optional[str] = None) -> Optional[subprocess.Popen]:
+             commands_file: Optional[str] = None,
+             commands_stdout: bool = False) -> Optional[subprocess.Popen]:
     """在指定GPU上运行单个任务"""
     cmd = [
         "python", "run_pretrain.py",
@@ -239,15 +240,17 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
 
     safe_cmd_str = ' '.join(shlex.quote(part) for part in cmd)
 
-    if commands_only:
-        # 只记录命令（包含 CUDA_VISIBLE_DEVICES 环境）到统一文件（追加）
-        record_line = f"CUDA_VISIBLE_DEVICES={gpu_id} {safe_cmd_str}\n"
-        # 默认写入当前目录 commands.list；如提供 commands_file 则使用之
-        dest_file = commands_file or 'commands.list'
-        Path(os.path.dirname(dest_file) or '.').mkdir(parents=True, exist_ok=True)
-        with open(dest_file, 'a', encoding='utf-8') as fh:
-            fh.write(record_line)
-        print(f"✍️ 记录命令到 {dest_file}: {record_line.strip()}")
+    if commands_only or commands_stdout:
+        # 只输出命令（包含 CUDA_VISIBLE_DEVICES 环境）
+        record_line = f"CUDA_VISIBLE_DEVICES={gpu_id} {safe_cmd_str}"
+        if commands_stdout:
+            print(record_line)
+        else:
+            dest_file = commands_file or 'commands.list'
+            Path(os.path.dirname(dest_file) or '.').mkdir(parents=True, exist_ok=True)
+            with open(dest_file, 'a', encoding='utf-8') as fh:
+                fh.write(record_line + "\n")
+            print(f"✍️ 记录命令到 {dest_file}: {record_line}")
         return None
 
     # 执行模式：重定向子进程输出
@@ -343,6 +346,7 @@ def main():
     parser.add_argument("--log_style", type=str, choices=["online", "offline"], default=None, help="日志样式：online=使用tqdm；offline=每个epoch按10%输出摘要")
     parser.add_argument("--commands_only", action="store_true", help="仅记录将要运行的命令到统一文件（append），不实际执行")
     parser.add_argument("--commands_file", type=str, default=None, help="commands_only 模式下的统一命令文件；未指定则写入 <log_dir>/commands.list")
+    parser.add_argument("--commands_stdout", action="store_true", help="仅将将要运行的命令打印到标准输出，不执行也不写文件")
     parser.add_argument("--plain_logs", action="store_true", help="将子任务输出写入无ANSI/emoji的纯文本日志，解决乱码问题")
 
     args = parser.parse_args()
@@ -387,18 +391,19 @@ def main():
     if args.use_augmentation is not None:
         aug_label = "aug" if args.use_augmentation == "true" else "noaug"
 
-    print("🚀 开始并行预训练...")
-    print(f"实验组: {args.experiment_group}")
-    print(f"数据集: {datasets}")
-    print(f"方法: {methods}")
-    print(f"BPE场景: {scenarios}")
-    print(f"可用GPU: {gpus}")
-    if combined_config_json:
-        print("📝 合并后的JSON覆盖将传入子进程 --config_json")
-    if args.exp_prefix:
-        print(f"🏷️ 实验名前缀: {args.exp_prefix}")
-    if args.tag:
-        print(f"🏷️ 实验名附加标识: {args.tag}")
+    if not args.commands_stdout:
+        print("🚀 开始并行预训练...")
+        print(f"实验组: {args.experiment_group}")
+        print(f"数据集: {datasets}")
+        print(f"方法: {methods}")
+        print(f"BPE场景: {scenarios}")
+        print(f"可用GPU: {gpus}")
+        if combined_config_json:
+            print("📝 合并后的JSON覆盖将传入子进程 --config_json")
+        if args.exp_prefix:
+            print(f"🏷️ 实验名前缀: {args.exp_prefix}")
+        if args.tag:
+            print(f"🏷️ 实验名附加标识: {args.tag}")
 
     # 如果提供了 --log_style，则以 JSON 覆盖传递给子进程（与直接 --log_style 二选一都可生效）
     if args.log_style:
@@ -418,10 +423,11 @@ def main():
         aug_label=aug_label,
         encoders=encoders_list,  # 🆕 传递编码器列表
     )
-    print(f"总任务数: {len(tasks)}")
-    if args.commands_only:
-        target_file = 'commands.list'
-        print(f"✍️ commands_only 模式：仅记录命令到 {target_file}，不执行子任务")
+    if not args.commands_stdout:
+        print(f"总任务数: {len(tasks)}")
+        if args.commands_only:
+            target_file = 'commands.list'
+            print(f"✍️ commands_only 模式：仅记录命令到 {target_file}，不执行子任务")
 
     running_processes = {}
     task_queue = tasks.copy()
@@ -444,8 +450,8 @@ def main():
             for gpu_id in gpus:
                 if gpu_id not in running_processes and task_queue:
                     task = task_queue.pop(0)
-                    process = run_task(task, gpu_id, args.experiment_group, combined_config_json, args.log_dir, args.commands_only, args.plain_logs, args.commands_file)
-                    if args.commands_only:
+                    process = run_task(task, gpu_id, args.experiment_group, combined_config_json, args.log_dir, args.commands_only, args.plain_logs, args.commands_file, args.commands_stdout)
+                    if args.commands_only or args.commands_stdout:
                         continue
                     running_processes[gpu_id] = (process, task)
                     if (not hasattr(process, "_tg_log_fh")) and (not args.plain_logs):
@@ -474,26 +480,27 @@ def main():
             for gpu_id in completed_gpus:
                 del running_processes[gpu_id]
 
-            if running_processes:
+            if running_processes and not args.commands_stdout:
                 time.sleep(2)
 
-        print("\n" + "="*60)
-        print("📊 任务执行总结")
-        print("="*60)
-        print(f"✅ 成功完成: {len(completed_tasks)}")
-        print(f"❌ 执行失败: {len(failed_tasks)}")
+        if not args.commands_stdout:
+            print("\n" + "="*60)
+            print("📊 任务执行总结")
+            print("="*60)
+            print(f"✅ 成功完成: {len(completed_tasks)}")
+            print(f"❌ 执行失败: {len(failed_tasks)}")
 
-        if completed_tasks:
-            print("\n✅ 成功任务:")
-            for task in completed_tasks:
-                print(f"  - {task['experiment_name']}")
+            if completed_tasks:
+                print("\n✅ 成功任务:")
+                for task in completed_tasks:
+                    print(f"  - {task['experiment_name']}")
 
-        if failed_tasks:
-            print("\n❌ 失败任务:")
-            for task, code in failed_tasks:
-                print(f"  - {task['experiment_name']} (退出码: {code})")
+            if failed_tasks:
+                print("\n❌ 失败任务:")
+                for task, code in failed_tasks:
+                    print(f"  - {task['experiment_name']} (退出码: {code})")
 
-        print("\n🎉 所有任务完成!")
+            print("\n🎉 所有任务完成!")
         return 0 if not failed_tasks else 1
 
     except Exception as e:
