@@ -135,7 +135,6 @@ def build_regression_loaders(
     
     # 创建BPE worker初始化函数（统一创建，mode控制行为）
     bpe_worker_init_fn = None
-    num_workers = 4  # 统一使用多进程
     if udi is not None and method is not None:
         try:
             from src.data.bpe_transform import create_bpe_worker_init_fn_from_udi
@@ -145,15 +144,17 @@ def build_regression_loaders(
             import logging
             logger_instance = logging.getLogger("tokenizerGraph.data")
             logger_instance.warning(f"BPE创建失败，回退到无BPE模式: {e}")
-            num_workers = 0
     
+    _num_workers = int(getattr(getattr(config, 'system', object()), 'num_workers', 0) or 0)
+    _persistent_workers = bool(getattr(getattr(config, 'system', object()), 'persistent_workers', False) and _num_workers > 0)
     train_dl = torch.utils.data.DataLoader(
         train_ds, 
         batch_size=config.bert.finetuning.batch_size, 
         shuffle=True, 
         pin_memory=True,
         worker_init_fn=bpe_worker_init_fn,
-        num_workers=num_workers
+        num_workers=_num_workers,
+        persistent_workers=_persistent_workers,
     )
     val_dl = torch.utils.data.DataLoader(
         val_ds, 
@@ -161,7 +162,8 @@ def build_regression_loaders(
         shuffle=False, 
         pin_memory=True,
         worker_init_fn=bpe_worker_init_fn,
-        num_workers=num_workers
+        num_workers=_num_workers,
+        persistent_workers=_persistent_workers,
     )
     test_dl = torch.utils.data.DataLoader(
         test_ds, 
@@ -169,7 +171,8 @@ def build_regression_loaders(
         shuffle=False, 
         pin_memory=True,
         worker_init_fn=bpe_worker_init_fn,
-        num_workers=num_workers
+        num_workers=_num_workers,
+        persistent_workers=_persistent_workers,
     )
     return train_dl, val_dl, test_dl, normalizer
 
@@ -224,13 +227,16 @@ def build_classification_loaders(
             logger_instance.warning(f"BPE创建失败，回退到无BPE模式: {e}")
             num_workers = 0
     
+    _num_workers = int(getattr(getattr(config, 'system', object()), 'num_workers', 0) or 0)
+    _persistent_workers = bool(getattr(getattr(config, 'system', object()), 'persistent_workers', False) and _num_workers > 0)
     train_dl = torch.utils.data.DataLoader(
         train_ds, 
         batch_size=config.bert.finetuning.batch_size, 
         shuffle=True, 
         pin_memory=True,
         worker_init_fn=bpe_worker_init_fn,
-        num_workers=num_workers
+        num_workers=_num_workers,
+        persistent_workers=_persistent_workers,
     )
     val_dl = torch.utils.data.DataLoader(
         val_ds, 
@@ -238,7 +244,8 @@ def build_classification_loaders(
         shuffle=False, 
         pin_memory=True,
         worker_init_fn=bpe_worker_init_fn,
-        num_workers=num_workers
+        num_workers=_num_workers,
+        persistent_workers=_persistent_workers,
     )
     test_dl = torch.utils.data.DataLoader(
         test_ds, 
@@ -246,7 +253,8 @@ def build_classification_loaders(
         shuffle=False, 
         pin_memory=True,
         worker_init_fn=bpe_worker_init_fn,
-        num_workers=num_workers
+        num_workers=_num_workers,
+        persistent_workers=_persistent_workers,
     )
     return train_dl, val_dl, test_dl
 
