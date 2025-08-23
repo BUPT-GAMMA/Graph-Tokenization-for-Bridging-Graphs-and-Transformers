@@ -425,8 +425,13 @@ def main():
             if isinstance(value, (int, float)):
                 print(f"  {metric}: {value:.4f}")
         
-        sys.exit(0)
-        return 0
+        try:
+            sys.stdout.flush()
+            sys.stderr.flush()
+        except Exception:
+            pass
+        os._exit(0)
+        print("exit后仍未结束！！！！！")
         
     except KeyboardInterrupt:
         print("\n⚠️ 用户中断训练")
