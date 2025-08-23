@@ -225,7 +225,6 @@ def build_classification_loaders(
             import logging
             logger_instance = logging.getLogger("tokenizerGraph.data")
             logger_instance.warning(f"BPE创建失败，回退到无BPE模式: {e}")
-            num_workers = 0
     
     _num_workers = int(getattr(getattr(config, 'system', object()), 'num_workers', 0) or 0)
     _persistent_workers = bool(getattr(getattr(config, 'system', object()), 'persistent_workers', False) and _num_workers > 0)
