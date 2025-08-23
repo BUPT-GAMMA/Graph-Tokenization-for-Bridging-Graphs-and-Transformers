@@ -173,10 +173,10 @@ def main():
             print(f"FATAL: --phase-split 参数无效: {args.phase_split}", file=sys.stderr)
             sys.exit(1)
 
-    # 若启用 pairwise，则强制将 split_idx 设为一半，并校验数量
-    if args.pairwise:
+    # 若启用 pair，则强制将 split_idx 设为一半，并校验数量
+    if args.pair:
         if len(tasks) % 2 != 0:
-            print("WARNING: --pairwise 模式要求任务数量为偶数（前后两半数量相等）", file=sys.stderr)
+            print("WARNING: --pair 模式要求任务数量为偶数（前后两半数量相等）", file=sys.stderr)
             #在开头补一个空行
             tasks.insert(0, "")
             # sys.exit(1)
@@ -195,7 +195,7 @@ def main():
                 batch_content = generate_single_task_sbatch_script(task, args.cpus_per_task, job_name, partition=args.partition)
                 print(f"[{i}] {job_name}: {batch_content}")
             print(f"\n[Phase 2] 任务数: {len(tasks) - split_idx}")
-            if args.pairwise:
+            if args.pair:
                 for offset, task in enumerate(tasks[split_idx:], start=0):
                     i = args.task_id_start + offset  # 对应前半编号
                     j = args.task_id_start + split_idx + offset  # 后半编号
@@ -262,7 +262,7 @@ def main():
             submitted += 1
 
         # Phase 2 提交
-        if args.pairwise:
+        if args.pair:
             # 一一对应：第 k 个后半依赖第 k 个前半
             if len(phase1_job_ids) != split_idx:
                 print("FATAL: Phase1 JobID 数量与 split_idx 不一致，无法建立一一对应依赖。", file=sys.stderr)
