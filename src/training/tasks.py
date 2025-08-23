@@ -135,7 +135,7 @@ def build_regression_loaders(
     
     # 创建BPE worker初始化函数（统一创建，mode控制行为）
     bpe_worker_init_fn = None
-    num_workers = 4  # 统一使用多进程
+    num_workers = 1  # 统一使用多进程
     if udi is not None and method is not None:
         try:
             from src.data.bpe_transform import create_bpe_worker_init_fn_from_udi
