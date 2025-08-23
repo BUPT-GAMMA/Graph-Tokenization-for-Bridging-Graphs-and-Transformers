@@ -54,6 +54,34 @@ def read_tasks_from_file(tasks_file_path: str):
     return tasks
 
 
+def read_tasks_from_script(script_path: str):
+    """执行一个脚本（如 .sh 或 .py），将其标准输出的每一行作为一条任务命令。忽略空行和以#开头的行。"""
+    if not os.path.isfile(script_path):
+        print(f"FATAL: 指定的脚本文件不存在: {script_path}", file=sys.stderr)
+        sys.exit(1)
+    try:
+        # 以 /bin/bash 运行 .sh；其他文件也按可执行脚本处理
+        if script_path.endswith('.sh'):
+            proc = subprocess.run(["bash", script_path], check=True, capture_output=True, text=True)
+        else:
+            proc = subprocess.run([script_path], check=True, capture_output=True, text=True)
+        output = proc.stdout
+    except subprocess.CalledProcessError as e:
+        print(f"FATAL: 执行脚本失败: {script_path}", file=sys.stderr)
+        print(f"stderr: {e.stderr}", file=sys.stderr)
+        sys.exit(1)
+    tasks = []
+    for line in output.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith('#'):
+            continue
+        tasks.append(stripped)
+    if not tasks:
+        print("FATAL: 脚本标准输出为空或均为注释/空行。", file=sys.stderr)
+        sys.exit(1)
+    return tasks
+
+
 def sanitize_task_command(task: str) -> str:
     """移除命令中显式设置的 CUDA_VISIBLE_DEVICES，以避免与 Slurm 分配冲突。"""
     tokens = task.strip().split()
@@ -97,9 +125,11 @@ def parse_sbatch_job_id(sbatch_stdout: str):
     return match.group(1)
 
 
+
 def main():
     parser = argparse.ArgumentParser(description="按任务文件逐条提交单卡 sbatch 作业（不扫描资源不指定节点）")
     parser.add_argument("--tasks-file", "-f", default="commands.list", type=str, help="包含任务指令的文本文件（每行一个）")
+    parser.add_argument("--script-file", type=str, default=None, help="可选：执行该脚本并将标准输出的每行作为任务命令")
     parser.add_argument("--cpus-per-task", type=int, default=2, help="每个任务申请的 CPU 数（默认 2）")
     parser.add_argument("--job-name-prefix", type=str, default="gzy", help="作业名前缀（默认 gzy_task）")
     parser.add_argument("--partition", "-p", type=str, default='h01,a01', help="Slurm 分区名（如 a01）。若集群无默认分区，则必须指定")
@@ -115,7 +145,11 @@ def main():
     parser.add_argument("--pairwise", action="store_true", help="启用一一对应依赖：将任务按前后两半划分，后半第k个依赖前半第k个（数量必须相等）")
     args = parser.parse_args()
 
-    tasks = read_tasks_from_file(args.tasks_file)
+    # 联动：如果提供了脚本，则优先用脚本的标准输出作为任务列表；否则读取文件
+    if args.script_file:
+        tasks = read_tasks_from_script(args.script_file)
+    else:
+        tasks = read_tasks_from_file(args.tasks_file)
 
     print("\n" + "=" * 40)
     print(" 提交计划预览")
