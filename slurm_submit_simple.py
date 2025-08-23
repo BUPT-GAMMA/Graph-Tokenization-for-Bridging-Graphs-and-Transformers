@@ -141,9 +141,9 @@ def main():
 
     # 若启用 pairwise，则强制将 split_idx 设为一半，并校验数量
     if args.pairwise:
-        if len(tasks) % 2 != 0:
-            print("FATAL: --pairwise 模式要求任务数量为偶数（前后两半数量相等）", file=sys.stderr)
-            sys.exit(1)
+        # if len(tasks) % 2 != 0:
+        #     print("FATAL: --pairwise 模式要求任务数量为偶数（前后两半数量相等）", file=sys.stderr)
+        #     sys.exit(1)
         split_idx = len(tasks) // 2
 
     if args.dry_run:
