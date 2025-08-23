@@ -284,8 +284,13 @@ def main():
         
         print("\n💡 可以使用以下命令进行微调:")
         print(f"python run_finetune.py --dataset {config.dataset.name} --method {config.serialization.method}")
-        sys.exit(0)
-        return 0
+        try:
+            sys.stdout.flush()
+            sys.stderr.flush()
+        except Exception:
+            pass
+        os._exit(0)
+        print("exit后仍未结束！！！！！")
         
     except KeyboardInterrupt:
         print("\n⚠️ 用户中断训练")
