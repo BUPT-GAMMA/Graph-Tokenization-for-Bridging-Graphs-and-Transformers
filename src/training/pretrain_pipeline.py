@@ -24,7 +24,6 @@ from torch.utils.tensorboard import SummaryWriter
 from config import ProjectConfig
 from src.data.unified_data_interface import UnifiedDataInterface
 from src.data.bpe_transform import create_bpe_worker_init_fn_from_udi
-# from src.models.model_factory import create_universal_model  # 🚫 已弃用，统一使用create_model_from_udi
 from src.models.bert.data import compute_effective_max_length
 from src.models.bert.vocab_manager import VocabManager
 from src.training.loops import train_epoch, evaluate_epoch
