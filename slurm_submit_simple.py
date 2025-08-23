@@ -142,13 +142,12 @@ def main():
     # 任务编号起始
     parser.add_argument("--task-id-start", type=int, default=0, help="任务编号起始值（用于作业名后缀），默认 0")
     # 一一对应依赖：前后两半数量相等，第二半第k个依赖第一半第k个
-    parser.add_argument("--pairwise", action="store_true", help="启用一一对应依赖：将任务按前后两半划分，后半第k个依赖前半第k个（数量必须相等）")
+    parser.add_argument("--pair", action="store_true", help="启用一一对应依赖：将任务按前后两半划分，后半第k个依赖前半第k个（数量必须相等）")
     args = parser.parse_args()
 
     # 联动：如果提供了脚本，则优先用脚本的标准输出作为任务列表；否则读取文件
     if args.script:
         tasks = read_tasks_from_script(args.script)
-        args.pairwise=True
     else:
         tasks = read_tasks_from_file(args.tasks_file)
 
