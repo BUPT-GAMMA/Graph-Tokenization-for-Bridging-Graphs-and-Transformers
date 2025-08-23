@@ -156,9 +156,9 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
         elif mode == "gte-pretrain":
             encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "": False, "suffix": "_gte_keep_pretrained", "direct": False, "pretrain_suffix": "_gte_keep"})
         elif mode == "gte-reset-direct":
-            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "": True, "suffix": "_gte__direct", "direct": True, "pretrain_suffix": "_gte_"})
+            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "": True, "suffix": "_gte_reset_direct", "direct": True, "pretrain_suffix": "_gte_reset"})
         elif mode == "gte-reset-pretrain":
-            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "": True, "suffix": "_gte__pretrained", "direct": False, "pretrain_suffix": "_gte_"})
+            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "": True, "suffix": "_gte_reset_pretrained", "direct": False, "pretrain_suffix": "_gte_reset"})
         else:
             raise ValueError(f"不支持的微调模式: {mode}。支持: bert, bert-pretrain, bert-direct, gte-direct, gte-pretrain, gte-reset-direct, gte-reset-pretrain")
     
