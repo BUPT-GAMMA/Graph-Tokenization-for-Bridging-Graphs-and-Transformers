@@ -19,8 +19,8 @@
  # 生成3种预训练命令：BERT + GTE保持权重 + GTE清空权重
 python batch_pretrain_simple.py \
     --encoders bert,gte,gte-reset \
-    --datasets zinc --methods feuler --bpe_scenarios random \
-    --epochs 20 --experiment_group gte_exploration \
+    --datasets zinc --methods feuler --bpe_scenarios all,raw,random \
+    --epochs 20 --experiment_group gte_exploration1 \
     --use_augmentation true \
     --commands_only \
     # --plain_logs --log_style offline 
@@ -29,8 +29,8 @@ python batch_pretrain_simple.py \
 # 生成5种微调命令：BERT + GTE的4种训练方式
 python batch_finetune_simple.py \
     --finetune_modes bert-pretrain,bert-direct,gte-direct,gte-pretrain,gte-reset-direct,gte-reset-pretrain \
-    --datasets zinc --methods feuler --bpe_scenarios random \
-    --epochs 30 --experiment_group gte_exploration \
+    --datasets zinc --methods feuler --bpe_scenarios all,raw,random \
+    --epochs 30 --experiment_group gte_exploration1 \
     --use_augmentation true \
     --commands_only \
     # --plain_logs --log_style offline 
