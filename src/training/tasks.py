@@ -45,19 +45,21 @@ def build_regression_datasets(
     val_eff = _effective_max_len(val_sequences, max_pos, config)
     test_eff = _effective_max_len(test_sequences, max_pos, config)
 
-    # 创建统一的transforms
-    transforms = create_transforms_from_config(config, vocab_manager.get_valid_tokens(), "regression")
+    # 仅训练集启用增强；验证/测试使用NoOp
+    train_transforms = create_transforms_from_config(config, vocab_manager.get_valid_tokens(), "regression")
+    from src.models.bert.data import NoOpTransform
+    eval_transforms = NoOpTransform()
     
     train_ds = NormalizedRegressionDataset(
-        train_sequences, train_labels, vocab_manager, transforms, train_eff,
+        train_sequences, train_labels, vocab_manager, train_transforms, train_eff,
         graph_ids=train_gids
     )
     val_ds = NormalizedRegressionDataset(
-        val_sequences, val_labels, vocab_manager, transforms, val_eff,
+        val_sequences, val_labels, vocab_manager, eval_transforms, val_eff,
         graph_ids=val_gids
     )
     test_ds = NormalizedRegressionDataset(
-        test_sequences, test_labels, vocab_manager, transforms, test_eff,
+        test_sequences, test_labels, vocab_manager, eval_transforms, test_eff,
         graph_ids=test_gids
     )
 
@@ -88,12 +90,14 @@ def build_classification_datasets(
     val_eff = _effective_max_len(val_sequences, max_pos, config)
     test_eff = _effective_max_len(test_sequences, max_pos, config)
 
-    # 创建统一的transforms
-    transforms = create_transforms_from_config(config, vocab_manager.get_valid_tokens(), "classification")
+    # 仅训练集启用增强；验证/测试使用NoOp
+    train_transforms = create_transforms_from_config(config, vocab_manager.get_valid_tokens(), "classification")
+    from src.models.bert.data import NoOpTransform
+    eval_transforms = NoOpTransform()
     
-    train_ds = ClassificationDataset(train_sequences, train_labels, vocab_manager, transforms, train_eff, train_gids)
-    val_ds = ClassificationDataset(val_sequences, val_labels, vocab_manager, transforms, val_eff, val_gids)
-    test_ds = ClassificationDataset(test_sequences, test_labels, vocab_manager, transforms, test_eff, test_gids)
+    train_ds = ClassificationDataset(train_sequences, train_labels, vocab_manager, train_transforms, train_eff, train_gids)
+    val_ds = ClassificationDataset(val_sequences, val_labels, vocab_manager, eval_transforms, val_eff, val_gids)
+    test_ds = ClassificationDataset(test_sequences, test_labels, vocab_manager, eval_transforms, test_eff, test_gids)
     return train_ds, val_ds, test_ds
 
 
@@ -138,15 +142,15 @@ def build_regression_loaders(
     if udi is not None and method is not None:
         try:
             from src.data.bpe_transform import create_bpe_worker_init_fn_from_udi
-            bpe_worker_init_fn = create_bpe_worker_init_fn_from_udi(udi, config, method)
+            bpe_worker_init_fn = create_bpe_worker_init_fn_from_udi(udi, config, method, split="train")
         except Exception as e:
             # 如果BPE创建失败，回退到无BPE模式（但不静默忽略错误）
             import logging
             logger_instance = logging.getLogger("tokenizerGraph.data")
             logger_instance.warning(f"BPE创建失败，回退到无BPE模式: {e}")
     
-    _num_workers = int(getattr(getattr(config, 'system', object()), 'num_workers', 0) or 0)
-    _persistent_workers = bool(getattr(getattr(config, 'system', object()), 'persistent_workers', False) and _num_workers > 0)
+    _num_workers = int(config.system.num_workers)
+    _persistent_workers = bool(config.system.persistent_workers and _num_workers > 0)
     train_dl = torch.utils.data.DataLoader(
         train_ds, 
         batch_size=config.bert.finetuning.batch_size, 
@@ -161,7 +165,7 @@ def build_regression_loaders(
         batch_size=config.bert.finetuning.batch_size, 
         shuffle=False, 
         pin_memory=True,
-        worker_init_fn=bpe_worker_init_fn,
+        worker_init_fn=create_bpe_worker_init_fn_from_udi(udi, config, method, split="val"),
         num_workers=_num_workers,
         persistent_workers=_persistent_workers,
     )
@@ -170,7 +174,7 @@ def build_regression_loaders(
         batch_size=config.bert.finetuning.batch_size, 
         shuffle=False, 
         pin_memory=True,
-        worker_init_fn=bpe_worker_init_fn,
+        worker_init_fn=create_bpe_worker_init_fn_from_udi(udi, config, method, split="test"),
         num_workers=_num_workers,
         persistent_workers=_persistent_workers,
     )
@@ -219,7 +223,7 @@ def build_classification_loaders(
     if udi is not None and method is not None:
         try:
             from src.data.bpe_transform import create_bpe_worker_init_fn_from_udi
-            bpe_worker_init_fn = create_bpe_worker_init_fn_from_udi(udi, config, method)
+            bpe_worker_init_fn = create_bpe_worker_init_fn_from_udi(udi, config, method, split="train")
         except Exception as e:
             # 如果BPE创建失败，回退到无BPE模式（但不静默忽略错误）
             import logging
@@ -242,7 +246,7 @@ def build_classification_loaders(
         batch_size=config.bert.finetuning.batch_size, 
         shuffle=False, 
         pin_memory=True,
-        worker_init_fn=bpe_worker_init_fn,
+        worker_init_fn=create_bpe_worker_init_fn_from_udi(udi, config, method, split="val"),
         num_workers=_num_workers,
         persistent_workers=_persistent_workers,
     )
@@ -251,7 +255,7 @@ def build_classification_loaders(
         batch_size=config.bert.finetuning.batch_size, 
         shuffle=False, 
         pin_memory=True,
-        worker_init_fn=bpe_worker_init_fn,
+        worker_init_fn=create_bpe_worker_init_fn_from_udi(udi, config, method, split="test"),
         num_workers=_num_workers,
         persistent_workers=_persistent_workers,
     )

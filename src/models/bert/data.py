@@ -277,9 +277,7 @@ class LabelNormalizer:
         """
         assert self.is_fitted, "标准化器尚未拟合，请先调用fit()方法"
         
-        labels_array = np.array(labels)
-        original_shape = labels_array.shape
-        
+        labels_array = np.array(labels)        
         # 处理不同维度
         if labels_array.ndim == 1:
             # 单目标回归：reshape为[N, 1]

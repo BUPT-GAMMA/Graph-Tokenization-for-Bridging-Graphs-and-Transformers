@@ -108,7 +108,7 @@ def train_bert_mlm(
     
     # 创建BPE Transform worker初始化函数（统一创建，mode控制行为）
     try:
-        bpe_worker_init_fn = create_bpe_worker_init_fn_from_udi(udi, config, method)
+        bpe_worker_init_fn = create_bpe_worker_init_fn_from_udi(udi, config, method, split="train")
         bpe_mode = config.serialization.bpe.engine.encode_rank_mode
         if bpe_mode == "none":
             logger.info("📦 BPE模式: none (无压缩，使用原始序列)")
@@ -122,17 +122,19 @@ def train_bert_mlm(
     logger.info("📦 创建数据加载器...")
     
     # 创建带BPE Transform的DataLoader
-    from src.models.bert.data import MLMDataset, create_transforms_from_config
+    from src.models.bert.data import MLMDataset, create_transforms_from_config, NoOpTransform
     from torch.utils.data import DataLoader
     
     # 获取有效的token列表，用于数据增强
     valid_tokens = vocab_manager.get_valid_tokens()
-    transforms = create_transforms_from_config(config, valid_tokens, "mlm")
+    # 仅训练集启用数据增强；验证/测试使用NoOp
+    train_transforms = create_transforms_from_config(config, valid_tokens, "mlm")
+    eval_transforms = NoOpTransform()
     
     # 训练集DataLoader
-    train_dataset = MLMDataset(train_sequences, vocab_manager, transforms, effective_max_length, config.bert.pretraining.mask_prob)
-    _num_workers = int(getattr(getattr(config, 'system', object()), 'num_workers', 0) or 0)
-    _persistent_workers = bool(getattr(getattr(config, 'system', object()), 'persistent_workers', False) and _num_workers > 0)
+    train_dataset = MLMDataset(train_sequences, vocab_manager, train_transforms, effective_max_length, config.bert.pretraining.mask_prob)
+    _num_workers = int(config.system.num_workers)
+    _persistent_workers = bool(config.system.persistent_workers and _num_workers > 0)
     train_dataloader = DataLoader(
         train_dataset, 
         batch_size=config.bert.pretraining.batch_size, 
@@ -144,13 +146,13 @@ def train_bert_mlm(
     )
     
     # 验证集DataLoader
-    val_dataset = MLMDataset(val_sequences, vocab_manager, transforms, effective_max_length, config.bert.pretraining.mask_prob)
+    val_dataset = MLMDataset(val_sequences, vocab_manager, eval_transforms, effective_max_length, config.bert.pretraining.mask_prob)
     val_dataloader = DataLoader(
         val_dataset, 
         batch_size=config.bert.pretraining.batch_size, 
         shuffle=False, 
         pin_memory=True,
-        worker_init_fn=bpe_worker_init_fn,
+        worker_init_fn=create_bpe_worker_init_fn_from_udi(udi, config, method, split="val"),
         num_workers=_num_workers,
         persistent_workers=_persistent_workers,
     )

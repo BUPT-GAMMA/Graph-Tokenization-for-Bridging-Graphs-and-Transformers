@@ -69,17 +69,17 @@ def _resolve_pretrained_path_internal(config, pretrain_exp_name, pretrained_dir)
         for subdir in ['best', 'final']:  # best优先
             candidate = pretrain_path / subdir
             if candidate.exists() and _validate_model_dir(candidate):
-                logger.info(f"✅ 从指定预训练实验找到模型: {pretrain_exp_name} -> {candidate}")
+                logger.info(f"✅ 从指定预训练实验找到模型: {pretrain_exp_name} -> {candidate} 作为预训练权重")
                 return str(candidate)
         
-        logger.warning(f"⚠️ 预训练实验 {pretrain_exp_name} 未找到有效模型")
+        logger.info(f"⚠️ 从pretrain_exp_name: {pretrain_exp_name} 中未找到有效模型")
     
     # 3. 使用当前experiment_name（最低优先级）
     base_dir = config.get_model_dir()
     for subdir in ['best', 'final']:  # best优先
         candidate = base_dir / subdir
         if candidate.exists() and _validate_model_dir(candidate):
-            logger.debug(f"✅ 在当前实验目录找到模型: {candidate}")
+            logger.info(f"✅ 采用experiment_name: {config.experiment_name} 找到模型")
             return str(candidate)
     
     return None

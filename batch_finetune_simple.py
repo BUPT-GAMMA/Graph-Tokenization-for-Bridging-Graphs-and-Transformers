@@ -189,7 +189,7 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
                                 "hyperparams": params,
                                 "bpe_config": bpe_config,
                                 "encoder_type": encoder_config["type"],
-                                "_weights": encoder_config[""],
+                                "reset_weights": encoder_config[""],
                                 "pretrain_exp_name": pretrain_exp_name,
                                 "experiment_name": experiment_name
                             })
