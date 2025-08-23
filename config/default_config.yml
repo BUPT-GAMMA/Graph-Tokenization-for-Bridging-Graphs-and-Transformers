@@ -146,7 +146,7 @@ logging:
   tensorboard_log_dir: logs/tensorboard
   
   # WandB配置
-  use_wandb: true  # 是否启用WandB
+  use_wandb: false  # 是否启用WandB
   wandb_project: tokenizerGraph  # WandB项目名称（可被环境变量WANDB_PROJECT覆盖）
   wandb_entity: null  # WandB实体名称（可被环境变量WANDB_ENTITY覆盖）
   wandb_offline: true  # 是否强制离线模式（true=离线，false=自动检测，可被环境变量WANDB_MODE覆盖）

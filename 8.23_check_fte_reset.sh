@@ -20,7 +20,7 @@
 python batch_pretrain_simple.py \
     --encoders bert,gte,gte-reset \
     --datasets zinc --methods feuler --bpe_scenarios all,raw,random \
-    --epochs 20 --experiment_group gte_exploration1 \
+    --epochs 20 --learning_rate 5e-4 --experiment_group gte_exploration1 \
     --use_augmentation true \
     --commands_only \
     # --plain_logs --log_style offline 
@@ -30,7 +30,7 @@ python batch_pretrain_simple.py \
 python batch_finetune_simple.py \
     --finetune_modes bert-pretrain,bert-direct,gte-direct,gte-pretrain,gte-reset-direct,gte-reset-pretrain \
     --datasets zinc --methods feuler --bpe_scenarios all,raw,random \
-    --epochs 30 --experiment_group gte_exploration1 \
+    --epochs 30 --learning_rate 5e-5 --experiment_group gte_exploration1 \
     --use_augmentation true \
     --commands_only \
     # --plain_logs --log_style offline 
