@@ -236,7 +236,7 @@ def main():
         pass
 
     # 打印配置摘要
-    print_config_summary(config)
+    # print_config_summary(config)
     
     # 运行预训练
     try:

@@ -36,7 +36,7 @@ def run_finetune(
     method = config.serialization.method
     
     # 显示启动配置
-    display_startup_config(config, dataset_name, method, "微调")
+    display_startup_config(logger, config, dataset_name, method, "微调")
 
     udi = UnifiedDataInterface(config=config, dataset=dataset_name)
     task = udi.get_dataset_task_type()
@@ -46,7 +46,7 @@ def run_finetune(
     from src.models.bert.data import compute_effective_max_length
     
     # 加载数据来计算有效长度
-    display_stage_separator("加载原始数据与label")
+    display_stage_separator(logger, "加载原始数据与label")
     train, val, test = udi.get_training_data_flat(method=method)
     all_sequences = train + val + test
     effective_max_length = compute_effective_max_length(all_sequences, config)
@@ -58,7 +58,7 @@ def run_finetune(
     if effective_max_length != original_max_seq_length:
         logger.warning(f"⚠️ 调整最大序列长度: {original_max_seq_length} → {effective_max_length} (基于数据计算)")
     
-    display_stage_separator("模型创建", f"创建{task}微调模型")
+    display_stage_separator(logger, "模型创建", f"创建{task}微调模型")
 
     # 🆕 简化：直接创建微调模型，支持灵活的预训练加载
     model, task_handler = build_task_model(
@@ -72,10 +72,9 @@ def run_finetune(
     # 显示模型信息
     vocab_manager = udi.get_vocab(method=method)
     check_vocab_compatibility(all_sequences, vocab_manager)
-    vocab_size = vocab_manager.vocab_size
-    display_model_info(model, task, config.encoder.type, vocab_size)
+    display_model_info(logger, model, task, config.encoder.type)
     
-    display_stage_separator("数据加载器", "创建数据加载器")
+    display_stage_separator(logger, "数据加载器", "创建数据加载器")
     if task == "regression":
         train_dl, val_dl, test_dl, normalizer = build_regression_loaders(
             config, udi, method
@@ -94,7 +93,7 @@ def run_finetune(
     else:
         raise ValueError(f"不支持的任务类型: {task}")
 
-    display_stage_separator("训练设置", "构建优化器和调度器，以及日志记录器")
+    display_stage_separator(logger, "训练设置", "构建优化器和调度器，以及日志记录器")
     total_steps = len(train_dl) * config.bert.finetuning.epochs
     optimizer, scheduler = build_from_config(model, config, total_steps=total_steps, stage="finetune")
 
@@ -149,14 +148,13 @@ def run_finetune(
     train_start_time = time.time()
     steps_per_epoch = len(train_dl)
     log_interval = steps_per_epoch//10
-    best_val_pk = None
     # 追踪最后一轮用于汇总写盘
     last_train_loss: float | None = None
     last_val_metrics: Dict[str, float] | None = None
     last_learning_rate: float | None = None
 
     best_epoch_index: int | None = None
-    display_stage_separator("训练循环", "开始训练循环")
+    display_stage_separator(logger, "训练循环", "开始训练循环")
     pk = task_handler.primary_metric
     for epoch in range(config.bert.finetuning.epochs):
         epoch_start = time.time()
@@ -221,66 +219,57 @@ def run_finetune(
         epoch_times.append(epoch_time)
 
         # 记录每个 epoch 的关键日志
-        try:
-            assert isinstance(train_stats, dict) and "loss" in train_stats, "训练统计数据格式错误，期望包含 'loss' 字段的字典"
-            train_loss = train_stats["loss"]
-            logger.info(
-                f"📈 Finetune Epoch {epoch + 1}: train_loss={train_loss:.4f} | "
-                + ", ".join(f"{k}={v:.4f}" for k, v in val_metrics.items())
-            )
-
-            # 通用指标
-            writer.add_scalar('Loss/Train', float(train_loss), epoch + 1)
-            writer.add_scalar('Loss/Validation', float(val_metrics['val_loss']), epoch + 1)
-            writer.add_scalar('Train/Epoch_Time', float(epoch_time), epoch + 1)
-            current_lr = scheduler.get_last_lr()[0] if scheduler else optimizer.param_groups[0]['lr']
-            writer.add_scalar('Train/Learning_Rate', float(current_lr), epoch + 1)
-            # 记录本轮快照
-            last_train_loss = float(train_loss)
-            try:
-                last_val_metrics = {k: float(v) for k, v in val_metrics.items()}
-            except Exception:
-                last_val_metrics = None
-            try:
-                last_learning_rate = float(current_lr)
-            except Exception:
-                last_learning_rate = None
-
-            # 任务特定指标：仅记录主指标（随任务/数据集自动选择）且分 avg/best
+        assert isinstance(train_stats, dict) and "loss" in train_stats, "训练统计数据格式错误，期望包含 'loss' 字段的字典"
+        train_loss = train_stats["loss"]
+        logger.info(
+            f"📈 Finetune Epoch {epoch + 1}: train_loss={train_loss:.4f} | "
+            + ", ".join(f"{k}={v:.4f}" for k, v in val_metrics.items())
+        )
+        
+        # 通用指标
+        writer.add_scalar('Loss/Train', float(train_loss), epoch + 1)
+        writer.add_scalar('Loss/Validation', float(val_metrics['val_loss']), epoch + 1)
+        writer.add_scalar('Train/Epoch_Time', float(epoch_time), epoch + 1)
+        current_lr = scheduler.get_last_lr()[0] if scheduler else optimizer.param_groups[0]['lr']
+        writer.add_scalar('Train/Learning_Rate', float(current_lr), epoch + 1)
+        
+        # 记录本轮快照
+        last_train_loss = float(train_loss)
+        last_val_metrics = {k: float(v) for k, v in val_metrics.items()}
+        last_learning_rate = float(current_lr)
+            
+        # 任务特定指标：仅记录主指标（随任务/数据集自动选择）且分 avg/best
+        for _mode, _m in val_metrics_by_mode.items():
+            base = f"Val/{_mode}"
+            _v = _m.get(pk)
+            if _v is not None:
+                writer.add_scalar(f'{base}/{pk}', float(_v), epoch + 1)
+                
+        # W&B：epoch级（train_epoch/* 与 val/*，epoch 轴）
+        if wandb_logger is not None:
+            payload = {
+                "train_epoch/loss": float(train_loss),
+                "train_epoch/learning_rate": float(current_lr),
+                "train_epoch/epoch_time": float(epoch_time),
+                "val/loss": float(val_metrics['val_loss']),
+                "epoch": int(epoch + 1),
+            }
+            # 仅记录主指标（分别记录 avg 与 best）
             for _mode, _m in val_metrics_by_mode.items():
-                base = f"Val/{_mode}"
-                _v = _m.get(pk)
-                if _v is not None:
-                    writer.add_scalar(f'{base}/{pk}', float(_v), epoch + 1)
+                _pv = _m.get(pk)
+                if _pv is not None:
+                    payload[f'val/{pk}_{_mode}'] = float(_pv)
+            _epoch_end_global_step = int((epoch + 1) * steps_per_epoch)
+            wandb_logger.log(payload, step=_epoch_end_global_step)
 
-            # W&B：epoch级（train_epoch/* 与 val/*，epoch 轴）
-            if wandb_logger is not None:
-                payload = {
-                    "train_epoch/loss": float(train_loss),
-                    "train_epoch/learning_rate": float(current_lr),
-                    "train_epoch/epoch_time": float(epoch_time),
-                    "val/loss": float(val_metrics['val_loss']),
-                    "epoch": int(epoch + 1),
-                }
-                # 仅记录主指标（分别记录 avg 与 best）
-                for _mode, _m in val_metrics_by_mode.items():
-                    _pv = _m.get(pk)
-                    if _pv is not None:
-                        payload[f'val/{pk}_{_mode}'] = float(_pv)
-                _epoch_end_global_step = int((epoch + 1) * steps_per_epoch)
-                wandb_logger.log(payload, step=_epoch_end_global_step)
-
-        except Exception:
-            pass
         # 使用TaskHandler确定主要指标和优化方向
-        if task_handler.should_maximize_metric:
-            flag = val_metrics[pk] > best_val
-        else:
-            flag = val_metrics[pk] < best_val
+        flag = val_metrics[pk] > best_val if task_handler.should_maximize_metric else val_metrics[pk] < best_val
+        
         if flag:
+            improvement = best_val - val_metrics[pk]
             best_val = val_metrics[pk]
             patience_ctr = 0
-            logger.info(f"🎯 新的最优模型! {pk}: {val_metrics[pk]:.4f}")
+            logger.info(f"🎯 新的最优模型! {pk}={val_metrics[pk]:.4f} (↓ {improvement:.4f})")
             model.save_model(str(best_dir))
             best_epoch_index = epoch + 1
             if task_handler.is_regression_task():
@@ -291,7 +280,7 @@ def run_finetune(
             if patience_ctr >= patience:
                 break
 
-    display_stage_separator("最终保存与测试", "保存模型与测试")
+    display_stage_separator(logger, "最终保存与测试", "保存模型与测试")
     # 最终保存与测试
     model.save_model(str(final_dir))
     if task == "regression":
@@ -364,8 +353,7 @@ def run_finetune(
         avg_epoch_time = (sum(epoch_times) / len(epoch_times)) if epoch_times else 0.0
         writer.add_scalar('Final/Avg_Epoch_Time', float(avg_epoch_time), 0)
         writer.add_scalar('Final/Total_Train_Time', float(total_train_time), 0)
-        writer.add_scalar('Final/Best_Val_Loss', float(best_val), 0)
-        writer.add_scalar(f'Final/Best_Val_{pk}', float(best_val_pk), 0)
+        writer.add_scalar(f'Final/Best_Val_{pk}', float(best_val), 0)
         # 组装最终指标并写入日志目录，包含所有聚合模式的结果
         final_json = {
             'dataset': str(dataset_name),
@@ -382,7 +370,7 @@ def run_finetune(
             'val': {
                 # 主验证结果（向后兼容）
                 **({k: (float(v) if isinstance(v, (int, float)) else v) for k, v in (last_val_metrics or {}).items()}),
-                f'best_val_{pk}': float(best_val_pk),
+                f'best_val_{pk}': float(best_val),
                 # 按聚合模式分别记录最后一轮验证结果
                 'by_aggregation': {
                     mode: {k: (float(v) if isinstance(v, (int, float)) else v) for k, v in mode_metrics.items()} 
@@ -419,7 +407,7 @@ def run_finetune(
                 'final/total_train_time': float(total_train_time),
                 'final/best_val_loss': float(best_val),
             }
-            final_payload[f'final/best_val_{pk}'] = float(best_val_pk)
+            final_payload[f'final/best_val_{pk}'] = float(best_val)
             _final_step = int(config.bert.finetuning.epochs * steps_per_epoch) + 1
             wandb_logger.log(final_payload, step=_final_step)
         writer.close()
@@ -433,7 +421,7 @@ def run_finetune(
     try:
         total_samples = len(train_dl.dataset) * epoch if epoch > 0 else 0
         from src.utils.info_display import display_performance_summary
-        display_performance_summary(total_train_time, total_samples, best_val, best_epoch_index or 0, "微调")
+        display_performance_summary(logger, total_train_time, total_samples, best_val, best_epoch_index or 0, "微调")
     except Exception:
         pass
 

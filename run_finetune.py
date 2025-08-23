@@ -369,7 +369,7 @@ def main():
         return 1
     
     # 打印配置摘要
-    print_config_summary(config)
+    # print_config_summary(config)
     
     # 运行微调
     try:
