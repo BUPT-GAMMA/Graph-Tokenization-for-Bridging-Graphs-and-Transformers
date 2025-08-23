@@ -54,11 +54,11 @@ def train_bert_mlm(
         包含训练结果的字典
     """
     # 显示启动配置
-    display_startup_config(config, config.dataset.name, config.serialization.method, "预训练")
+    display_startup_config(logger, config, config.dataset.name, config.serialization.method, "预训练")
     udi = UnifiedDataInterface(config, config.dataset.name)
     method = config.serialization.method
     
-    display_stage_separator("词表与最大长度", "验证输入数据")
+    display_stage_separator(logger, "词表与最大长度", "验证输入数据")
     # 验证输入数据
     train, val, test = udi.get_training_data_flat(method=method)
 
@@ -76,11 +76,12 @@ def train_bert_mlm(
     
     # 显示数据信息
     display_data_info(
+        logger,
         len(train), len(val), len(test),
         vocab_info['vocab_size'], effective_max_length
     )
     
-    display_stage_separator("模型创建", "创建MLM预训练模型")
+    display_stage_separator(logger, "模型创建", "创建MLM预训练模型")
     
     # 确保配置中的位置嵌入大小与有效长度一致
     config.bert.architecture.max_position_embeddings = int(effective_max_length)
@@ -94,7 +95,7 @@ def train_bert_mlm(
     )
     
     # 显示模型信息
-    display_model_info(mlm_model, 'mlm', config.encoder.type, vocab_info['vocab_size'])
+    display_model_info(logger, mlm_model, 'mlm', config.encoder.type)
     
     # 注意：为避免 CUDA 初始化后再 fork 导致的 DataLoader 退出卡住问题，
     # 先构建 DataLoader（spawn/fork 子进程）再将模型迁移到 GPU。
@@ -109,7 +110,7 @@ def train_bert_mlm(
         raise
     
     # 创建数据加载器
-    display_stage_separator("数据加载器", "创建数据加载器与BPE Transform")
+    display_stage_separator(logger, "数据加载器", "创建数据加载器与BPE Transform")
     
     # 创建带BPE Transform的DataLoader
     from src.models.bert.data import MLMDataset, create_transforms_from_config, NoOpTransform
@@ -170,11 +171,12 @@ def train_bert_mlm(
         mlm_model, config, total_steps=total_steps, stage="pretrain"
     )
     
-    display_stage_separator("训练设置", "构建优化器和调度器")
+    display_stage_separator(logger, "训练设置", "构建优化器和调度器")
     # 显示训练设置
     optimizer_info = f"{optimizer.__class__.__name__}(lr={optimizer.param_groups[0]['lr']})"
     scheduler_info = f"{scheduler.__class__.__name__}" if scheduler else "None"
     display_training_setup(
+        logger,
         total_steps, len(train_dataloader), config.bert.pretraining.epochs,
         optimizer_info, scheduler_info
     )
@@ -224,7 +226,7 @@ def train_bert_mlm(
     best_epoch = 0
     patience_counter = 0
     
-    display_stage_separator("训练循环", "开始训练循环")
+    display_stage_separator(logger, "训练循环", "开始训练循环")
     train_start_time = time.time()
     
     epoch_times: List[float] = []
@@ -318,10 +320,10 @@ def train_bert_mlm(
             # 早停检查和最佳模型保存
             best_model_dir = model_dir / "best"
             if val_loss < best_val_loss:
+                improvement = best_val_loss - val_loss
                 best_val_loss = val_loss
                 best_epoch = epoch
                 patience_counter = 0
-                improvement = best_val_loss - val_loss
                 logger.info(f"🎯 新最优 (epoch {epoch}): val_loss={val_loss:.4f} (↓ {improvement:.4f})")
                 mlm_model.save_model(str(best_model_dir))
                 if not ((best_model_dir / 'pytorch_model.bin').exists() and (best_model_dir / 'config.bin').exists()):
@@ -411,8 +413,8 @@ def train_bert_mlm(
         total_time = time.time() - train_start_time
         total_samples = len(train) * epoch if epoch > 0 else 0
         
-        display_stage_separator("预训练完成", "训练结果总结")
-        display_performance_summary(total_time, total_samples, best_val_loss, best_epoch, "预训练")
+        display_stage_separator(logger, "预训练完成", "训练结果总结")
+        display_performance_summary(logger, total_time, total_samples, best_val_loss, best_epoch, "预训练")
         logger.info(f"💾 模型保存: {model_dir}/best/ (最优), {model_dir}/final/ (最终)")
     
     return {

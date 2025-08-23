@@ -102,13 +102,13 @@ class MLMDataset(Dataset):
         self.max_length = min(max_length, max(len(seq) for seq in token_sequences)+2)
         self.mlm_probability: float = mlm_probability
         self.transforms = transforms
-        print("bert模型训练所用序列长度固定为：", self.max_length)
+        # print("bert模型训练所用序列长度固定为：", self.max_length)
         
         # BPE Transform将在worker_init_fn中初始化，这里先设为None
         self._bpe_transform = None
         self._bpe_checked = False  # 标记是否已检查过BPE Transform
         
-        print(f"MLM数据集创建完成，共 {len(token_sequences)} 个序列")
+        # print(f"MLM数据集创建完成，共 {len(token_sequences)} 个序列")
     
     def _apply_bpe_if_enabled(self, token_sequence: List[int]) -> List[int]:
         """应用BPE编码（延迟初始化，失败时报错）"""
