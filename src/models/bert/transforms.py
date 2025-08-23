@@ -27,7 +27,7 @@ class TokenTransform(ABC):
 class RandomDeletion(TokenTransform):
     """随机删除token"""
     
-    def __init__(self, deletion_prob: float = 0.1, probability: float = 0.3):
+    def __init__(self, deletion_prob: float = 0.01, probability: float = 0.1):
         super().__init__(probability)
         self.deletion_prob = deletion_prob
     
@@ -48,7 +48,7 @@ class RandomDeletion(TokenTransform):
 class RandomInsertion(TokenTransform):
     """随机插入token"""
     
-    def __init__(self, valid_tokens,insertion_prob: float = 0.1, probability: float = 0.3, ):
+    def __init__(self, valid_tokens,insertion_prob: float = 0.01, probability: float = 0.1, ):
         super().__init__(probability)
         self.insertion_prob = insertion_prob
         # 使用实际存在的token列表，而不是vocab_size范围
@@ -71,7 +71,7 @@ class RandomInsertion(TokenTransform):
 class RandomReplacement(TokenTransform):
     """随机替换token"""
     
-    def __init__(self, valid_tokens, replacement_prob: float = 0.1, probability: float = 0.3):
+    def __init__(self, valid_tokens, replacement_prob: float = 0.01, probability: float = 0.1):
         super().__init__(probability)
         self.replacement_prob = replacement_prob
         # 使用实际存在的token列表，而不是vocab_size范围
@@ -92,7 +92,7 @@ class RandomReplacement(TokenTransform):
 class RandomSwap(TokenTransform):
     """随机交换相邻token"""
     
-    def __init__(self, swap_prob: float = 0.1, probability: float = 0.3):
+    def __init__(self, swap_prob: float = 0.01, probability: float = 0.1):
         super().__init__(probability)
         self.swap_prob = swap_prob
     
@@ -111,7 +111,7 @@ class RandomSwap(TokenTransform):
 class RandomTruncation(TokenTransform):
     """随机截取序列的一部分"""
     
-    def __init__(self, min_ratio: float = 0.7, probability: float = 0.3):
+    def __init__(self, min_ratio: float = 0.7, probability: float = 0.1):
         super().__init__(probability)
         self.min_ratio = min_ratio
     
