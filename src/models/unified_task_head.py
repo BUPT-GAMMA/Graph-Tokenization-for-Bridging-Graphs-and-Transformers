@@ -12,6 +12,11 @@ from typing import Dict
 import torch
 import torch.nn as nn
 
+from src.utils.logger import get_logger
+
+# 创建模块级logger
+logger = get_logger(__name__)
+
 
 class UnifiedTaskHead(nn.Module):
     """统一任务头管理器 - 根据任务类型构建不同结构的预测头"""
@@ -33,12 +38,12 @@ class UnifiedTaskHead(nn.Module):
             # MLM任务：简单线性投影，不需要复杂结构
             # input: [batch_size, seq_len, hidden_size] → output: [batch_size, seq_len, vocab_size]
             self.head = nn.Linear(input_dim, output_dim)  # hidden_size → vocab_size
-            print(f"🔤 MLM任务头: Linear({input_dim} → {output_dim})")
+            logger.info(f"🔤 MLM任务头: Linear({input_dim} → {output_dim})")
         else:
             # 其他任务：多层感知机，支持更复杂的特征变换
             # input: [batch_size, hidden_size] → output: [batch_size, output_dim]
             self.head = self._build_configurable_head(input_dim, output_dim, config or {})
-            print(f"🎯 {task_type}任务头: MLP({input_dim} → ... → {output_dim})")
+            logger.info(f"🎯 {task_type}任务头: MLP({input_dim} → ... → {output_dim})")
         
         # 初始化权重
         self._init_weights()

@@ -74,7 +74,7 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
     # 编码器参数
     encoder_group = parser.add_argument_group('编码器参数')
     encoder_group.add_argument("--encoder_type", type=str, choices=["bert", "Alibaba-NLP/gte-multilingual-base"], help="编码器类型")
-    encoder_group.add_argument("--reinit_weights", action="store_true", help="重新初始化编码器权重(用于GTE MLM预训练)")
+    encoder_group.add_argument("--reset_weights", action="store_true", help="重置编码器权重")
 
 
 def add_json_override_args(parser: argparse.ArgumentParser) -> None:
@@ -219,11 +219,9 @@ def apply_args_to_config(config: ProjectConfig, args: argparse.Namespace, *, com
     if hasattr(args, 'encoder_type') and args.encoder_type:
         config.encoder.type = args.encoder_type
         print(f"🎯 encoder.type = {args.encoder_type}")
-    
-    if hasattr(args, 'reinit_weights') and args.reinit_weights:
-        # 通过临时属性传递给模型工厂
-        config._reinit_weights = True
-        print(f"🎯 reinit_weights = True (GTE权重重新初始化)")
+    if hasattr(args, 'reset_weights') and args.reset_weights:
+        setattr(config, 'reset_weights', True)
+        print("🎯 reset_weights = True")
     
 # 删除冗余的finetune_*参数处理，统一使用--epochs等通用参数
 
@@ -377,7 +375,7 @@ def add_all_args(parser: argparse.ArgumentParser, include_finetune: bool = True)
     # 编码器参数 (预训练和微调都需要)
     encoder_group = parser.add_argument_group('编码器配置')
     encoder_group.add_argument("--encoder_type", type=str, choices=["bert", "Alibaba-NLP/gte-multilingual-base"], help="编码器类型")
-    encoder_group.add_argument("--reinit_weights", action="store_true", help="重新初始化编码器权重")
+    encoder_group.add_argument("--reset_weights", action="store_true", help="重置编码器权重（对于gte等有预训练的模型，可能需要重置权重）")
     
     # 任务参数 (仅微调需要)
     if include_finetune:

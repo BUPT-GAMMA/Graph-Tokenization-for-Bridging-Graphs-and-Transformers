@@ -24,6 +24,11 @@ from typing import Dict, Optional
 import torch
 import torch.nn as nn
 
+from src.utils.logger import get_logger
+
+# 创建模块级logger
+logger = get_logger(__name__)
+
 from src.models.unified_encoder import BaseEncoder
 from src.models.unified_task_head import UnifiedTaskHead
 
@@ -154,7 +159,7 @@ class UniversalModel(nn.Module):
         }
         torch.save(config_to_save, os.path.join(save_path, 'config.bin'))
         
-        print(f"🎯 UniversalModel已保存到: {save_path}")
+        logger.info(f"🎯 UniversalModel已保存到: {save_path}")
     
     @classmethod
     def load_model(cls, model_path: str, encoder: BaseEncoder) -> 'UniversalModel':
@@ -176,5 +181,5 @@ class UniversalModel(nn.Module):
         state_dict = torch.load(os.path.join(model_path, 'pytorch_model.bin'), map_location='cpu')
         model.load_state_dict(state_dict)
         
-        print(f"🎯 UniversalModel已从 {model_path} 加载完成")
+        logger.info(f"🎯 UniversalModel已从 {model_path} 加载完成")
         return model

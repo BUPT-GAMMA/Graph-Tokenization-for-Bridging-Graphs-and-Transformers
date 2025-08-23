@@ -11,7 +11,6 @@ from src.data.unified_data_interface import UnifiedDataInterface
 from src.training.tasks import build_regression_loaders, build_classification_loaders
 from src.training.model_builder import build_task_model
 from src.training.evaluate import evaluate_model
-from src.training.finetune_pipeline import load_pretrained_backbone
 from src.utils.logger import get_logger
 
 
