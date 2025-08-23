@@ -1,81 +1,11 @@
 from __future__ import annotations
+from pathlib import Path
 
+from src.models.bert.heads import create_model_from_udi
+from src.utils.logger import get_logger
 
-def load_pretrained_backbone(config, pretrained_dir=None):
-    """统一的预训练模型加载接口，支持BERT和GTE等"""
-    from src.utils.logger import get_logger
-    logger = get_logger(__name__)
-    
-    # 使用新的配置项
-    encoder_type = config.encoder.type
-    logger.info(f"🔧 加载编码器类型: {encoder_type}")
-    
-    if encoder_type == 'bert':
-        return _load_bert_backbone(config, pretrained_dir)
-    elif 'gte' in encoder_type.lower():
-        return _load_gte_backbone(config, pretrained_dir)
-    else:
-        raise ValueError(f"不支持的编码器类型: {encoder_type}")
-
-
-def _load_bert_backbone(config, pretrained_dir=None):
-    """加载BERT backbone - 重构为UniversalModel加载"""
-    from pathlib import Path
-    from src.utils.logger import get_logger
-    logger = get_logger(__name__)
-
-    # 🆕 现在返回UniversalModel而不是BertMLM
-    # 如果有预训练模型，尝试加载为UniversalModel
-    if pretrained_dir is not None:
-        p = Path(pretrained_dir)
-        if (p / 'config.bin').exists() and (p / 'pytorch_model.bin').exists():
-            try:
-                # TODO: 实现UniversalModel加载
-                logger.warning("⚠️ UniversalModel加载暂未实现，使用随机初始化")
-            except Exception:
-                logger.warning("⚠️ 预训练模型格式不兼容，使用随机初始化")
-        else:
-            logger.warning(f"⚠️ 预训练目录无效: {pretrained_dir}")
-
-    # 🔧 简化：直接返回None，让create_model_from_udi处理
-    # 这样可以避免复杂的预训练模型格式转换
-    logger.warning("⚠️ 未找到预训练BERT模型，将使用随机初始化")
-    return None
-
-
-def _load_gte_backbone(config, pretrained_dir=None):
-    """加载GTE backbone"""
-    from src.utils.logger import get_logger
-    logger = get_logger(__name__)
-    logger.info("🚀 创建预训练GTE编码器...")
-    
-    # 获取vocab_manager
-    from src.data.unified_data_interface import UnifiedDataInterface
-    udi = UnifiedDataInterface(config=config, dataset=config.dataset.name)
-    vocab_manager = udi.get_vocab(method=config.serialization.method)
-    
-    # 构建GTE配置
-    gte_config = {
-        'hidden_size': 768,  # GTE固定768维
-        'max_seq_length': 8192,  # GTE支持长序列
-        'vocab_size': vocab_manager.vocab_size,
-        'optimization': {
-            'unpad_inputs': True,
-            'use_memory_efficient_attention': True,
-            'torch_dtype': 'float32'  # 微调时使用float32
-        }
-    }
-    
-    # 创建GTE编码器（使用HuggingFace预训练权重）
-    from src.models.unified_encoder import create_encoder
-    gte_encoder = create_encoder(
-        model_name=config.encoder.type,  # 'Alibaba-NLP/gte-multilingual-base'
-        config=gte_config,
-        vocab_manager=vocab_manager
-    )
-    
-    logger.info(f"✅ GTE编码器创建完成: {gte_encoder.get_hidden_size()}维")
-    return gte_encoder
+# 创建模块级logger
+logger = get_logger(__name__)
 
 
 def build_task_model(
@@ -86,7 +16,7 @@ def build_task_model(
     pretrain_exp_name=None,
 ):
     """
-    构建统一任务模型 - 完全重构版
+    构建统一任务模型 - 重新设计版本，逻辑清晰简洁
     
     Args:
         config: 项目配置
@@ -98,34 +28,61 @@ def build_task_model(
     Returns:
         (model, task_handler) 元组
     """
-    from src.models.bert.heads import create_model_from_udi
+    logger.info("🚀 构建任务模型...")
+    logger.info(f"  数据集: {config.dataset.name}")
+    logger.info(f"  序列化方法: {method}")
+    logger.info(f"  编码器类型: {config.encoder.type}")
     
-    # 🆕 预训练模型加载逻辑内置到create_model_from_udi中
-    # 通过pretrain_exp_name实现灵活的预训练模型指定
-    if pretrain_exp_name is not None:
-        # 临时修改配置中的实验名，用于预训练模型查找
-        original_exp_name = config.experiment_name
-        config.experiment_name = pretrain_exp_name
-        
-        try:
-            model, task_handler = create_model_from_udi(
-                udi, 
-                pretrained_model=None,  # 自动加载
-                pooling_method=config.bert.architecture.pooling_method
-            )
-            return model, task_handler
-        finally:
-            # 恢复原始实验名
-            config.experiment_name = original_exp_name
+    # 🆕 内置路径解析逻辑
+    pretrained_path = _resolve_pretrained_path_internal(config, pretrain_exp_name, pretrained_dir)
+    
+    if pretrained_path:
+        logger.info(f"📦 将使用预训练模型: {pretrained_path}")
     else:
-        # 标准流程
-        model, task_handler = create_model_from_udi(
-            udi, 
-            pretrained_model=None,
-            pooling_method=config.bert.architecture.pooling_method
-        )
+        logger.info("🆕 将创建新模型（无预训练权重）")
+    
+    return create_model_from_udi(udi, pretrained_path)
+
+
+def _resolve_pretrained_path_internal(config, pretrain_exp_name, pretrained_dir):
+    """内部化的预训练路径解析，避免创建额外文件"""
+    
+    def _validate_model_dir(path):
+        """验证模型目录是否包含必需文件"""
+        required_files = ['config.bin', 'pytorch_model.bin']
+        return all((path / f).exists() for f in required_files)
+    
+    # 1. 显式预训练目录优先（最高优先级）
+    if pretrained_dir is not None:
+        logger.debug(f"检查显式预训练目录: {pretrained_dir}")
+        p = Path(pretrained_dir)
+        if p.exists() and _validate_model_dir(p):
+            return str(p)
+        logger.warning(f"⚠️ 指定的预训练目录无效: {pretrained_dir}")
+        return None
+    
+    # 2. 使用pretrain_exp_name（中等优先级）  
+    if pretrain_exp_name is not None:
+        logger.debug(f"使用预训练实验名搜索: {pretrain_exp_name}")
+        pretrain_path = config.get_model_dir().parent / pretrain_exp_name / config.dataset.name / config.serialization.method
         
-        return model, task_handler
+        for subdir in ['best', 'final']:  # best优先
+            candidate = pretrain_path / subdir
+            if candidate.exists() and _validate_model_dir(candidate):
+                logger.info(f"✅ 从指定预训练实验找到模型: {pretrain_exp_name} -> {candidate}")
+                return str(candidate)
+        
+        logger.warning(f"⚠️ 预训练实验 {pretrain_exp_name} 未找到有效模型")
+    
+    # 3. 使用当前experiment_name（最低优先级）
+    base_dir = config.get_model_dir()
+    for subdir in ['best', 'final']:  # best优先
+        candidate = base_dir / subdir
+        if candidate.exists() and _validate_model_dir(candidate):
+            logger.debug(f"✅ 在当前实验目录找到模型: {candidate}")
+            return str(candidate)
+    
+    return None
 
 
 

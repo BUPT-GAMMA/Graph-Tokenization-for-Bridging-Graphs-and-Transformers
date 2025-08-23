@@ -24,13 +24,17 @@ from torch.utils.tensorboard import SummaryWriter
 from config import ProjectConfig
 from src.data.unified_data_interface import UnifiedDataInterface
 from src.data.bpe_transform import create_bpe_worker_init_fn_from_udi
-from src.models.model_factory import create_universal_model
+# from src.models.model_factory import create_universal_model  # 🚫 已弃用，统一使用create_model_from_udi
 from src.models.bert.data import compute_effective_max_length
 from src.models.bert.vocab_manager import VocabManager
 from src.training.loops import train_epoch, evaluate_epoch
 from src.training.optim import build_from_config
 from src.training.callbacks import update_and_check
 from src.utils.logger import get_logger
+from src.utils.info_display import (
+    display_startup_config, display_data_info, display_model_info, 
+    display_training_setup, display_stage_separator, display_performance_summary
+)
 
 logger = get_logger('tokenizerGraph.training.pretrain_pipeline')
 logger.propagate = False
@@ -57,7 +61,8 @@ def train_bert_mlm(
     Returns:
         包含训练结果的字典
     """
-    logger.info("🎓 开始BERT MLM预训练...")
+    # 显示启动配置
+    display_startup_config(config, udi.dataset, method, "预训练")
     
     # 验证输入数据
     required_splits = ["train", "val", "test"]
@@ -65,55 +70,42 @@ def train_bert_mlm(
         assert split in token_sequences, f"缺少数据划分: {split}"
     
     train_sequences = token_sequences["train"]
-    val_sequences = token_sequences["val"]
+    val_sequences = token_sequences["val"]  
     test_sequences = token_sequences["test"]
-    
-    logger.info(f"📊 数据集分割: 训练集 {len(train_sequences)}, 验证集 {len(val_sequences)}, 测试集 {len(test_sequences)}")
     
     # 使用提供的词表
     vocab_info = vocab_manager.get_vocab_info()
-    logger.info(f"✅ 使用提供的词表: {vocab_info['vocab_size']} 个token")
-    
     # 同步配置中的词表大小
     config.bert.architecture.vocab_size = int(vocab_info['vocab_size'])
     
     # 计算有效最大长度
     all_sequences = train_sequences + val_sequences + test_sequences
     effective_max_length = compute_effective_max_length(all_sequences, config)
-    logger.info(f"📏 计算得到有效最大长度: {effective_max_length}")
     
-    # 🆕 创建统一模型（MLM任务）
-    logger.info("🏗️ 创建统一MLM模型...")
+    # 显示数据信息
+    display_data_info(
+        len(train_sequences), len(val_sequences), len(test_sequences),
+        vocab_info['vocab_size'], effective_max_length
+    )
+    
+    display_stage_separator("模型创建", "构建MLM预训练模型")
     
     # 确保配置中的位置嵌入大小与有效长度一致
     config.bert.architecture.max_position_embeddings = int(effective_max_length)
     
-    # 使用统一模型创建接口
-    mlm_model, task_handler = create_universal_model(
-        config=config,
-        vocab_manager=vocab_manager,
-        task_type='mlm'  # 🎯 MLM作为任务类型
+    # 🆕 使用统一模型创建接口（与微调完全一致）
+    from src.models.bert.heads import create_model_from_udi
+    mlm_model, task_handler = create_model_from_udi(
+        udi=udi,
+        pretrained_path=None,        # 🎯 预训练阶段不加载预训练模型
+        force_task_type='mlm'        # 🎯 强制MLM任务类型，覆盖数据集原生任务
     )
     
-    logger.info(f"✅ MLM模型创建完成: 编码器({mlm_model.encoder.get_hidden_size()}维) + MLM头({mlm_model.output_dim})")
+    # 显示模型信息
+    display_model_info(mlm_model, 'mlm', config.encoder.type, vocab_info['vocab_size'])
     
     device = torch.device(config.device)
     mlm_model.to(device)
-    
-    # 打印模型信息（适配UniversalModel）
-    try:
-        hidden_size = mlm_model.encoder.get_hidden_size()
-        vocab_size = vocab_manager.vocab_size
-        logger.info("📊 模型信息:")
-        logger.info(f"  - 编码器类型: {config.encoder.type}")
-        logger.info(f"  - 隐藏维度: {hidden_size}")
-        logger.info(f"  - 词表大小: {vocab_size}")
-        logger.info("  - 任务类型: MLM")
-        logger.info(f"  - 输出维度: {mlm_model.output_dim}")
-    except Exception as e:
-        logger.warning(f"打印模型信息失败: {e}")
-    
-    logger.info(f"✅ 统一MLM模型创建完成: {config.bert.architecture.hidden_size}d_{config.bert.architecture.num_hidden_layers}l_{config.bert.architecture.num_attention_heads}h")
     
     # 创建BPE Transform worker初始化函数（统一创建，mode控制行为）
     try:
@@ -173,11 +165,19 @@ def train_bert_mlm(
     
     # 计算训练步数
     total_steps = len(train_dataloader) * config.bert.pretraining.epochs
-    logger.info(f"📈 总训练步数: {total_steps} ({len(train_dataloader)} steps/epoch × {config.bert.pretraining.epochs} epochs)")
     
     # 构建优化器和调度器
     optimizer, scheduler = build_from_config(
         mlm_model, config, total_steps=total_steps, stage="pretrain"
+    )
+    
+    display_stage_separator("训练设置", "优化器和调度器配置")
+    # 显示训练设置
+    optimizer_info = f"{optimizer.__class__.__name__}(lr={optimizer.param_groups[0]['lr']})"
+    scheduler_info = f"{scheduler.__class__.__name__}" if scheduler else "None"
+    display_training_setup(
+        total_steps, len(train_dataloader), config.bert.pretraining.epochs,
+        optimizer_info, scheduler_info
     )
     
     # 准备日志和模型保存
@@ -236,7 +236,9 @@ def train_bert_mlm(
             # 训练一个epoch
             steps_per_epoch = len(train_dataloader)
             log_interval = steps_per_epoch//10
-            print(f"log_interval: {log_interval}, steps_per_epoch: {steps_per_epoch}")
+            # 只在第一个epoch显示训练参数
+            if epoch == 1:
+                logger.info(f"⚡ 训练参数: {steps_per_epoch} steps/epoch × {config.bert.pretraining.epochs} epochs = {total_steps} total steps")
 
             def _on_step(step_idx: int, batch_loss: float, current_lr: float | None):
                 global_step = (epoch - 1) * steps_per_epoch + step_idx
@@ -324,16 +326,23 @@ def train_bert_mlm(
             
             # 检查是否有改进（val_loss降低了）
             if new_best_val_loss < best_val_loss:
+                improvement = best_val_loss - new_best_val_loss
                 best_val_loss = new_best_val_loss
                 best_epoch = epoch
                 
                 # 保存最佳模型
                 best_model_dir = model_dir / "best"
+                logger.info(f"🎯 新最优 (epoch {epoch}): val_loss={val_loss:.4f} (↓ {improvement:.4f})")
                 mlm_model.save_model(str(best_model_dir))
-                logger.info(f"💾 保存最佳模型 (epoch {epoch}, val_loss={val_loss:.4f}): {best_model_dir}")
+                
+                # 验证保存成功
+                if not ((best_model_dir / 'pytorch_model.bin').exists() and (best_model_dir / 'config.bin').exists()):
+                    logger.error("❌ 最佳模型保存失败 - 缺少必需文件")
             
             if should_stop:
                 logger.info(f"⏹️ 早停触发 (patience={config.bert.pretraining.early_stopping_patience})")
+                logger.info(f"  - 最佳epoch: {best_epoch}")
+                logger.info(f"  - 最佳验证损失: {best_val_loss:.4f}")
                 break
     
     except KeyboardInterrupt:
@@ -363,14 +372,23 @@ def train_bert_mlm(
             wandb_logger.finish()
         
         # 保存最终模型
+        logger.info("💾 保存最终模型...")
         final_model_dir = model_dir / "final"
         final_model_dir.mkdir(parents=True, exist_ok=True)
         mlm_model.save_model(str(final_model_dir))
         
-        # 保存配置
+        # 验证最终模型保存
+        if (final_model_dir / 'pytorch_model.bin').exists() and (final_model_dir / 'config.bin').exists():
+            logger.info(f"✅ 最终模型保存成功: {final_model_dir}")
+        else:
+            logger.error(f"❌ 最终模型保存失败: {final_model_dir}")
+        
+        # 保存训练配置
+        logger.info("📝 保存训练配置...")
         config_path = model_dir / "config.json"
         config_data = {
             "model_config": {
+                "encoder_type": config.encoder.type,
                 "hidden_size": config.bert.architecture.hidden_size,
                 "num_hidden_layers": config.bert.architecture.num_hidden_layers,
                 "num_attention_heads": config.bert.architecture.num_attention_heads,
@@ -379,20 +397,37 @@ def train_bert_mlm(
                 "vocab_size": vocab_info['vocab_size'],
             },
             "training_config": {
+                "task_type": "mlm",
                 "epochs": config.bert.pretraining.epochs,
                 "batch_size": config.bert.pretraining.batch_size,
                 "learning_rate": config.bert.pretraining.learning_rate,
                 "mask_prob": config.bert.pretraining.mask_prob,
+                "final_epoch": epoch,
+                "best_epoch": best_epoch,
+                "best_val_loss": best_val_loss,
+            },
+            "serialization_config": {
+                "method": method,
+                "bpe_mode": config.serialization.bpe.engine.encode_rank_mode,
+                "bpe_merges": config.serialization.bpe.num_merges if config.serialization.bpe.num_merges > 0 else None,
             }
         }
         
         with open(config_path, 'w', encoding='utf-8') as f:
             json.dump(config_data, f, indent=2, ensure_ascii=False)
         
+        if config_path.exists():
+            logger.info(f"✅ 训练配置保存成功: {config_path}")
+        else:
+            logger.error(f"❌ 训练配置保存失败: {config_path}")
+        
+        # 训练总结
         total_time = time.time() - train_start_time
-        logger.info(f"✅ 预训练完成! 总用时: {total_time:.1f}s")
-        logger.info(f"📊 最佳验证损失: {best_val_loss:.4f} (epoch {best_epoch})")
-        logger.info(f"💾 模型保存路径: {model_dir}")
+        total_samples = len(train_sequences) * epoch if epoch > 0 else 0
+        
+        display_stage_separator("预训练完成", "训练结果总结")
+        display_performance_summary(total_time, total_samples, best_val_loss, best_epoch, "预训练")
+        logger.info(f"💾 模型保存: {model_dir}/best/ (最优), {model_dir}/final/ (最终)")
     
     return {
         "mlm_model": mlm_model,

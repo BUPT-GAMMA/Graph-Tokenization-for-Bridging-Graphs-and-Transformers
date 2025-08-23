@@ -341,18 +341,18 @@ class TaskHandler:
 
 def create_task_handler(udi=None, task_type: str = None, vocab_size: int = None) -> TaskHandler:
     """
-    创建任务处理器 - 支持MLM和其他任务类型
+    创建任务处理器 - 支持MLM、强制任务类型和UDI推断
     
     Args:
-        udi: UnifiedDataInterface实例（可选，微调任务使用）
-        task_type: 任务类型（可选，用于MLM等预训练任务）
+        udi: UnifiedDataInterface实例（可选）
+        task_type: 任务类型（可选，强制指定时使用）
         vocab_size: 词表大小（MLM任务需要）
         
     Returns:
         TaskHandler实例
     """
     
-    # 🆕 支持直接指定任务类型（MLM预训练使用）
+    # 模式1: MLM任务（预训练使用）
     if task_type == 'mlm':
         if vocab_size is None:
             raise ValueError("MLM任务需要提供vocab_size")
@@ -360,24 +360,43 @@ def create_task_handler(udi=None, task_type: str = None, vocab_size: int = None)
         logger.info(f"📋 创建MLM任务处理器: vocab_size={vocab_size}")
         return TaskHandler(task_type='mlm', output_dim=vocab_size, vocab_size=vocab_size)
     
-    # 原有逻辑：从UDI推断任务类型（微调任务使用）
+    # 模式2: 强制指定任务类型（测试或特殊情况使用）
+    if task_type is not None and task_type != 'mlm':
+        # 硬编码输出维度，与heads.py保持一致
+        if task_type == 'regression':
+            output_dim = 1
+        elif task_type == 'binary_classification':
+            output_dim = 2
+        elif task_type in ['classification', 'multi_label_classification', 'multi_target_regression']:
+            # 这种情况需要UDI来获取类别数
+            if udi is None:
+                raise ValueError(f"任务类型 {task_type} 需要UDI来确定输出维度")
+            output_dim = udi.get_num_classes()
+        else:
+            raise ValueError(f"不支持的强制任务类型: {task_type}")
+        
+        dataset_name = udi.dataset if udi is not None else "unknown"
+        logger.info(f"📋 创建任务处理器: {task_type} (强制指定, 输出维度={output_dim}, 数据集={dataset_name})")
+        return TaskHandler(task_type, output_dim, dataset_name)
+    
+    # 模式3: 从UDI推断任务类型（标准微调使用）
     if udi is None:
-        raise ValueError("微调任务需要提供udi参数")
+        raise ValueError("需要提供udi参数或明确指定task_type")
         
     inferred_task_type = udi.get_dataset_task_type()
     
     # 获取输出维度
-    if inferred_task_type in ["regression"]:
+    if inferred_task_type == "regression":
         output_dim = 1
-    elif inferred_task_type in ["binary_classification"]:
+    elif inferred_task_type == "binary_classification":
         output_dim = 2
     elif inferred_task_type in ["classification", "multi_label_classification", "multi_target_regression"]:
         output_dim = udi.get_num_classes()
     else:
         raise ValueError(f"无法确定输出维度: {inferred_task_type}")
     
-    dataset_name = udi.dataset  # 从UDI获取数据集名称
+    dataset_name = udi.dataset
     
-    logger.info(f"📋 创建任务处理器: {inferred_task_type} (输出维度={output_dim}, 数据集={dataset_name})")
+    logger.info(f"📋 创建任务处理器: {inferred_task_type} (从UDI推断, 输出维度={output_dim}, 数据集={dataset_name})")
     
     return TaskHandler(inferred_task_type, output_dim, dataset_name)
