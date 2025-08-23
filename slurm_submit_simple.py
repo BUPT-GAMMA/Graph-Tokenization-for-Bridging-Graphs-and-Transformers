@@ -129,7 +129,7 @@ def parse_sbatch_job_id(sbatch_stdout: str):
 def main():
     parser = argparse.ArgumentParser(description="按任务文件逐条提交单卡 sbatch 作业（不扫描资源不指定节点）")
     parser.add_argument("--tasks-file", "-f", default="commands.list", type=str, help="包含任务指令的文本文件（每行一个）")
-    parser.add_argument("--script-file", type=str, default=None, help="可选：执行该脚本并将标准输出的每行作为任务命令")
+    parser.add_argument("--script", type=str, default=None, help="可选：执行该脚本并将标准输出的每行作为任务命令")
     parser.add_argument("--cpus-per-task", type=int, default=2, help="每个任务申请的 CPU 数（默认 2）")
     parser.add_argument("--job-name-prefix", type=str, default="gzy", help="作业名前缀（默认 gzy_task）")
     parser.add_argument("--partition", "-p", type=str, default='h01,a01', help="Slurm 分区名（如 a01）。若集群无默认分区，则必须指定")
@@ -146,8 +146,9 @@ def main():
     args = parser.parse_args()
 
     # 联动：如果提供了脚本，则优先用脚本的标准输出作为任务列表；否则读取文件
-    if args.script_file:
-        tasks = read_tasks_from_script(args.script_file)
+    if args.script:
+        tasks = read_tasks_from_script(args.script)
+        args.pairwise=True
     else:
         tasks = read_tasks_from_file(args.tasks_file)
 
