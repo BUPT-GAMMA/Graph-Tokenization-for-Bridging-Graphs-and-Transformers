@@ -169,27 +169,19 @@ class GTEEncoder(BaseEncoder):
         emb.padding_idx = pad_id
         
         if reset_weights:
-            # 🆕 重新初始化整个GTE模型的所有权重
+            # 重新初始化整个GTE模型参数（逐参数，覆盖所有自定义层）
             logger.info(f"🔄 重置GTE整个模型权重，词表大小: {new_vocab_size}")
             logger.warning("⚠️ 警告：这将丢弃GTE的预训练权重！")
-            
-            # 重新初始化所有参数
-            for module in self.gte_model.modules():
-                if isinstance(module, nn.Linear):
-                    nn.init.normal_(module.weight, mean=0.0, std=0.02)
-                    if module.bias is not None:
-                        nn.init.zeros_(module.bias)
-                elif isinstance(module, nn.Embedding):
-                    nn.init.normal_(module.weight, mean=0.0, std=0.02)
-                elif isinstance(module, nn.LayerNorm):
-                    nn.init.ones_(module.weight)
-                    nn.init.zeros_(module.bias)
-            
-            # 确保pad位置为零
             with torch.no_grad():
+                for name, param in self.gte_model.named_parameters():
+                    # 权重使用N(0, 0.02)，偏置置零
+                    if param.dim() >= 2:
+                        nn.init.normal_(param, mean=0.0, std=0.02)
+                    else:
+                        nn.init.zeros_(param)
+                # pad 行归零
                 emb.weight[pad_id].zero_()
-                
-            logger.info("✅ GTE整个模型权重已重新初始化，适配token序列预训练")
+            logger.info("✅ GTE参数已逐项重置")
         else:
             # 原有逻辑：只清零pad位置，保持预训练权重
             with torch.no_grad():
@@ -219,6 +211,7 @@ class GTEEncoder(BaseEncoder):
 def create_encoder(model_name: str, config: Dict[str, Any], vocab_manager: VocabManager) -> BaseEncoder:
     name = (model_name or '').lower()
     if 'gte' in name or 'alibaba-nlp' in name:
+      #note： 这个是必要的，因为如果不用本地这个目录的话，他会去尝试访问huggingface的。模型接口那个需要联网，而在服务器上会卡死。
         return GTEEncoder('./gte_model', config, vocab_manager)
     # 默认走bert
     return BertEncoder(model_name or 'bert', config, vocab_manager)
