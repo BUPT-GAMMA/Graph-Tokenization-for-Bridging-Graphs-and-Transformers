@@ -32,7 +32,7 @@ DEFAULT_METHODS = ["feuler", "eulerian", "cpp", "fcpp", "topo", "smiles"]
 DEFAULT_GPUS = [0]
 # DEFAULT_BPE_SCENARIOS = ["raw", "all", "random", "gaussian"]
 DEFAULT_BPE_SCENARIOS = ["all"]
-DEFAULT_FT_HYPERPARAMS = [{"epochs": 60, "batch_size": 256, "learning_rate": 5e-5}]
+DEFAULT_FT_HYPERPARAMS = [{"epochs": 60, "batch_size": 128, "learning_rate": 5e-5}]
 DEFAULT_AGGREGATION_MODE = "best"  # or "best"
 DEFAULT_LOG_DIR = "logs/batch_finetune"
 
@@ -148,15 +148,15 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
     encoder_configs = []
     for mode in finetune_modes:
         if mode == "bert":
-            encoder_configs.append({"type": "bert", "reinit": False, "suffix": "", "direct": True})
+            encoder_configs.append({"type": "bert", "": False, "suffix": "", "direct": True})
         elif mode == "gte-direct":
-            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "reinit": False, "suffix": "_gte_keep_direct", "direct": True, "pretrain_suffix": "_gte_keep"})
+            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "": False, "suffix": "_gte_keep_direct", "direct": True, "pretrain_suffix": "_gte_keep"})
         elif mode == "gte-pretrain":
-            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "reinit": False, "suffix": "_gte_keep_pretrained", "direct": False, "pretrain_suffix": "_gte_keep"})
+            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "": False, "suffix": "_gte_keep_pretrained", "direct": False, "pretrain_suffix": "_gte_keep"})
         elif mode == "gte-reset-direct":
-            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "reinit": True, "suffix": "_gte_reinit_direct", "direct": True, "pretrain_suffix": "_gte_reinit"})
+            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "": True, "suffix": "_gte__direct", "direct": True, "pretrain_suffix": "_gte_"})
         elif mode == "gte-reset-pretrain":
-            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "reinit": True, "suffix": "_gte_reinit_pretrained", "direct": False, "pretrain_suffix": "_gte_reinit"})
+            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "": True, "suffix": "_gte__pretrained", "direct": False, "pretrain_suffix": "_gte_"})
         else:
             raise ValueError(f"不支持的微调模式: {mode}。支持: bert, gte-direct, gte-pretrain, gte-reset-direct, gte-reset-pretrain")
     
@@ -187,7 +187,7 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
                                 "hyperparams": params,
                                 "bpe_config": bpe_config,
                                 "encoder_type": encoder_config["type"],
-                                "reinit_weights": encoder_config["reinit"],
+                                "_weights": encoder_config[""],
                                 "pretrain_exp_name": pretrain_exp_name,
                                 "experiment_name": experiment_name
                             })
@@ -210,7 +210,7 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
                             "hyperparams": None,
                             "bpe_config": bpe_config,
                             "encoder_type": encoder_config["type"],
-                            "reinit_weights": encoder_config["reinit"],
+                            "_weights": encoder_config[""],
                             "pretrain_exp_name": pretrain_exp_name,
                             "experiment_name": experiment_name
                         })
@@ -260,8 +260,8 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
     if task.get("encoder_type") and task["encoder_type"] != "bert":
         cmd.extend(["--encoder_type", task["encoder_type"]])
     
-    if task.get("reinit_weights", False):
-        cmd.append("--reinit_weights")
+    if task.get("_weights", False):
+        cmd.append("--_weights")
         
     if task.get("pretrain_exp_name"):
         cmd.extend(["--pretrain_exp_name", task["pretrain_exp_name"]])

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Dict, Any, Literal, Optional
 import time
 import pickle
@@ -15,101 +14,12 @@ from src.training.evaluate import evaluate_model
 from src.training.model_builder import build_task_model
 from src.training.tasks import build_regression_loaders, build_classification_loaders
 from src.utils.logger import get_logger
+from src.utils.info_display import (
+    display_startup_config, display_model_info, display_stage_separator
+)
 
 logger = get_logger('tokenizerGraph.training.finetune_pipeline')
 logger.propagate = False
-
-
-def load_pretrained_backbone(config: ProjectConfig, pretrained_dir: Optional[str] = None, pretrain_exp_name: Optional[str] = None):
-    """统一的预训练模型加载接口 - 重构版"""
-    
-    # 🆕 使用新的配置属性
-    encoder_type = config.encoder.type
-    logger.info(f"🔧 加载编码器类型: {encoder_type}")
-    
-    # 🆕 解析预训练模型路径
-    pretrained_path = _resolve_pretrained_model_path(config, pretrained_dir, pretrain_exp_name)
-    
-    if pretrained_path is None:
-        logger.warning("⚠️ 未找到预训练模型，将使用随机初始化")
-        return None
-    
-    try:
-        # 🆕 尝试加载UniversalModel格式
-        from src.models.universal_model import UniversalModel
-        from src.models.unified_encoder import create_encoder
-        from src.models.model_factory import _build_encoder_config
-        
-        # 检查是否为UniversalModel格式
-        config_path = pretrained_path / 'config.bin'
-        if config_path.exists():
-            # 加载配置，检查格式
-            saved_config = torch.load(config_path, map_location='cpu')
-            
-            if 'task_type' in saved_config:
-                # 新格式：UniversalModel
-                logger.info(f"🔄 加载UniversalModel格式: {pretrained_path}")
-                
-                # 重新创建encoder  
-                udi = UnifiedDataInterface(config=config, dataset=config.dataset.name)
-                vocab_manager = udi.get_vocab(method=config.serialization.method)
-                encoder_config = _build_encoder_config(config, encoder_type)
-                encoder = create_encoder(encoder_type, encoder_config, vocab_manager)
-                
-                # 加载UniversalModel
-                model = UniversalModel.load_model(str(pretrained_path), encoder)
-                logger.info(f"✅ UniversalModel加载成功: {model.task_type}任务")
-                return model
-            else:
-                # 旧格式，跳过加载
-                logger.warning("⚠️ 检测到旧格式预训练模型，跳过加载，使用随机初始化")
-                return None
-        else:
-            logger.warning(f"⚠️ 预训练模型配置文件不存在: {config_path}")
-            return None
-            
-    except Exception as e:
-        logger.warning(f"⚠️ 预训练模型加载失败: {e}，使用随机初始化")
-        return None
-
-
-def _resolve_pretrained_model_path(
-    config: ProjectConfig, 
-    pretrained_dir: Optional[str] = None,
-    pretrain_exp_name: Optional[str] = None
-) -> Optional[Path]:
-    """解析预训练模型路径"""    
-    # 1. 显式指定的目录优先
-    if pretrained_dir is not None:
-        p = Path(pretrained_dir)
-        if p.exists() and (p / 'config.bin').exists():
-            return p
-        logger.warning(f"⚠️ 指定的预训练目录无效: {pretrained_dir}")
-        return None
-    
-    # 2. 使用pretrain_exp_name (如果提供)
-    if pretrain_exp_name is not None:
-        pretrain_path = config.get_model_dir().parent / pretrain_exp_name / config.dataset.name / config.serialization.method
-        for subdir in ['best', 'final']:
-            candidate = pretrain_path / subdir
-            if candidate.exists() and (candidate / 'config.bin').exists():
-                logger.info(f"🔄 从指定预训练实验加载: {pretrain_exp_name}")
-                return candidate
-    
-    # 3. 使用当前experiment_name
-    base_dir = config.get_model_dir()
-    for subdir in ['best', 'final']:
-        candidate = base_dir / subdir
-        if candidate.exists() and (candidate / 'config.bin').exists():
-            return candidate
-    
-    # 4. 未找到任何预训练模型
-    return None
-
-
-# 旧的加载函数已重构到新的load_pretrained_backbone中
-
-
 
 
 def run_finetune(
@@ -127,8 +37,26 @@ def run_finetune(
 ) -> Dict[str, Any]:
     dataset_name = config.dataset.name
     method = config.serialization.method
+    
+    # 显示启动配置
+    display_startup_config(config, dataset_name, method, "微调")
 
     udi = UnifiedDataInterface(config=config, dataset=dataset_name)
+    
+    # 🚨 关键修复：微调阶段也需要计算有效最大长度，确保与预训练一致
+    from src.models.bert.data import compute_effective_max_length
+    
+    # 加载数据来计算有效长度
+    train, val, test = udi.get_training_data_flat(method=method)
+    all_sequences = train + val + test
+    effective_max_length = compute_effective_max_length(all_sequences, config)
+    
+    # 🎯 确保微调阶段的位置嵌入长度与预训练一致
+    original_max_seq_length = config.bert.architecture.max_seq_length
+    config.bert.architecture.max_position_embeddings = int(effective_max_length)
+    
+    if effective_max_length != original_max_seq_length:
+        logger.warning(f"⚠️ 调整最大序列长度: {original_max_seq_length} → {effective_max_length} (基于数据计算)")
     
     # 🆕 自动从UDI推断任务类型（如果未指定）
     if task is None:
@@ -140,6 +68,8 @@ def run_finetune(
         auto_task = udi.get_dataset_task_type()
         if task != auto_task:
             logger.warning(f"⚠️  指定任务类型 '{task}' 与数据集自动推断类型 '{auto_task}' 不匹配")
+    
+    display_stage_separator("模型创建", f"构建{task}微调模型")
 
     # 🆕 简化：直接创建微调模型，支持灵活的预训练加载
     model, task_handler = build_task_model(
@@ -149,6 +79,11 @@ def run_finetune(
         pretrained_dir=pretrained_dir,
         pretrain_exp_name=pretrain_exp_name
     )
+    
+    # 显示模型信息
+    vocab_manager = udi.get_vocab(method=method)
+    vocab_size = vocab_manager.vocab_size
+    display_model_info(model, task, config.encoder.type, vocab_size)
     
     # 🆕 创建数据加载器 - 直接使用统一架构
     if task == "regression":
@@ -230,6 +165,7 @@ def run_finetune(
     last_val_metrics: Dict[str, float] | None = None
     last_learning_rate: float | None = None
 
+    best_epoch_index: int | None = None
     for epoch in range(config.bert.finetuning.epochs):
         epoch_start = time.time()
 
@@ -350,38 +286,16 @@ def run_finetune(
             except Exception:
                 last_learning_rate = None
 
-            # 任务特定指标（仅两个分支：回归/分类）
+            # 任务特定指标：仅记录主指标（随任务/数据集自动选择）且分 avg/best
+            primary_key = task_handler.primary_metric
             if task == "regression":
                 if train_metrics_eval is not None:
                     writer.add_scalar('Regression/Train_MAE', float(train_metrics_eval['mae']), epoch + 1)
-                # 追加：分别记录两种聚合模式
-                for _mode, _m in val_metrics_by_mode.items():
-                    base = f"Val/{_mode}"
-                    # writer.add_scalar(f'{base}/Loss', float(_m['val_loss']), epoch + 1)
-                    writer.add_scalar(f'{base}/MAE', float(_m['mae']), epoch + 1)
-                    writer.add_scalar(f'{base}/MSE', float(_m['mse']), epoch + 1)
-                    # writer.add_scalar(f'{base}/RMSE', float(_m['rmse']), epoch + 1)
-                    # writer.add_scalar(f'{base}/R2', float(_m['r2']), epoch + 1)
-                # 兼容原标签
-                # writer.add_scalar('Regression/Val_MAE', float(val_metrics['mae']), epoch + 1)
-                # writer.add_scalar('Regression/Val_MSE', float(val_metrics['mse']), epoch + 1)
-                # writer.add_scalar('Regression/Val_RMSE', float(val_metrics['rmse']), epoch + 1)
-                # writer.add_scalar('Regression/Val_R2', float(val_metrics['r2']), epoch + 1)
-                # writer.add_scalar('Regression/Val_Correlation', float(val_metrics['correlation']), epoch + 1)
-            else:  # classification
-                # 追加：分别记录两种聚合模式
-                for _mode, _m in val_metrics_by_mode.items():
-                    base = f"Val/{_mode}"
-                    # writer.add_scalar(f'{base}/Loss', float(_m['val_loss']), epoch + 1)
-                    writer.add_scalar(f'{base}/Accuracy', float(_m['accuracy']), epoch + 1)
-                    # writer.add_scalar(f'{base}/Precision', float(_m['precision']), epoch + 1)
-                    # writer.add_scalar(f'{base}/Recall', float(_m['recall']), epoch + 1)
-                    writer.add_scalar(f'{base}/F1', float(_m['f1']), epoch + 1)
-                # 兼容原标签
-                # writer.add_scalar('Classification/Val_Accuracy', float(val_metrics['accuracy']), epoch + 1)
-                # writer.add_scalar('Classification/Val_Precision', float(val_metrics['precision']), epoch + 1)
-                # writer.add_scalar('Classification/Val_Recall', float(val_metrics['recall']), epoch + 1)
-                # writer.add_scalar('Classification/Val_F1', float(val_metrics['f1']), epoch + 1)
+            for _mode, _m in val_metrics_by_mode.items():
+                base = f"Val/{_mode}"
+                _v = _m.get(primary_key)
+                if _v is not None:
+                    writer.add_scalar(f'{base}/{primary_key}', float(_v), epoch + 1)
 
             # W&B：epoch级（train_epoch/* 与 val/*，epoch 轴）
             if wandb_logger is not None:
@@ -395,20 +309,11 @@ def run_finetune(
                 if task == "regression":
                     if train_metrics_eval is not None:
                         payload['train_epoch/mae'] = float(train_metrics_eval['mae'])
-                    payload.update({
-                        'val/mae': float(val_metrics['mae']),
-                        'val/mse': float(val_metrics['mse']),
-                        'val/rmse': float(val_metrics['rmse']),
-                        'val/r2': float(val_metrics['r2']),
-                        # 'val/correlation': float(val_metrics['correlation']),
-                    })
-                else:
-                    payload.update({
-                        'val/accuracy': float(val_metrics['accuracy']),
-                        'val/precision': float(val_metrics['precision']),
-                        'val/recall': float(val_metrics['recall']),
-                        'val/f1': float(val_metrics['f1']),
-                    })
+                # 仅记录主指标（分别记录 avg 与 best）
+                for _mode, _m in val_metrics_by_mode.items():
+                    _pv = _m.get(primary_key)
+                    if _pv is not None:
+                        payload[f'val/{primary_key}_{_mode}'] = float(_pv)
                 _epoch_end_global_step = int((epoch + 1) * steps_per_epoch)
                 wandb_logger.log(payload, step=_epoch_end_global_step)
 
@@ -425,6 +330,7 @@ def run_finetune(
             patience_ctr = 0
             logger.info(f"🎯 新的最优模型! {key}: {val_metrics[key]:.4f}")
             model.save_model(str(best_dir))
+            best_epoch_index = epoch + 1
             if task_handler.is_regression_task():
                 with open(best_dir / "label_normalizer.pkl", "wb") as f:
                     pickle.dump(normalizer, f)
@@ -637,6 +543,14 @@ def run_finetune(
             wandb_logger.finish()
     except Exception as e:
         logger.error(f"最终指标写盘失败: {e}")
+        pass
+
+    # 轻量性能总结（与预训练对齐）
+    try:
+        total_samples = len(train_dl.dataset) * epoch if epoch > 0 else 0
+        from src.utils.info_display import display_performance_summary
+        display_performance_summary(total_train_time, total_samples, best_val, best_epoch_index or 0, "微调")
+    except Exception:
         pass
 
     return {
