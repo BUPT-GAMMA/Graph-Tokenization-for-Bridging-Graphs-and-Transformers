@@ -146,7 +146,7 @@ def train_bert_mlm(
         shuffle=True, 
         pin_memory=True,
         worker_init_fn=bpe_worker_init_fn,
-        num_workers=4  # 统一使用多进程，BPE mode控制具体行为
+        num_workers=1  # 统一使用多进程，BPE mode控制具体行为
     )
     
     # 验证集DataLoader
@@ -157,7 +157,7 @@ def train_bert_mlm(
         shuffle=False, 
         pin_memory=True,
         worker_init_fn=bpe_worker_init_fn,
-        num_workers=4  # 统一使用多进程，BPE mode控制具体行为
+        num_workers=1  # 统一使用多进程，BPE mode控制具体行为
     )
     
     # # 测试集DataLoader
@@ -168,7 +168,7 @@ def train_bert_mlm(
     #     shuffle=False, 
     #     pin_memory=True,
     #     worker_init_fn=bpe_worker_init_fn,
-    #     num_workers=4 if config.serialization.bpe.num_merges > 0 else 0
+    #     num_workers=1哎 if config.serialization.bpe.num_merges > 0 else 0
     # )
     
     # 计算训练步数
