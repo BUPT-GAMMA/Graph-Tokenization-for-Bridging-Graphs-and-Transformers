@@ -129,11 +129,35 @@ def _parse_experiment_info_from_task(task: str) -> tuple[str, str]:
     return sanitize_component(exp_group), sanitize_component(exp_name)
 
 
+def _detect_stage_from_task(task: str) -> str:
+    """从任务命令中粗略判断阶段：pretrain 或 finetune。若无法判断则返回 other。"""
+    try:
+        tokens = shlex.split(task)
+    except ValueError:
+        tokens = task.split()
+
+    joined = " ".join(tokens).lower()
+    # 优先精确匹配常见入口脚本
+    for tok in tokens:
+        low = tok.lower()
+        if low.endswith("run_finetune.py") or "finetune" in low:
+            return "finetune"
+        if low.endswith("run_pretrain.py") or "pretrain" in low:
+            return "pretrain"
+    # 回退基于整体字符串的包含判断
+    if "finetune" in joined:
+        return "finetune"
+    if "pretrain" in joined:
+        return "pretrain"
+    return "other"
+
+
 def generate_single_task_sbatch_script(task: str, cpus_per_task: int, job_name: str, partition: str = None) -> str:
     """生成单个任务的 sbatch 脚本内容。"""
     sanitized_task = sanitize_task_command(task)
     exp_group, exp_name = _parse_experiment_info_from_task(sanitized_task)
-    log_base = f"{exp_group}_{exp_name}"
+    stage = _detect_stage_from_task(sanitized_task)
+    log_base = f"{stage}_{exp_group}_{exp_name}"
     extra_directives = f"#SBATCH --partition={partition}\n" if partition else ""
     script_content = f"""#!/bin/bash
 #SBATCH --job-name={job_name}

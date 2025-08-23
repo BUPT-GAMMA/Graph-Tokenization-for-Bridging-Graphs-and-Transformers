@@ -17,6 +17,8 @@ from src.utils.logger import get_logger
 from src.utils.info_display import (
     display_startup_config, display_model_info, display_stage_separator
 )
+from src.utils.check import check_vocab_compatibility
+from src.utils.metrics import add_metrics_to_writer, log_wandb_metrics
 
 logger = get_logger('tokenizerGraph.training.finetune_pipeline')
 logger.propagate = False
@@ -24,11 +26,6 @@ logger.propagate = False
 
 def run_finetune(
     config: ProjectConfig,
-    *,
-    task: Optional[Literal["mlm", "regression", "classification", "multi_label_classification", "multi_target_regression"]] = None,
-    num_classes: Optional[int] = None,
-    num_labels: Optional[int] = None,
-    num_targets: Optional[int] = None,
     aggregation_mode: Literal["avg", "best", "learned"] = "avg",
     save_name_prefix: Optional[str] = None,
     save_name_suffix: Optional[str] = None,
@@ -42,11 +39,14 @@ def run_finetune(
     display_startup_config(config, dataset_name, method, "微调")
 
     udi = UnifiedDataInterface(config=config, dataset=dataset_name)
+    task = udi.get_dataset_task_type()
+    config.task.type = task
     
     # 🚨 关键修复：微调阶段也需要计算有效最大长度，确保与预训练一致
     from src.models.bert.data import compute_effective_max_length
     
     # 加载数据来计算有效长度
+    display_stage_separator("加载原始数据与label")
     train, val, test = udi.get_training_data_flat(method=method)
     all_sequences = train + val + test
     effective_max_length = compute_effective_max_length(all_sequences, config)
@@ -58,18 +58,7 @@ def run_finetune(
     if effective_max_length != original_max_seq_length:
         logger.warning(f"⚠️ 调整最大序列长度: {original_max_seq_length} → {effective_max_length} (基于数据计算)")
     
-    # 🆕 自动从UDI推断任务类型（如果未指定）
-    if task is None:
-        task = udi.get_dataset_task_type()
-        logger.info(f"📋 自动推断任务类型: {task} (来源: {dataset_name})")
-    else:
-        logger.info(f"📋 使用指定任务类型: {task}")
-        # 验证指定的任务类型与数据集是否匹配
-        auto_task = udi.get_dataset_task_type()
-        if task != auto_task:
-            logger.warning(f"⚠️  指定任务类型 '{task}' 与数据集自动推断类型 '{auto_task}' 不匹配")
-    
-    display_stage_separator("模型创建", f"构建{task}微调模型")
+    display_stage_separator("模型创建", f"创建{task}微调模型")
 
     # 🆕 简化：直接创建微调模型，支持灵活的预训练加载
     model, task_handler = build_task_model(
@@ -82,10 +71,11 @@ def run_finetune(
     
     # 显示模型信息
     vocab_manager = udi.get_vocab(method=method)
+    check_vocab_compatibility(all_sequences, vocab_manager)
     vocab_size = vocab_manager.vocab_size
     display_model_info(model, task, config.encoder.type, vocab_size)
     
-    # 🆕 创建数据加载器 - 直接使用统一架构
+    display_stage_separator("数据加载器", "创建数据加载器")
     if task == "regression":
         train_dl, val_dl, test_dl, normalizer = build_regression_loaders(
             config, udi, method
@@ -104,7 +94,7 @@ def run_finetune(
     else:
         raise ValueError(f"不支持的任务类型: {task}")
 
-    # 优化器与调度器
+    display_stage_separator("训练设置", "构建优化器和调度器，以及日志记录器")
     total_steps = len(train_dl) * config.bert.finetuning.epochs
     optimizer, scheduler = build_from_config(model, config, total_steps=total_steps, stage="finetune")
 
@@ -159,13 +149,15 @@ def run_finetune(
     train_start_time = time.time()
     steps_per_epoch = len(train_dl)
     log_interval = steps_per_epoch//10
-    best_val_mae = float('inf')  # 仅用于回归任务的最佳MAE记录
+    best_val_pk = None
     # 追踪最后一轮用于汇总写盘
     last_train_loss: float | None = None
     last_val_metrics: Dict[str, float] | None = None
     last_learning_rate: float | None = None
 
     best_epoch_index: int | None = None
+    display_stage_separator("训练循环", "开始训练循环")
+    pk = task_handler.primary_metric
     for epoch in range(config.bert.finetuning.epochs):
         epoch_start = time.time()
 
@@ -209,33 +201,18 @@ def run_finetune(
         _val_agg_mode = aggregation_mode if aggregation_mode != "learned" else "avg"
         val_metrics_by_mode: Dict[str, Dict[str, float]] = {}
         for _mode in ("avg", "best"):
-            try:
-                    _metrics = evaluate_model(
-                        model,
-                        val_dl,
-                        device,
-                        task,
-                        task_handler=task_handler,
-                        label_normalizer=normalizer if task_handler.is_regression_task() else None,
-                        aggregation_mode=_mode,
-                        epoch_num=epoch + 1,
-                        total_epochs=config.bert.finetuning.epochs,
-                        log_style=getattr(config.system, 'log_style', 'online'),
-                    )
-            except Exception:
-                # learned 回退为 avg
-                _metrics = evaluate_model(
-                    model,
-                    val_dl,
-                    device,
-                    task,
-                    task_handler=task_handler,
-                    label_normalizer=normalizer if task_handler.is_regression_task() else None,
-                    aggregation_mode="avg",
-                    epoch_num=epoch + 1,
-                    total_epochs=config.bert.finetuning.epochs,
-                    log_style=getattr(config.system, 'log_style', 'online'),
-                )
+            _metrics = evaluate_model(
+                  model,
+                  val_dl,
+                  device,
+                  task,
+                  task_handler=task_handler,
+                  label_normalizer=normalizer if task_handler.is_regression_task() else None,
+                  aggregation_mode=_mode,
+                  epoch_num=epoch + 1,
+                  total_epochs=config.bert.finetuning.epochs,
+                  log_style=getattr(config.system, 'log_style', 'online'),
+              )
             val_metrics_by_mode[_mode] = _metrics
 
         # 主验证指标用于早停逻辑，仍按传入 aggregation_mode
@@ -243,25 +220,8 @@ def run_finetune(
         epoch_time = time.time() - epoch_start
         epoch_times.append(epoch_time)
 
-        # 回归任务：计算训练集上的MAE等指标（用于日志记录）
-        train_metrics_eval = None
-        if task == "regression":
-            # train_metrics_eval = evaluate_model(
-            #     model,
-            #     train_dl,
-            #     device,
-            #     task,
-            #     label_normalizer=normalizer,
-            #     aggregation_mode=aggregation_mode,
-            #     epoch_num=epoch + 1,
-            #     total_epochs=config.bert.finetuning.epochs,
-            #     log_style=getattr(config.system, 'log_style', 'online'),
-            # )
-            train_metrics_eval = None
-
         # 记录每个 epoch 的关键日志
         try:
-
             assert isinstance(train_stats, dict) and "loss" in train_stats, "训练统计数据格式错误，期望包含 'loss' 字段的字典"
             train_loss = train_stats["loss"]
             logger.info(
@@ -287,15 +247,11 @@ def run_finetune(
                 last_learning_rate = None
 
             # 任务特定指标：仅记录主指标（随任务/数据集自动选择）且分 avg/best
-            primary_key = task_handler.primary_metric
-            if task == "regression":
-                if train_metrics_eval is not None:
-                    writer.add_scalar('Regression/Train_MAE', float(train_metrics_eval['mae']), epoch + 1)
             for _mode, _m in val_metrics_by_mode.items():
                 base = f"Val/{_mode}"
-                _v = _m.get(primary_key)
+                _v = _m.get(pk)
                 if _v is not None:
-                    writer.add_scalar(f'{base}/{primary_key}', float(_v), epoch + 1)
+                    writer.add_scalar(f'{base}/{pk}', float(_v), epoch + 1)
 
             # W&B：epoch级（train_epoch/* 与 val/*，epoch 轴）
             if wandb_logger is not None:
@@ -306,29 +262,25 @@ def run_finetune(
                     "val/loss": float(val_metrics['val_loss']),
                     "epoch": int(epoch + 1),
                 }
-                if task == "regression":
-                    if train_metrics_eval is not None:
-                        payload['train_epoch/mae'] = float(train_metrics_eval['mae'])
                 # 仅记录主指标（分别记录 avg 与 best）
                 for _mode, _m in val_metrics_by_mode.items():
-                    _pv = _m.get(primary_key)
+                    _pv = _m.get(pk)
                     if _pv is not None:
-                        payload[f'val/{primary_key}_{_mode}'] = float(_pv)
+                        payload[f'val/{pk}_{_mode}'] = float(_pv)
                 _epoch_end_global_step = int((epoch + 1) * steps_per_epoch)
                 wandb_logger.log(payload, step=_epoch_end_global_step)
 
         except Exception:
             pass
         # 使用TaskHandler确定主要指标和优化方向
-        key = task_handler.primary_metric
         if task_handler.should_maximize_metric:
-            flag = val_metrics[key] > best_val
+            flag = val_metrics[pk] > best_val
         else:
-            flag = val_metrics[key] < best_val
+            flag = val_metrics[pk] < best_val
         if flag:
-            best_val = val_metrics[key]
+            best_val = val_metrics[pk]
             patience_ctr = 0
-            logger.info(f"🎯 新的最优模型! {key}: {val_metrics[key]:.4f}")
+            logger.info(f"🎯 新的最优模型! {pk}: {val_metrics[pk]:.4f}")
             model.save_model(str(best_dir))
             best_epoch_index = epoch + 1
             if task_handler.is_regression_task():
@@ -339,11 +291,7 @@ def run_finetune(
             if patience_ctr >= patience:
                 break
 
-        # 跟踪最佳验证MAE（仅回归任务）
-        if task == "regression":
-            if float(val_metrics['mae']) < best_val_mae:
-                best_val_mae = float(val_metrics['mae'])
-
+    display_stage_separator("最终保存与测试", "保存模型与测试")
     # 最终保存与测试
     model.save_model(str(final_dir))
     if task == "regression":
@@ -381,8 +329,7 @@ def run_finetune(
     # 测试集：三种聚合模式均评估并记录
     test_metrics_by_mode: Dict[str, Dict[str, float]] = {}
     for _mode in ("avg", "best", "learned"):
-        try:
-            _metrics = evaluate_model(
+        _metrics = evaluate_model(
                 model,
                 test_dl,
                 device,
@@ -395,80 +342,19 @@ def run_finetune(
                 log_style=getattr(config.system, 'log_style', 'online'),
                 aggregator=aggregator if _mode == "learned" else None,
             )
-        except Exception:
-            _metrics = evaluate_model(
-                model,
-                test_dl,
-                device,
-                task,
-                task_handler=task_handler,
-                label_normalizer=normalizer if task_handler.is_regression_task() else None,
-                aggregation_mode="avg",
-                epoch_num=None,
-                total_epochs=None,
-                log_style=getattr(config.system, 'log_style', 'online'),
-            )
+
         test_metrics_by_mode[_mode] = _metrics
 
     # 主测试指标沿用传入 aggregation_mode 语义（learned 无聚合器则回退为 avg）
     _main_test_mode = ("learned" if aggregation_mode == "learned" and aggregator is not None else ("avg" if aggregation_mode == "learned" else aggregation_mode))
     test_metrics = test_metrics_by_mode.get(_main_test_mode, test_metrics_by_mode.get("avg"))
 
-    # 记录测试指标（仅两种分支：回归/分类）
+    # 记录测试指标
     try:
-        # 追加：分别记录三种聚合模式到不同路径 Test/{mode}/...
         for _mode, _m in test_metrics_by_mode.items():
             base = f"Test/{_mode}"
-            # writer.add_scalar(f'{base}/Loss', float(_m['val_loss']), 0)
-            if task == "regression":
-                writer.add_scalar(f'{base}/MAE', float(_m['mae']), 0)
-                writer.add_scalar(f'{base}/MSE', float(_m['mse']), 0)
-                # writer.add_scalar(f'{base}/RMSE', float(_m['rmse']), 0)
-                writer.add_scalar(f'{base}/R2', float(_m['r2']), 0)
-                # writer.add_scalar(f'{base}/Correlation', float(_m['correlation']), 0)
-            else:
-                writer.add_scalar(f'{base}/Accuracy', float(_m['accuracy']), 0)
-                writer.add_scalar(f'{base}/Precision', float(_m['precision']), 0)
-                writer.add_scalar(f'{base}/Recall', float(_m['recall']), 0)
-                writer.add_scalar(f'{base}/F1', float(_m['f1']), 0)
-                writer.add_scalar(f'{base}/ROC_AUC', float(_m.get('roc_auc', 0.0)), 0)
-                writer.add_scalar(f'{base}/AP', float(_m.get('ap', 0.0)), 0)
-
-        # 兼容原有单一路径写法
-        # writer.add_scalar('Test/Loss', float(test_metrics['val_loss']), 0)
-        # if task == "regression":
-        #     writer.add_scalar('Test/Regression_MAE', float(test_metrics['mae']), 0)
-        #     writer.add_scalar('Test/Regression_MSE', float(test_metrics['mse']), 0)
-        #     writer.add_scalar('Test/Regression_RMSE', float(test_metrics['rmse']), 0)
-        #     writer.add_scalar('Test/Regression_R2', float(test_metrics['r2']), 0)
-        #     # writer.add_scalar('Test/Regression_Correlation', float(test_metrics['correlation']), 0)
-        # else:
-        #     writer.add_scalar('Test/Classification_Accuracy', float(test_metrics['accuracy']), 0)
-        #     writer.add_scalar('Test/Classification_Precision', float(test_metrics['precision']), 0)
-        #     writer.add_scalar('Test/Classification_Recall', float(test_metrics['recall']), 0)
-        #     writer.add_scalar('Test/Classification_F1', float(test_metrics['f1']), 0)
-        #     writer.add_scalar('Test/Classification_ROC_AUC', float(test_metrics.get('roc_auc', 0.0)), 0)
-        #     writer.add_scalar('Test/Classification_AP', float(test_metrics.get('ap', 0.0)), 0)
-
-        if wandb_logger is not None:
-            if task == "regression":
-                wb_payload = {
-                    'test/loss': float(test_metrics['val_loss']),
-                    'test/mae': float(test_metrics['mae']),
-                    'test/mse': float(test_metrics['mse']),
-                    'test/rmse': float(test_metrics['rmse']),
-                    'test/r2': float(test_metrics['r2']),
-                    # 'test/correlation': float(test_metrics['correlation']),
-                }
-            else:
-                wb_payload = {
-                    'test/loss': float(test_metrics['val_loss']),
-                    'test/accuracy': float(test_metrics['accuracy']),
-                    'test/precision': float(test_metrics['precision']),
-                    'test/recall': float(test_metrics['recall']),
-                    'test/f1': float(test_metrics['f1']),
-                }
-            wandb_logger.log(wb_payload)
+            add_metrics_to_writer(writer, base, _m, task)
+            log_wandb_metrics(wandb_logger, base, _m, task)
     except Exception:
         pass
 
@@ -479,8 +365,7 @@ def run_finetune(
         writer.add_scalar('Final/Avg_Epoch_Time', float(avg_epoch_time), 0)
         writer.add_scalar('Final/Total_Train_Time', float(total_train_time), 0)
         writer.add_scalar('Final/Best_Val_Loss', float(best_val), 0)
-        if task == "regression" and best_val_mae != float('inf'):
-            writer.add_scalar('Final/Best_Val_MAE', float(best_val_mae), 0)
+        writer.add_scalar(f'Final/Best_Val_{pk}', float(best_val_pk), 0)
         # 组装最终指标并写入日志目录，包含所有聚合模式的结果
         final_json = {
             'dataset': str(dataset_name),
@@ -497,7 +382,7 @@ def run_finetune(
             'val': {
                 # 主验证结果（向后兼容）
                 **({k: (float(v) if isinstance(v, (int, float)) else v) for k, v in (last_val_metrics or {}).items()}),
-                'best_val_mae': float(best_val_mae) if task == 'regression' and best_val_mae != float('inf') else None,
+                f'best_val_{pk}': float(best_val_pk),
                 # 按聚合模式分别记录最后一轮验证结果
                 'by_aggregation': {
                     mode: {k: (float(v) if isinstance(v, (int, float)) else v) for k, v in mode_metrics.items()} 
@@ -534,8 +419,7 @@ def run_finetune(
                 'final/total_train_time': float(total_train_time),
                 'final/best_val_loss': float(best_val),
             }
-            if task == "regression" and best_val_mae != float('inf'):
-                final_payload['final/best_val_mae'] = float(best_val_mae)
+            final_payload[f'final/best_val_{pk}'] = float(best_val_pk)
             _final_step = int(config.bert.finetuning.epochs * steps_per_epoch) + 1
             wandb_logger.log(final_payload, step=_final_step)
         writer.close()

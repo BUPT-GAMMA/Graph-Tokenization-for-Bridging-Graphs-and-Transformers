@@ -31,6 +31,8 @@ import re
 import io
 from pathlib import Path
 
+from src.training.pretrain_pipeline import train_bert_mlm
+
 # 设置项目路径
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
@@ -38,7 +40,6 @@ if str(ROOT) not in sys.path:
 
 from config import ProjectConfig  # noqa: E402
 from src.data.unified_data_interface import UnifiedDataInterface  # noqa: E402
-from src.training.pretrain_api import pretrain as pretrain_api  # noqa: E402
 from src.utils.config_override import (  # noqa: E402
     add_all_args,
     apply_args_to_config,
@@ -142,44 +143,11 @@ def run_pretraining(config: ProjectConfig) -> dict:
         训练结果字典
     """
     print("🚀 开始BERT预训练...")
-    
-    # 创建UDI实例
-    udi = UnifiedDataInterface(config, config.dataset.name)
-    
-    # 加载训练数据
-    print(f"📂 加载序列化数据: {config.serialization.method}")
-    try:
-        train_sequences, val_sequences, test_sequences = udi.get_training_data_flat(config.serialization.method)
-        
-        print("✅ 数据加载完成:")
-        print(f"  训练集: {len(train_sequences)} 个序列")
-        print(f"  验证集: {len(val_sequences)} 个序列")
-        print(f"  测试集: {len(test_sequences)} 个序列")
-        
-        token_splits = {
-            'train': train_sequences,
-            'val': val_sequences,
-            'test': test_sequences,
-        }
-    except Exception as e:
-        print(f"❌ 数据加载失败: {e}")
-        raise
-    
-    # 加载词表
-    print("📚 加载词表...")
-    try:
-        vocab_manager = udi.get_vocab(method=config.serialization.method)
-        vocab_info = vocab_manager.get_vocab_info()
-        print(f"✅ 词表加载成功: {vocab_info['vocab_size']} 个token")
-    except Exception as e:
-        print(f"❌ 词表加载失败: {e}")
-        print("💡 请确保已运行数据准备流程构建词表")
-        raise
-    
+
     # 运行预训练
     print("🎓 开始模型训练...")
     try:
-        result = pretrain_api(config, token_splits, vocab_manager, udi, config.serialization.method)
+        result = train_bert_mlm(config)
         print("✅ 预训练完成!")
         
         print(f"📊 最优验证损失: {result['best_val_loss']:.4f}")

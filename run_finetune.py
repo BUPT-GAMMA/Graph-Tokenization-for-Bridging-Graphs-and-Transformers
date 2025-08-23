@@ -36,6 +36,7 @@ import os
 import re
 import io
 from pathlib import Path
+from typing import Optional, Literal
 
 # 设置项目路径
 ROOT = Path(__file__).resolve().parent
@@ -223,9 +224,7 @@ def check_pretrained_model(config: ProjectConfig) -> bool:
 
 def run_finetuning(
     config: ProjectConfig,
-    task: str | None = None,
-    num_classes: int | None = None,
-    aggregation_mode: str = "avg",
+    aggregation_mode: Literal["avg", "best", "learned"] = "avg",
     save_name_prefix: str | None = None,
     save_name_suffix: str | None = None,
     pretrained_dir: str | None = None,
@@ -244,21 +243,6 @@ def run_finetuning(
         微调结果字典
     """
     print("🚀 开始BERT微调...")
-    if task is not None:
-        print(f"📋 任务类型: {task}")
-    else:
-        print("📋 任务类型: 将从数据集自动推断")
-    
-    if task == "regression" and config.task.target_property:
-        print(f"📋 回归目标: {config.task.target_property}")
-    elif task == "classification" and num_classes:
-        print(f"📋 分类类别数: {num_classes}")
-    
-    # 检查预训练模型
-    # if not check_pretrained_model(config):
-    #     print("\n💡 请先运行预训练:")
-    #     print(f"python run_pretrain.py --dataset {config.dataset.name} --method {config.serialization.method}")
-    #     assert False, "预训练模型不存在"
     
     # 运行微调
     print("🎓 开始微调...")
@@ -266,7 +250,6 @@ def run_finetuning(
         # 统一架构会自动从UDI推断任务类型和维度，不需要显式传递num_classes等参数
         result = run_finetune(
             config,
-            task=task,
             aggregation_mode=aggregation_mode,
             save_name_prefix=save_name_prefix,
             save_name_suffix=save_name_suffix,
@@ -377,16 +360,7 @@ def main():
     
     # 自动生成实验名称（如果未指定）
     create_experiment_name(config)
-    
-    # 创建UDI并推断任务信息
-    udi = UnifiedDataInterface(config, config.dataset.name)
-    task = args.task
-    num_classes = args.num_classes
-    task, num_classes = infer_task_and_targets(config, udi, task, num_classes)
-    
-    # 更新配置中的任务类型
-    config.task.type = task
-    
+
     # 验证配置
     try:
         config.validate()
@@ -401,8 +375,6 @@ def main():
     try:
         result = run_finetuning(
             config,
-            task,
-            num_classes,
             aggregation_mode=args.aggregation_mode,
             save_name_prefix=args.save_name_prefix,
             save_name_suffix=args.save_name_suffix,

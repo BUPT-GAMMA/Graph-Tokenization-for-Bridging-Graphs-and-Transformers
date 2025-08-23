@@ -25,10 +25,8 @@ from config import ProjectConfig
 from src.data.unified_data_interface import UnifiedDataInterface
 from src.data.bpe_transform import create_bpe_worker_init_fn_from_udi
 from src.models.bert.data import compute_effective_max_length
-from src.models.bert.vocab_manager import VocabManager
 from src.training.loops import train_epoch, evaluate_epoch
 from src.training.optim import build_from_config
-from src.training.callbacks import update_and_check
 from src.utils.logger import get_logger
 from src.utils.info_display import (
     display_startup_config, display_data_info, display_model_info, 
@@ -42,10 +40,6 @@ logger.propagate = False
 
 def train_bert_mlm(
     config: ProjectConfig,
-    token_sequences: Dict[str, List[List[int]]],
-    vocab_manager: VocabManager,
-    udi: UnifiedDataInterface,
-    method: str,
 ) -> Dict[str, Any]:
     """
     BERT MLM预训练主函数
@@ -53,41 +47,40 @@ def train_bert_mlm(
     Args:
         config: 项目配置
         token_sequences: 包含"train"/"val"/"test"键的序列字典
-        vocab_manager: 可选的词表管理器，如果None则从token_sequences构建
-        udi: 可选的统一数据接口，用于BPE Transform（如果需要）
+        udi: 统一数据接口
         method: 序列化方法名，用于BPE Transform（如果需要）
         
     Returns:
         包含训练结果的字典
     """
     # 显示启动配置
-    display_startup_config(config, udi.dataset, method, "预训练")
+    display_startup_config(config, config.dataset.name, config.serialization.method, "预训练")
+    udi = UnifiedDataInterface(config, config.dataset.name)
+    method = config.serialization.method
     
+    display_stage_separator("词表与最大长度", "验证输入数据")
     # 验证输入数据
-    required_splits = ["train", "val", "test"]
-    for split in required_splits:
-        assert split in token_sequences, f"缺少数据划分: {split}"
-    
-    train_sequences = token_sequences["train"]
-    val_sequences = token_sequences["val"]  
-    test_sequences = token_sequences["test"]
+    train, val, test = udi.get_training_data_flat(method=method)
+
+
     
     # 使用提供的词表
+    vocab_manager = udi.get_vocab(method=method)
     vocab_info = vocab_manager.get_vocab_info()
     # 同步配置中的词表大小
     config.bert.architecture.vocab_size = int(vocab_info['vocab_size'])
     
     # 计算有效最大长度
-    all_sequences = train_sequences + val_sequences + test_sequences
+    all_sequences = train + val + test
     effective_max_length = compute_effective_max_length(all_sequences, config)
     
     # 显示数据信息
     display_data_info(
-        len(train_sequences), len(val_sequences), len(test_sequences),
+        len(train), len(val), len(test),
         vocab_info['vocab_size'], effective_max_length
     )
     
-    display_stage_separator("模型创建", "构建MLM预训练模型")
+    display_stage_separator("模型创建", "创建MLM预训练模型")
     
     # 确保配置中的位置嵌入大小与有效长度一致
     config.bert.architecture.max_position_embeddings = int(effective_max_length)
@@ -110,16 +103,13 @@ def train_bert_mlm(
     try:
         bpe_worker_init_fn = create_bpe_worker_init_fn_from_udi(udi, config, method, split="train")
         bpe_mode = config.serialization.bpe.engine.encode_rank_mode
-        if bpe_mode == "none":
-            logger.info("📦 BPE模式: none (无压缩，使用原始序列)")
-        else:
-            logger.info(f"🔧 BPE模式: {bpe_mode} (启用BPE压缩)")
+        logger.info(f"🔧 BPE模式: {bpe_mode}")
     except Exception as e:
         logger.error(f"❌ BPE Transform创建失败: {e}")
         raise
     
     # 创建数据加载器
-    logger.info("📦 创建数据加载器...")
+    display_stage_separator("数据加载器", "创建数据加载器与BPE Transform")
     
     # 创建带BPE Transform的DataLoader
     from src.models.bert.data import MLMDataset, create_transforms_from_config, NoOpTransform
@@ -132,7 +122,7 @@ def train_bert_mlm(
     eval_transforms = NoOpTransform()
     
     # 训练集DataLoader
-    train_dataset = MLMDataset(train_sequences, vocab_manager, train_transforms, effective_max_length, config.bert.pretraining.mask_prob)
+    train_dataset = MLMDataset(train, vocab_manager, train_transforms, effective_max_length, config.bert.pretraining.mask_prob)
     _num_workers = int(config.system.num_workers)
     _persistent_workers = bool(config.system.persistent_workers and _num_workers > 0)
     train_dataloader = DataLoader(
@@ -146,7 +136,7 @@ def train_bert_mlm(
     )
     
     # 验证集DataLoader
-    val_dataset = MLMDataset(val_sequences, vocab_manager, eval_transforms, effective_max_length, config.bert.pretraining.mask_prob)
+    val_dataset = MLMDataset(val, vocab_manager, eval_transforms, effective_max_length, config.bert.pretraining.mask_prob)
     val_dataloader = DataLoader(
         val_dataset, 
         batch_size=config.bert.pretraining.batch_size, 
@@ -180,7 +170,7 @@ def train_bert_mlm(
         mlm_model, config, total_steps=total_steps, stage="pretrain"
     )
     
-    display_stage_separator("训练设置", "优化器和调度器配置")
+    display_stage_separator("训练设置", "构建优化器和调度器")
     # 显示训练设置
     optimizer_info = f"{optimizer.__class__.__name__}(lr={optimizer.param_groups[0]['lr']})"
     scheduler_info = f"{scheduler.__class__.__name__}" if scheduler else "None"
@@ -234,7 +224,7 @@ def train_bert_mlm(
     best_epoch = 0
     patience_counter = 0
     
-    logger.info("🚀 开始训练循环...")
+    display_stage_separator("训练循环", "开始训练循环")
     train_start_time = time.time()
     
     epoch_times: List[float] = []
@@ -326,34 +316,21 @@ def train_bert_mlm(
                 }, step=_epoch_end_global_step)
             
             # 早停检查和最佳模型保存
-            new_best_val_loss, patience_counter, should_stop = update_and_check(
-                best_metric=best_val_loss,
-                new_metric=val_loss,
-                patience_counter=patience_counter,
-                patience=config.bert.pretraining.early_stopping_patience
-            )
-            
-            # 检查是否有改进（val_loss降低了）
-            if new_best_val_loss < best_val_loss:
-                improvement = best_val_loss - new_best_val_loss
-                best_val_loss = new_best_val_loss
+            best_model_dir = model_dir / "best"
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
                 best_epoch = epoch
-                
-                # 保存最佳模型
-                best_model_dir = model_dir / "best"
+                patience_counter = 0
+                improvement = best_val_loss - val_loss
                 logger.info(f"🎯 新最优 (epoch {epoch}): val_loss={val_loss:.4f} (↓ {improvement:.4f})")
                 mlm_model.save_model(str(best_model_dir))
-                
-                # 验证保存成功
                 if not ((best_model_dir / 'pytorch_model.bin').exists() and (best_model_dir / 'config.bin').exists()):
                     logger.error("❌ 最佳模型保存失败 - 缺少必需文件")
-            
-            if should_stop:
+            if patience_counter >= config.bert.pretraining.early_stopping_patience:
                 logger.info(f"⏹️ 早停触发 (patience={config.bert.pretraining.early_stopping_patience})")
-                logger.info(f"  - 最佳epoch: {best_epoch}")
-                logger.info(f"  - 最佳验证损失: {best_val_loss:.4f}")
+                logger.info(f"  - 最佳epoch: {best_epoch}, 最佳验证损失: {best_val_loss:.4f}")
                 break
-    
+            patience_counter += 1
     except KeyboardInterrupt:
         logger.info("⏹️ 训练被用户中断")
     
@@ -432,7 +409,7 @@ def train_bert_mlm(
         
         # 训练总结
         total_time = time.time() - train_start_time
-        total_samples = len(train_sequences) * epoch if epoch > 0 else 0
+        total_samples = len(train) * epoch if epoch > 0 else 0
         
         display_stage_separator("预训练完成", "训练结果总结")
         display_performance_summary(total_time, total_samples, best_val_loss, best_epoch, "预训练")

@@ -9,11 +9,11 @@
 from __future__ import annotations
 from pathlib import Path
 import torch
+from typing import Dict
 
 # 模型相关导入
 from src.models.universal_model import UniversalModel
 from src.models.unified_encoder import create_encoder
-from src.models.model_factory import _build_encoder_config
 from src.training.task_handler import create_task_handler
 from src.utils.logger import get_logger
 
@@ -91,6 +91,67 @@ def create_model_from_udi(udi, pretrained_path: str = None, force_task_type: str
         weight_state = "重置权重" if udi.config.reset_weights else "默认初始化"
         logger.info(f"✅ 模型创建完成 ({weight_state})")
     return model, task_handler
+
+
+def _build_encoder_config(config, encoder_type: str, task_type: str = None) -> Dict:
+    """构建编码器配置 - 包含详细日志"""
+    
+    logger.info(f"🔧 构建编码器配置: {encoder_type}")
+    logger.info(f"  任务类型: {task_type or 'unspecified'}")
+    
+    if encoder_type == 'bert':
+        # BERT编码器配置
+        bert_config = {
+            'hidden_size': config.bert.architecture.hidden_size,
+            'num_hidden_layers': config.bert.architecture.num_hidden_layers,
+            'num_attention_heads': config.bert.architecture.num_attention_heads,
+            'intermediate_size': config.bert.architecture.intermediate_size,
+            'hidden_dropout_prob': config.bert.architecture.hidden_dropout_prob,
+            'attention_probs_dropout_prob': config.bert.architecture.attention_probs_dropout_prob,
+            'max_position_embeddings': config.bert.architecture.max_position_embeddings,
+            'layer_norm_eps': config.bert.architecture.layer_norm_eps,
+            'type_vocab_size': getattr(config.bert.architecture, 'type_vocab_size', 2),
+            'initializer_range': getattr(config.bert.architecture, 'initializer_range', 0.02),
+            # 统一传递 reset_weights
+            'reset_weights': bool(config.reset_weights),
+        }
+        model_desc = f"{bert_config['hidden_size']}d_{bert_config['num_hidden_layers']}l_{bert_config['num_attention_heads']}h"
+        logger.info(f"🔧 BERT配置: {model_desc}, max_len={bert_config['max_position_embeddings']}")
+        return bert_config
+        
+    elif 'gte' in encoder_type.lower():
+        # GTE编码器配置
+        gte_config = {
+            'hidden_size': 768,  # GTE固定768维
+            'max_seq_length': 8096,  # GTE支持长序列
+            'optimization': {
+                'unpad_inputs': True,
+                'use_memory_efficient_attention': True,
+                'torch_dtype': 'float16'  
+            }
+        }
+        
+        # 统一 reset 字段（不再兼容reinit_weights）
+        reset_weights = bool(config.reset_weights)
+        if reset_weights:
+            gte_config['reset_weights'] = True
+            logger.info(f"🔄 检测到 reset_weights，将重新初始化GTE整个模型权重,任务类型: {task_type}")
+            logger.warning("  注意：这会丢弃GTE的预训练权重！")
+        else:
+            logger.info("📋 GTE权重策略:")
+            if task_type == 'mlm':
+                logger.info("  - MLM预训练：保持GTE原始权重，仅适配新词表")
+            else:
+                logger.info("  - 微调任务：保持GTE原始权重")
+        
+        reinit_status = "重置权重" if gte_config.get('reset_weights', False) else "保持原权重"
+        logger.info(f"🔧 GTE配置: {gte_config['hidden_size']}d, max_len={gte_config['max_seq_length']}, {reinit_status}")
+        
+        return gte_config
+    else:
+        logger.error(f"❌ 不支持的编码器类型: {encoder_type}")
+        logger.info("📋 支持的编码器类型: bert, Alibaba-NLP/gte-multilingual-base")
+        raise ValueError(f"不支持的编码器类型: {encoder_type}")
 
 
 def _create_complete_model(udi, task_type, encoder_type, vocab_manager, pooling_method):
