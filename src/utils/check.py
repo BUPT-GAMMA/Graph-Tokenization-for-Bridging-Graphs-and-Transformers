@@ -1,3 +1,4 @@
+
 from __future__ import annotations
 
 from typing import List
@@ -39,8 +40,3 @@ def check_vocab_compatibility(token_sequences: List[List[int]], vocab_manager) -
             logger.info(f"✅ 词表兼容性良好，未知token比例较低 ({unknown_ratio:.2f}%)")
     else:
         logger.info("✅ 词表完全兼容，所有token都在预训练词表中")
-
-
-
-
-
