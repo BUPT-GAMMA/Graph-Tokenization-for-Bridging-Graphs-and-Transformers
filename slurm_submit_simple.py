@@ -19,6 +19,7 @@ import re
 import subprocess
 import sys
 import math
+import shlex
 
 
 SBATCH_SCRIPT_DIR = "sbatch_scripts"
@@ -90,9 +91,49 @@ def sanitize_task_command(task: str) -> str:
     return sanitized
 
 
+def _parse_experiment_info_from_task(task: str) -> tuple[str, str]:
+    """从任务命令中解析 --experiment_group 与 --experiment_name。
+
+    支持 `--key value` 与 `--key=value` 两种写法。若缺失则给出默认占位。
+    """
+    try:
+        tokens = shlex.split(task)
+    except ValueError:
+        tokens = task.split()
+
+    exp_group = None
+    exp_name = None
+    i = 0
+    while i < len(tokens):
+        tok = tokens[i]
+        if tok.startswith("--experiment_group="):
+            exp_group = tok.split("=", 1)[1]
+        elif tok == "--experiment_group":
+            if i + 1 < len(tokens):
+                exp_group = tokens[i + 1]
+                i += 1
+        elif tok.startswith("--experiment_name="):
+            exp_name = tok.split("=", 1)[1]
+        elif tok == "--experiment_name":
+            if i + 1 < len(tokens):
+                exp_name = tokens[i + 1]
+                i += 1
+        i += 1
+
+    def sanitize_component(s: str | None) -> str:
+        if not s:
+            return "unknown"
+        # 仅保留常见安全字符，其余替换为下划线
+        return re.sub(r"[^A-Za-z0-9._-]", "_", s)
+
+    return sanitize_component(exp_group), sanitize_component(exp_name)
+
+
 def generate_single_task_sbatch_script(task: str, cpus_per_task: int, job_name: str, partition: str = None) -> str:
     """生成单个任务的 sbatch 脚本内容。"""
     sanitized_task = sanitize_task_command(task)
+    exp_group, exp_name = _parse_experiment_info_from_task(sanitized_task)
+    log_base = f"{exp_group}_{exp_name}"
     extra_directives = f"#SBATCH --partition={partition}\n" if partition else ""
     script_content = f"""#!/bin/bash
 #SBATCH --job-name={job_name}
@@ -101,8 +142,8 @@ def generate_single_task_sbatch_script(task: str, cpus_per_task: int, job_name: 
 #SBATCH --gres=gpu:1
 #SBATCH --time=12:00:00 
 #SBATCH --cpus-per-task={cpus_per_task}
-{extra_directives}#SBATCH --output=logs/{job_name}_%j.out
-#SBATCH --error=logs/{job_name}_%j.err
+{extra_directives}#SBATCH --output=logs/{log_base}_%j.out
+#SBATCH --error=logs/{log_base}_%j.err
 
 
 export NCCL_IB_HCA=mlx5_0,mlx5_1,mlx5_2,mlx5_3,mlx5_4,mlx5_6,mlx5_7,mlx5_8
