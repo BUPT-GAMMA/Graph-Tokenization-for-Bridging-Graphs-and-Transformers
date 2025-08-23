@@ -104,8 +104,8 @@ def train_bert_mlm(
     # 显示模型信息
     display_model_info(mlm_model, 'mlm', config.encoder.type, vocab_info['vocab_size'])
     
-    device = torch.device(config.device)
-    mlm_model.to(device)
+    # 注意：为避免 CUDA 初始化后再 fork 导致的 DataLoader 退出卡住问题，
+    # 先构建 DataLoader（spawn/fork 子进程）再将模型迁移到 GPU。
     
     # 创建BPE Transform worker初始化函数（统一创建，mode控制行为）
     try:
@@ -132,13 +132,16 @@ def train_bert_mlm(
     
     # 训练集DataLoader
     train_dataset = MLMDataset(train_sequences, vocab_manager, transforms, effective_max_length, config.bert.pretraining.mask_prob)
+    _num_workers = int(getattr(getattr(config, 'system', object()), 'num_workers', 0) or 0)
+    _persistent_workers = bool(getattr(getattr(config, 'system', object()), 'persistent_workers', False) and _num_workers > 0)
     train_dataloader = DataLoader(
         train_dataset, 
         batch_size=config.bert.pretraining.batch_size, 
         shuffle=True, 
         pin_memory=True,
         worker_init_fn=bpe_worker_init_fn,
-        num_workers=4  # 统一使用多进程，BPE mode控制具体行为
+        num_workers=_num_workers,
+        persistent_workers=_persistent_workers,
     )
     
     # 验证集DataLoader
@@ -149,7 +152,8 @@ def train_bert_mlm(
         shuffle=False, 
         pin_memory=True,
         worker_init_fn=bpe_worker_init_fn,
-        num_workers=4  # 统一使用多进程，BPE mode控制具体行为
+        num_workers=_num_workers,
+        persistent_workers=_persistent_workers,
     )
     
     # # 测试集DataLoader
@@ -165,6 +169,10 @@ def train_bert_mlm(
     
     # 计算训练步数
     total_steps = len(train_dataloader) * config.bert.pretraining.epochs
+
+    # 在 DataLoader 创建完成后再初始化 CUDA 相关（迁移模型到设备）
+    device = torch.device(config.device)
+    mlm_model.to(device)
     
     # 构建优化器和调度器
     optimizer, scheduler = build_from_config(
