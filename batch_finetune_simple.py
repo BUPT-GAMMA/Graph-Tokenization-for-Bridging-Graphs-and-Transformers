@@ -147,8 +147,10 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
     # 根据指定的微调模式构建配置
     encoder_configs = []
     for mode in finetune_modes:
-        if mode == "bert":
-            encoder_configs.append({"type": "bert", "": False, "suffix": "", "direct": True})
+        if mode in {"bert", "bert-pretrain"}:  # bert 作为 bert-pretrain 的别名
+            encoder_configs.append({"type": "bert", "": False, "suffix": "", "direct": False, "pretrain_suffix": ""})
+        elif mode == "bert-direct":
+            encoder_configs.append({"type": "bert", "": False, "suffix": "_bert_direct", "direct": True, "pretrain_suffix": ""})
         elif mode == "gte-direct":
             encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "": False, "suffix": "_gte_keep_direct", "direct": True, "pretrain_suffix": "_gte_keep"})
         elif mode == "gte-pretrain":
@@ -158,7 +160,7 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
         elif mode == "gte-reset-pretrain":
             encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "": True, "suffix": "_gte__pretrained", "direct": False, "pretrain_suffix": "_gte_"})
         else:
-            raise ValueError(f"不支持的微调模式: {mode}。支持: bert, gte-direct, gte-pretrain, gte-reset-direct, gte-reset-pretrain")
+            raise ValueError(f"不支持的微调模式: {mode}。支持: bert, bert-pretrain, bert-direct, gte-direct, gte-pretrain, gte-reset-direct, gte-reset-pretrain")
     
     for dataset in datasets:
         for method in methods:
@@ -386,7 +388,7 @@ def main():
     
     # 🆕 微调模式选择（灵活配置）
     parser.add_argument("--finetune_modes", type=str, default="bert", 
-                        help="要运行的微调模式，逗号分隔。可选: bert,gte-direct,gte-pretrain,gte-reset-direct,gte-reset-pretrain。默认bert保持向后兼容")
+                        help="要运行的微调模式，逗号分隔。可选: bert,bert-pretrain,bert-direct,gte-direct,gte-pretrain,gte-reset-direct,gte-reset-pretrain。默认bert作为bert-pretrain的别名以保持向后兼容")
     parser.add_argument("--pretrain_exp_prefix", type=str, default="", 
                         help="预训练实验名前缀，用于构建依赖的预训练实验名（仅对*-pretrain模式有效）")
 
