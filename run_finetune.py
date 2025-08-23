@@ -425,7 +425,7 @@ def main():
             if isinstance(value, (int, float)):
                 print(f"  {metric}: {value:.4f}")
         
-        exit(0)
+        sys.exit(0)
         return 0
         
     except KeyboardInterrupt:
