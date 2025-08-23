@@ -41,7 +41,7 @@ serialization:
   method: feuler  # feuler(原 graph_seq), topo(topological), eulerian, smiles
   # 多重采样配置（仅适用于支持随机性的序列化方法）
   multiple_sampling:
-    enabled: false          # 是否启用多重采样
+    enabled: true          # 是否启用多重采样
     num_realizations: 10     # 每个图的采样次数
     flatten_variants: true  # 是否将多个采样结果平铺为独立样本
   bpe:  # BPE压缩配置
@@ -100,7 +100,7 @@ bert:
     batch_size: 32
     learning_rate: 2e-4
     mask_prob: 0.15
-    warmup_steps: 1000
+    warmup_steps: 100
     weight_decay: 0.05
     max_grad_norm: 1.0
     save_steps: 1000

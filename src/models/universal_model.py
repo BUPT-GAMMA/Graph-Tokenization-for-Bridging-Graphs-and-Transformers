@@ -160,7 +160,7 @@ class UniversalModel(nn.Module):
         torch.save(config_to_save, os.path.join(save_path, 'config.bin'))
         
         logger.info(f"🎯 UniversalModel已保存到: {save_path}")
-    
+     
     @classmethod
     def load_model(cls, model_path: str, encoder: BaseEncoder) -> 'UniversalModel':
         """加载统一模型"""
