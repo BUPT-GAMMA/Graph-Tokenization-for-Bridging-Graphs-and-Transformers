@@ -41,7 +41,7 @@ serialization:
   method: feuler  # feuler(原 graph_seq), topo(topological), eulerian, smiles
   # 多重采样配置（仅适用于支持随机性的序列化方法）
   multiple_sampling:
-    enabled: true          # 是否启用多重采样
+    enabled: false          # 是否启用多重采样
     num_realizations: 10     # 每个图的采样次数
     flatten_variants: true  # 是否将多个采样结果平铺为独立样本
   bpe:  # BPE压缩配置
