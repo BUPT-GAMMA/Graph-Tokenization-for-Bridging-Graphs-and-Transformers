@@ -21,10 +21,11 @@ import torch.nn as nn
 
 from src.models.bert.vocab_manager import VocabManager
 from src.models.utils.pooling import pool_sequence
+from src.utils.check import parse_torch_dtype
 from src.utils.logger import get_logger
 
 # 模型相关导入
-from transformers import BertModel, AutoModel
+from transformers import BertModel, AutoModel, AutoConfig
 from src.models.bert.config import BertConfig
 
 # 创建模块级logger
@@ -130,8 +131,8 @@ class BertEncoder(BaseEncoder):
         outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask, return_dict=True)
         sequence_output = outputs.last_hidden_state  # [batch_size, seq_len, hidden_size]
         if pooling_method == 'pooler':
-            raise ValueError("BertEncoder 不支持 'pooler' 池化；请使用 'mean' 或 'cls'")
-        return pool_sequence(sequence_output, attention_mask, method=('cls' if pooling_method == 'cls' else 'mean'))
+            raise ValueError("BertEncoder 不支持 'pooler' 池化；请使用 'mean'、'max' 或 'cls'")
+        return pool_sequence(sequence_output, attention_mask, method=pooling_method)
     
     def get_sequence_output(self, input_ids: torch.Tensor, attention_mask: torch.Tensor | None = None) -> torch.Tensor:
         """获取BERT序列级编码输出 [batch, seq_len, hidden_size] - MLM任务使用"""
@@ -148,47 +149,59 @@ class GTEEncoder(BaseEncoder):
     def __init__(self, model_name: str, config: Dict[str, Any], vocab_manager: VocabManager):
         super().__init__(model_name, config, vocab_manager)
 
-        optimization = config.get('optimization', {})
-        reset_weights = bool(config.get('reset_weights', False))  # 统一从config读取reset标志
-        
-        self.gte_model = AutoModel.from_pretrained(
-            model_name,
-            trust_remote_code=True,
-            unpad_inputs=optimization.get('unpad_inputs', True),
-            use_memory_efficient_attention=optimization.get('use_memory_efficient_attention', True),
-            torch_dtype=getattr(torch, optimization.get('torch_dtype', 'float32')),
-        )
+        optimization = config['optimization']
+        reset_weights = config['reset_weights']
+
+        torch_dtype = parse_torch_dtype(optimization['torch_dtype'])
+
+        # 词表与 pad 协议目标值（来自项目词表）
+        target_vocab_size = int(vocab_manager.vocab_size)
+        target_pad_id = int(vocab_manager.pad_token_id)
+
+        if reset_weights:
+            # 方案A：从配置新建模型，按库规则随机初始化全部参数
+            logger.warning("🆕 使用AutoConfig.from_pretrained + AutoModel.from_config进行随机初始化GTE模型（丢弃预训练）")
+            cfg = AutoConfig.from_pretrained(model_name, trust_remote_code=True)
+            # 统一写入优化与词表/Pad设定（先占位，稍后根据vocab_manager覆盖）
+            cfg.unpad_inputs = optimization['unpad_inputs']
+            cfg.use_memory_efficient_attention = optimization['use_memory_efficient_attention']
+            cfg.torch_dtype = torch_dtype
+            # 直接在配置阶段设置目标 vocab/pad，避免后续再 resize 带来的再初始化差异
+            cfg.vocab_size = target_vocab_size
+            cfg.pad_token_id = target_pad_id
+            self.gte_model = AutoModel.from_config(cfg, torch_dtype=torch_dtype, trust_remote_code=True)
+        else:
+            logger.info("🔄 加载官方GTE预训练权重")
+            self.gte_model = AutoModel.from_pretrained(
+                model_name,
+                trust_remote_code=True,
+                unpad_inputs=optimization['unpad_inputs'],
+                use_memory_efficient_attention=optimization['use_memory_efficient_attention'],
+                torch_dtype=torch_dtype,
+            )
         
         # 词表与 pad 协议对齐
-        new_vocab_size = int(vocab_manager.vocab_size)
-        pad_id = int(vocab_manager.pad_token_id)
-        self.gte_model.resize_token_embeddings(new_vocab_size)
-        self.gte_model.config.pad_token_id = pad_id
-        
-        emb = self.gte_model.get_input_embeddings()
-        emb.padding_idx = pad_id
-        
         if reset_weights:
-            # 重新初始化整个GTE模型参数（逐参数，覆盖所有自定义层）
-            logger.info(f"🔄 重置GTE整个模型权重，词表大小: {new_vocab_size}")
-            logger.warning("⚠️ 警告：这将丢弃GTE的预训练权重！")
+            # 已在配置阶段设置 vocab/pad，确保初始嵌入即为目标形状
+            assert self.gte_model.config.vocab_size == target_vocab_size
+            assert self.gte_model.config.pad_token_id == target_pad_id
+            emb = self.gte_model.get_input_embeddings()
+            emb.padding_idx = target_pad_id
             with torch.no_grad():
-                for name, param in self.gte_model.named_parameters():
-                    # 权重使用N(0, 0.02)，偏置置零
-                    if param.dim() >= 2:
-                        nn.init.normal_(param, mean=0.0, std=0.02)
-                    else:
-                        nn.init.zeros_(param)
-                # pad 行归零
-                emb.weight[pad_id].zero_()
-            logger.info("✅ GTE参数已逐项重置")
+                emb.weight[target_pad_id].zero_()
+            logger.info(f"✅ 随机初始化GTE模型并适配词表/Pad：vocab={target_vocab_size}, pad_id={target_pad_id}")
         else:
-            # 原有逻辑：只清零pad位置，保持预训练权重
+            # 预训练路径：先设置 pad_token_id，再调整嵌入尺寸，最后清零 pad 行
+            self.gte_model.config.pad_token_id = target_pad_id
+            self.gte_model.resize_token_embeddings(target_vocab_size)
+            emb = self.gte_model.get_input_embeddings()
+            emb.padding_idx = target_pad_id
             with torch.no_grad():
-                emb.weight[pad_id].zero_()
-            logger.info("📚 保持GTE预训练权重，仅适配词表")
+                emb.weight[target_pad_id].zero_()
+            logger.info("📚 使用官方GTE预训练权重，仅适配词表")
 
         self._hidden_size = self.gte_model.config.hidden_size
+        assert isinstance(self._hidden_size, int), "GTE编码器hidden_size必须是整数"
         # 使用底层 config，保持单一数据源
         self.config = self.gte_model.config
 
@@ -222,8 +235,5 @@ def list_supported_encoders() -> Dict[str, str]:
         'bert': 'Internal BERT implementation',
         'Alibaba-NLP/gte-multilingual-base': 'Alibaba GTE multilingual model',
     }
-
-
-# UnifiedTaskModel已被删除，现在使用src/models/universal_model.py中的UniversalModel
 
 

@@ -25,6 +25,7 @@ from config import ProjectConfig
 from src.data.unified_data_interface import UnifiedDataInterface
 from src.data.bpe_transform import create_bpe_worker_init_fn_from_udi
 from src.models.bert.data import compute_effective_max_length
+from src.training.model_builder import build_task_model
 from src.training.loops import train_epoch, evaluate_epoch
 from src.training.optim import build_from_config
 from src.utils.logger import get_logger
@@ -87,11 +88,11 @@ def train_bert_mlm(
     config.bert.architecture.max_position_embeddings = int(effective_max_length)
     
     # 🆕 使用统一模型创建接口（与微调完全一致）
-    from src.models.bert.heads import create_model_from_udi
-    mlm_model, task_handler = create_model_from_udi(
+    mlm_model, task_handler = build_task_model(
+        config=config,
         udi=udi,
-        pretrained_path=None,        # 🎯 预训练阶段不加载预训练模型
-        force_task_type='mlm'        # 🎯 强制MLM任务类型，覆盖数据集原生任务
+        method=method,
+        force_task_type='mlm'
     )
     
     # 显示模型信息

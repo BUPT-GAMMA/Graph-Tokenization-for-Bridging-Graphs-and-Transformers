@@ -178,7 +178,8 @@ def evaluate_model(
             all_gids.extend(graph_ids.tolist())
             # 采集序列池化向量
             if 'pooled' in outputs:
-                pooled_np = outputs['pooled'].detach().cpu().numpy()
+                # bfloat16 -> float32 再转 numpy
+                pooled_np = outputs['pooled'].detach().to(torch.float32).cpu().numpy()
                 # 与 y_pred 一一对应
                 for row in pooled_np:
                     all_pooled.append(row)
@@ -199,7 +200,7 @@ def evaluate_model(
                 all_logits.extend(probs.tolist())
                 
             if 'pooled' in outputs:
-                pooled_np = outputs['pooled'].detach().cpu().numpy()
+                pooled_np = outputs['pooled'].detach().to(torch.float32).cpu().numpy()
                 for row in pooled_np:
                     all_pooled.append(row)
 

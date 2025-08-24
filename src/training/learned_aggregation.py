@@ -148,8 +148,8 @@ def _collect_variant_sets(
             if task == 'regression':
                 # 注意：这里的预测值是标准化空间的最终任务预测（TaskHead输出）
                 # 修正：使用正确的字段名 'outputs'（而非 'predictions'）
-                preds = outputs['outputs'].detach().cpu().numpy().reshape(-1, 1)
-                pooled_np = pooled.detach().cpu().numpy()
+                preds = outputs['outputs'].detach().to(torch.float32).cpu().numpy().reshape(-1, 1)
+                pooled_np = pooled.detach().to(torch.float32).cpu().numpy()
                 # 原始标签需要标准化以后用于监督
                 if label_normalizer is None:
                     raise RuntimeError("回归聚合器训练需要 label_normalizer")
@@ -163,8 +163,8 @@ def _collect_variant_sets(
             else:
                 # 注意：这里的logits是标准化后的最终任务预测（TaskHead输出）
                 # 修正：使用正确的字段名 'outputs'（而非 'logits'）
-                logits = outputs['outputs'].detach().cpu().numpy()
-                pooled_np = pooled.detach().cpu().numpy()
+                logits = outputs['outputs'].detach().to(torch.float32).cpu().numpy()
+                pooled_np = pooled.detach().to(torch.float32).cpu().numpy()
                 y_true = labels.detach().cpu().numpy().reshape(-1)
                 for gid, f, lg, y in zip(graph_ids, pooled_np, logits, y_true):
                     features_by_gid.setdefault(gid, []).append(f.astype(np.float32))

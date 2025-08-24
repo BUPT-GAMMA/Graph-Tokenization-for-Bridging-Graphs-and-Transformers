@@ -2,13 +2,11 @@
 from __future__ import annotations
 
 from typing import List
-import logging
-import numpy as np
 
-logger = logging.getLogger(__name__)
+import torch
 
-
-def check_vocab_compatibility(token_sequences: List[List[int]], vocab_manager) -> None:
+def check_vocab_compatibility(logger, token_sequences: List[List[int]], vocab_manager) -> None:
+  
     if not vocab_manager:
         logger.warning("词表管理器未加载，跳过词表兼容性检查")
         return
@@ -40,3 +38,19 @@ def check_vocab_compatibility(token_sequences: List[List[int]], vocab_manager) -
             logger.info(f"✅ 词表兼容性良好，未知token比例较低 ({unknown_ratio:.2f}%)")
     else:
         logger.info("✅ 词表完全兼容，所有token都在预训练词表中")
+        
+        
+def parse_torch_dtype(dtype_val):
+    if dtype_val is None:
+        return None
+    if isinstance(dtype_val, torch.dtype):
+        return dtype_val
+    mapping = {
+        'float16': torch.float16,
+        'fp16': torch.float16,
+        'bfloat16': torch.bfloat16,
+        'bf16': torch.bfloat16,
+        'float32': torch.float32,
+        'fp32': torch.float32,
+    }
+    return mapping.get(str(dtype_val).lower(), torch.float32)

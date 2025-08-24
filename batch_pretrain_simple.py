@@ -27,7 +27,7 @@ DEFAULT_METHODS = ["feuler", "eulerian", "cpp", "fcpp", "topo", "smiles"]
 DEFAULT_GPUS = [0]
 # DEFAULT_BPE_SCENARIOS = ["raw", "all", "random", "gaussian"]
 DEFAULT_BPE_SCENARIOS = ["all"]
-DEFAULT_HYPERPARAMS = [{"epochs": 100, "batch_size": 128, "learning_rate": 5e-4}]
+DEFAULT_HYPERPARAMS = [{"epochs": 100, "batch_size": 512, "learning_rate": 2e-4}]
 DEFAULT_MLM_AUG_METHODS = [
     "random_deletion",
     "random_insertion",

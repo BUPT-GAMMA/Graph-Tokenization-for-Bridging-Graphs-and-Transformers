@@ -220,7 +220,7 @@ def apply_args_to_config(config: ProjectConfig, args: argparse.Namespace, *, com
         config.encoder.type = args.encoder_type
         print(f"🎯 encoder.type = {args.encoder_type}")
     if hasattr(args, 'reset_weights') and args.reset_weights:
-        setattr(config, 'reset_weights', True)
+        config.encoder.reset_weights = True
         print("🎯 reset_weights = True")
     
 # 删除冗余的finetune_*参数处理，统一使用--epochs等通用参数
@@ -293,47 +293,7 @@ def show_full_config(config: ProjectConfig) -> None:
     print("="*60)
     
     # 构建主要配置字典
-    config_dict = {
-        "bert": {
-            "architecture": {
-                "hidden_size": config.bert.architecture.hidden_size,
-                "num_hidden_layers": config.bert.architecture.num_hidden_layers,
-                "num_attention_heads": config.bert.architecture.num_attention_heads,
-                "max_seq_length": config.bert.architecture.max_seq_length,
-                "hidden_dropout_prob": config.bert.architecture.hidden_dropout_prob,
-                "attention_probs_dropout_prob": config.bert.architecture.attention_probs_dropout_prob,
-            },
-            "pretraining": {
-                "epochs": config.bert.pretraining.epochs,
-                "batch_size": config.bert.pretraining.batch_size,
-                "learning_rate": config.bert.pretraining.learning_rate,
-                "warmup_steps": config.bert.pretraining.warmup_steps,
-                "mask_prob": config.bert.pretraining.mask_prob,
-                "early_stopping_patience": config.bert.pretraining.early_stopping_patience,
-            },
-            "finetuning": {
-                "epochs": config.bert.finetuning.epochs,
-                "batch_size": config.bert.finetuning.batch_size,
-                "learning_rate": config.bert.finetuning.learning_rate,
-                # "warmup_ratio": config.bert.finetuning.warmup_ratio,  # 配置中不存在
-                "early_stopping_patience": config.bert.finetuning.early_stopping_patience,
-            }
-        },
-        "system": {
-            "num_workers": config.system.num_workers,
-            # "mixed_precision": config.system.mixed_precision,  # 配置中不存在
-        }
-    }
-    
-    # 添加任务配置（如果存在）
-    if hasattr(config.task, 'type') and config.task.type:
-        config_dict["task"] = {
-            "type": config.task.type,
-            "normalization": config.task.normalization,
-        }
-        if hasattr(config.task, 'target_property') and config.task.target_property:
-            config_dict["task"]["target_property"] = config.task.target_property
-    
+    config_dict = config.to_dict()
     print(json.dumps(config_dict, indent=2, ensure_ascii=False))
     print("\n💡 可以将上述JSON内容保存到文件，然后用 --config_json 参数加载")
     print("="*60)

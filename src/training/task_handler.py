@@ -6,7 +6,7 @@
 保持简洁，避免过度设计。
 """
 
-from typing import Optional, Dict
+from typing import Optional, Dict, Tuple
 import torch
 import torch.nn as nn
 import numpy as np
@@ -124,11 +124,14 @@ class TaskHandler:
             # 单目标回归：确保标签是[batch_size, 1]
             if labels.dim() == 1:
                 labels = labels.unsqueeze(-1)
-            loss = self.loss_fn(outputs, labels.float())
+            # 与输出保持相同dtype，避免与bf16混用导致的dtype错误
+            labels = labels.to(outputs.dtype)
+            loss = self.loss_fn(outputs, labels)
             
         elif self.task_type == "multi_target_regression":
             # 多目标回归：标签已经是[batch_size, num_targets]
-            loss = self.loss_fn(outputs, labels.float())
+            labels = labels.to(outputs.dtype)
+            loss = self.loss_fn(outputs, labels)
             
         elif self.task_type in ["binary_classification", "classification"]:
             # 分类：标签是整数索引
@@ -136,7 +139,8 @@ class TaskHandler:
             
         elif self.task_type == "multi_label_classification":
             # 多标签分类：标签是二进制向量
-            loss = self.loss_fn(outputs, labels.float())
+            labels = labels.to(outputs.dtype)
+            loss = self.loss_fn(outputs, labels)
             
         else:
             raise ValueError(f"不支持的任务类型: {self.task_type}")
@@ -197,16 +201,16 @@ class TaskHandler:
         """
         with torch.no_grad():
             if self.task_type in ["regression", "multi_target_regression"]:
-                # 回归：直接返回
-                return outputs.cpu().numpy()
+                # 回归：直接返回（bfloat16 先转 float32 再 numpy）
+                return outputs.detach().to(torch.float32).cpu().numpy()
                 
             elif self.task_type in ["binary_classification", "classification"]:
-                # 分类：返回预测类别
-                return torch.argmax(outputs, dim=-1).cpu().numpy()
+                # 分类：返回预测类别（long → numpy 支持）
+                return torch.argmax(outputs, dim=-1).detach().cpu().numpy()
                 
             elif self.task_type == "multi_label_classification":
                 # 多标签：返回二进制预测
-                return (torch.sigmoid(outputs) > 0.5).float().cpu().numpy()
+                return (torch.sigmoid(outputs) > 0.5).float().detach().cpu().numpy()
                 
             else:
                 raise ValueError(f"不支持的任务类型: {self.task_type}")
@@ -229,10 +233,11 @@ class TaskHandler:
                 return None
                 
             elif self.task_type in ["binary_classification", "classification"]:
-                return torch.softmax(outputs, dim=-1).cpu().numpy()
+                # 概率在 bf16 下先转 float32 再 numpy
+                return torch.softmax(outputs, dim=-1).to(torch.float32).detach().cpu().numpy()
                 
             elif self.task_type == "multi_label_classification":
-                return torch.sigmoid(outputs).cpu().numpy()
+                return torch.sigmoid(outputs).to(torch.float32).detach().cpu().numpy()
                 
             else:
                 raise ValueError(f"不支持的任务类型: {self.task_type}")
@@ -339,7 +344,7 @@ class TaskHandler:
                 return {}
 
 
-def create_task_handler(udi=None, task_type: str = None, vocab_size: int = None) -> TaskHandler:
+def create_task_handler(udi, task_type: str , vocab_size: int = None) -> Tuple[TaskHandler, int]:
     """
     创建任务处理器 - 支持MLM、强制任务类型和UDI推断
     
@@ -354,13 +359,12 @@ def create_task_handler(udi=None, task_type: str = None, vocab_size: int = None)
     
     # 模式1: MLM任务（预训练使用）
     if task_type == 'mlm':
-        if vocab_size is None:
-            raise ValueError("MLM任务需要提供vocab_size")
+        assert vocab_size is not None, "MLM任务需要提供vocab_size"
         
         logger.info(f"📋 创建MLM任务处理器: vocab_size={vocab_size}")
-        return TaskHandler(task_type='mlm', output_dim=vocab_size, vocab_size=vocab_size)
+        return TaskHandler(task_type='mlm', output_dim=vocab_size, vocab_size=vocab_size), vocab_size
     
-    # 模式2: 强制指定任务类型（测试或特殊情况使用）
+    # 模式2: 根据上层指定任务类型
     if task_type is not None and task_type != 'mlm':
         # 硬编码输出维度，与heads.py保持一致
         if task_type == 'regression':
@@ -375,28 +379,10 @@ def create_task_handler(udi=None, task_type: str = None, vocab_size: int = None)
         else:
             raise ValueError(f"不支持的强制任务类型: {task_type}")
         
-        dataset_name = udi.dataset if udi is not None else "unknown"
-        logger.info(f"📋 创建任务处理器: {task_type} (强制指定, 输出维度={output_dim}, 数据集={dataset_name})")
-        return TaskHandler(task_type, output_dim, dataset_name)
+        dataset_name = udi.dataset 
+        logger.info(f"📋 创建任务处理器: {task_type} (dataset={dataset_name}, output_dim={output_dim})")
+        return TaskHandler(task_type, output_dim, dataset_name), output_dim
     
     # 模式3: 从UDI推断任务类型（标准微调使用）
-    if udi is None:
-        raise ValueError("需要提供udi参数或明确指定task_type")
-        
-    inferred_task_type = udi.get_dataset_task_type()
+    raise ValueError("流程异常：上层未指定task_type，将根据UDI推断任务类型(理论上这一步推断应该在上层完成)")
     
-    # 获取输出维度
-    if inferred_task_type == "regression":
-        output_dim = 1
-    elif inferred_task_type == "binary_classification":
-        output_dim = 2
-    elif inferred_task_type in ["classification", "multi_label_classification", "multi_target_regression"]:
-        output_dim = udi.get_num_classes()
-    else:
-        raise ValueError(f"无法确定输出维度: {inferred_task_type}")
-    
-    dataset_name = udi.dataset
-    
-    logger.info(f"📋 创建任务处理器: {inferred_task_type} (从UDI推断, 输出维度={output_dim}, 数据集={dataset_name})")
-    
-    return TaskHandler(inferred_task_type, output_dim, dataset_name)

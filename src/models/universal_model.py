@@ -42,25 +42,26 @@ class UniversalModel(nn.Module):
         task_type: str,
         output_dim: int,
         pooling_method: str = 'mean',
-        task_head_config: Dict = None
+        dtype: torch.dtype = torch.float32
     ):
         super().__init__()
         
         self.encoder = encoder
         self.task_type = task_type
         self.pooling_method = pooling_method
-        
+        task_head_config={'hidden_ratio': 0.5, 'activation': 'relu', 'dropout': 0.1}
+
         # 创建统一任务头
         self.task_head = UnifiedTaskHead(
             input_dim=encoder.get_hidden_size(),  # 编码器输出维度，如512或768
             task_type=task_type,
             output_dim=output_dim,                # 任务输出维度：MLM=vocab_size, 分类=num_classes
-            config=task_head_config or {}
+            config=task_head_config,
+            dtype=dtype
         )
         
         # 保存元数据
         self.output_dim = output_dim
-        self.vocab_manager = getattr(encoder, 'vocab_manager', None)
     
     def forward(
         self, 
@@ -149,6 +150,7 @@ class UniversalModel(nn.Module):
         
         # 保存模型权重
         torch.save(self.state_dict(), os.path.join(save_path, 'pytorch_model.bin'))
+        # print(list(self.state_dict().keys())[:10])
         
         # 保存配置信息
         config_to_save = {
