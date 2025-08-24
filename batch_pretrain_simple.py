@@ -208,11 +208,16 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
     if "bpe_encode_rank_mode" in bpe_config and bpe_config["bpe_encode_rank_mode"]:
         cmd.extend(["--bpe_encode_rank_mode", str(bpe_config["bpe_encode_rank_mode"])])
 
+    if bpe_config["bpe_encode_rank_mode"]=='none':
+      bs=task["hyperparams"]["batch_size"]/2
+    else:
+      bs=task["hyperparams"]["batch_size"]
+
     if task["hyperparams"]:
         params = task["hyperparams"]
         cmd.extend([
             "--epochs", str(params["epochs"]),
-            "--batch_size", str(params["batch_size"]),
+            "--batch_size", str(int(bs)),
             "--learning_rate", str(params["learning_rate"])
         ])
 
