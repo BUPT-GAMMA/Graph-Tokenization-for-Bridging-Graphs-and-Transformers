@@ -369,7 +369,7 @@ def main():
         return 1
     
     # 打印配置摘要
-    # print_config_summary(config)
+    print_config_summary(config)
     
     # 运行微调
     try:
@@ -392,7 +392,7 @@ def main():
         
         # 显示测试结果
         test_metrics = result['test_metrics']
-        print("\n📈 测试集性能:")
+        print("\n📈 test_metrics:")
         for metric, value in test_metrics.items():
             if isinstance(value, (int, float)):
                 print(f"  {metric}: {value:.4f}")

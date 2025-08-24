@@ -68,6 +68,7 @@ encoding:
 # 编码器配置
 encoder:
   type: bert  # bert | Alibaba-NLP/gte-multilingual-base | 其他编码器
+  reset_weights: false
   
 # BERT模型配置
 bert:
@@ -120,12 +121,13 @@ bert:
   finetuning:
     epochs: 60
     batch_size: 32
-    learning_rate: 5e-5
+    learning_rate: 1e-4
     weight_decay: 0.15
     head_lr_multiplier: 2.0
-    early_stopping_patience: 10
+    early_stopping_patience: 20
     use_layered_lr: false
     max_grad_norm: 1.0
+    save_models: false
     regression_augmentation_methods:
       # - random_deletion
       # - random_insertion

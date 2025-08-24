@@ -39,7 +39,6 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from config import ProjectConfig  # noqa: E402
-from src.data.unified_data_interface import UnifiedDataInterface  # noqa: E402
 from src.utils.config_override import (  # noqa: E402
     add_all_args,
     apply_args_to_config,
@@ -236,7 +235,7 @@ def main():
         pass
 
     # 打印配置摘要
-    # print_config_summary(config)
+    print_config_summary(config)
     
     # 运行预训练
     try:

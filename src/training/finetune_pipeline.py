@@ -71,7 +71,7 @@ def run_finetune(
     
     # 显示模型信息
     vocab_manager = udi.get_vocab(method=method)
-    check_vocab_compatibility(all_sequences, vocab_manager)
+    check_vocab_compatibility(logger, all_sequences, vocab_manager)
     display_model_info(logger, model, task, config.encoder.type)
     
     display_stage_separator(logger, "数据加载器", "创建数据加载器")
@@ -257,8 +257,7 @@ def run_finetune(
             # 仅记录主指标（分别记录 avg 与 best）
             for _mode, _m in val_metrics_by_mode.items():
                 _pv = _m.get(pk)
-                if _pv is not None:
-                    payload[f'val/{pk}_{_mode}'] = float(_pv)
+                payload[f'val/{pk}_{_mode}'] = float(_pv)
             _epoch_end_global_step = int((epoch + 1) * steps_per_epoch)
             wandb_logger.log(payload, step=_epoch_end_global_step)
 
@@ -270,11 +269,13 @@ def run_finetune(
             best_val = val_metrics[pk]
             patience_ctr = 0
             logger.info(f"🎯 新的最优模型! {pk}={val_metrics[pk]:.4f} (↓ {improvement:.4f})")
-            model.save_model(str(best_dir))
+            if config.bert.finetuning.save_models:
+                model.save_model(str(best_dir))
             best_epoch_index = epoch + 1
             if task_handler.is_regression_task():
-                with open(best_dir / "label_normalizer.pkl", "wb") as f:
-                    pickle.dump(normalizer, f)
+                if config.bert.finetuning.save_models :
+                    with open(best_dir / "label_normalizer.pkl", "wb") as f:
+                        pickle.dump(normalizer, f)
         else:
             patience_ctr += 1
             if patience_ctr >= patience:
@@ -282,25 +283,16 @@ def run_finetune(
 
     display_stage_separator(logger, "最终保存与测试", "保存模型与测试")
     # 最终保存与测试
-    model.save_model(str(final_dir))
-    if task == "regression":
-        with open(final_dir / "label_normalizer.pkl", "wb") as f:
-            pickle.dump(normalizer, f)
+    if config.bert.finetuning.save_models:
+        model.save_model(str(final_dir))
+        if task == "regression":
+            with open(final_dir / "label_normalizer.pkl", "wb") as f:
+                pickle.dump(normalizer, f)
 
     # 可学习聚合：在测试前尝试训练聚合器（无论传入模式为何，都为 learned 评估做准备）
     aggregator = None
     try:
         from src.training.learned_aggregation import train_variant_aggregator
-        agg_cfg: Dict[str, Any] = {
-            "hidden_dim": 256,
-            "dropout": 0.1,
-            "epochs": 10,
-            "lr": 1e-3,
-            "weight_decay": 1e-2,
-            "early_stopping_patience": 5,
-            "use_pred_as_feat": task_handler.is_regression_task(),
-            "batch_size": 64,
-        }
         aggregator = train_variant_aggregator(
             model=model,
             train_loader=train_dl,
@@ -308,8 +300,7 @@ def run_finetune(
             device=device,
             task=task,
             label_normalizer=normalizer if task_handler.is_regression_task() else None,
-            save_dir=str(final_dir / "aggregator"),
-            cfg=agg_cfg,
+            save_dir=(str(final_dir / "aggregator") if config.bert.finetuning.save_models else None),
         )
     except Exception as e:
         logger.warning(f"训练聚合器失败，将回退到 avg 聚合: {e}")

@@ -26,51 +26,54 @@ class UnifiedTaskHead(nn.Module):
         input_dim: int,     # 编码器输出维度，如512(BERT-Small)或768(BERT-Base/GTE)
         task_type: str,     # 任务类型：'mlm', 'classification', 'regression'等
         output_dim: int,    # 输出维度：MLM=vocab_size, 分类=num_classes, 回归=1或num_targets
-        config: Dict = None # 任务头配置参数
+        config: Dict, # 任务头配置参数
+        dtype: torch.dtype = torch.float32
     ):
         super().__init__()
         
         self.task_type = task_type
         self.output_dim = output_dim
         self.input_dim = input_dim
+        assert input_dim is not None and input_dim > 0, "输入维度不能为空"
+        assert output_dim is not None and output_dim > 0, "输出维度不能为空"
         
         if task_type == 'mlm':
             # MLM任务：简单线性投影，不需要复杂结构
             # input: [batch_size, seq_len, hidden_size] → output: [batch_size, seq_len, vocab_size]
-            self.head = nn.Linear(input_dim, output_dim)  # hidden_size → vocab_size
+            self.head = nn.Linear(input_dim, output_dim, dtype=dtype)  # hidden_size → vocab_size
             logger.info(f"🔤 MLM任务头: Linear({input_dim} → {output_dim})")
         else:
             # 其他任务：多层感知机，支持更复杂的特征变换
             # input: [batch_size, hidden_size] → output: [batch_size, output_dim]
-            self.head = self._build_configurable_head(input_dim, output_dim, config or {})
-            logger.info(f"🎯 {task_type}任务头: MLP({input_dim} → ... → {output_dim})")
+            self.head = self._build_configurable_head(input_dim, output_dim, config, dtype)
+            logger.info(f"🎯 {task_type}任务头: MLP({input_dim} → {config['hidden_ratio']} → {config['activation']} → {config['dropout']} → {output_dim})")
         
         # 初始化权重
         self._init_weights()
     
-    def _build_configurable_head(self, input_dim: int, output_dim: int, config: Dict):
+    def _build_configurable_head(self, input_dim: int, output_dim: int, config: Dict, dtype: torch.dtype):
         """
         构建可配置的多层任务头
         
         Args:
             input_dim: 输入维度 [hidden_size]
             output_dim: 输出维度 [num_classes或1]
-            config: 配置字典，包含hidden_ratio, activation, dropout等
+            config: 配置字典，包含['hidden_ratio', 'activation', 'dropout']
             
         Returns:
             nn.Sequential: 多层感知机结构
         """
         
         # 解析配置参数，提供合理默认值
-        hidden_ratio = config.get('hidden_ratio', 0.5)      # 隐藏层大小比例
-        activation = config.get('activation', 'relu')       # 激活函数类型
-        dropout = config.get('dropout', 0.1)               # dropout比例
+        hidden_ratio = config['hidden_ratio']      # 隐藏层大小比例
+        activation = config['activation']       # 激活函数类型
+        dropout = config['dropout']               # dropout比例
         
         layers = []
         
         # 第一层：输入层 → 隐藏层
         hidden_dim = int(input_dim * hidden_ratio)  # 如512*0.5=256
-        layers.append(nn.Linear(input_dim, hidden_dim))
+        layers.append(nn.Linear(input_dim, hidden_dim, dtype=dtype))
         # 线性层: [batch_size, input_dim] → [batch_size, hidden_dim]
         
         # 激活函数
@@ -85,20 +88,19 @@ class UnifiedTaskHead(nn.Module):
         layers.append(nn.Dropout(dropout))
         
         # 输出层：隐藏层 → 输出维度
-        layers.append(nn.Linear(hidden_dim, output_dim))
+        layers.append(nn.Linear(hidden_dim, output_dim, dtype=dtype))
         # 线性层: [batch_size, hidden_dim] → [batch_size, output_dim]
         
         return nn.Sequential(*layers)
     
     def _init_weights(self):
         """初始化任务头权重 - 使用标准初始化策略"""
-        for module in self.head.modules() if hasattr(self.head, 'modules') else [self.head]:
+        for module in self.head.modules():
             if isinstance(module, nn.Linear):
                 # 权重：正态分布初始化
-                nn.init.normal_(module.weight, mean=0.0, std=0.02)
-                # 偏置：零初始化
+                module.weight.data.normal_(mean=0.0, std=0.02)
                 if module.bias is not None:
-                    nn.init.zeros_(module.bias)
+                    module.bias.data.zero_()
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
