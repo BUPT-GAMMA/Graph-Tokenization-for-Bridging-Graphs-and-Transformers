@@ -118,8 +118,8 @@ bert:
     augmentation_config:
       # 全局控制：是否使用各种增强方法的概率
       random_deletion_probability: 0.3
-      random_swap_probability: 0.3
-      random_truncation_probability: 0.3
+      random_swap_probability: 0.2
+      random_truncation_probability: 0.2
       
       # 比例控制：对整个序列有多少比例的token需要应用增强
       random_deletion_ratio: 0.1      # 10%的token被删除

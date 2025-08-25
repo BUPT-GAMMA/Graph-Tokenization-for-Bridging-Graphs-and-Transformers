@@ -66,26 +66,38 @@ def generate_commands(experiments, output_file):
     commands = []
     
     for exp in experiments:
-        # 构建命令
-        cmd_parts = [
-            "python batch_pretrain_simple.py",
-            "--dataset qm9test",
-            "--serialization_method graph_seq", 
-            "--bpe_num_merges 2000",
-            f"--experiment_name {exp['name']}",
-        ]
+        # 构建配置JSON
+        config_json = {
+            "bert": {
+                "pretraining": {
+                    "mlm_augmentation_methods": exp['seq_methods'],
+                    "augmentation_config": {}
+                }
+            }
+        }
         
-        # 添加序列级增强方法
-        if exp['seq_methods']:
-            methods_str = ' '.join(exp['seq_methods'])
-            cmd_parts.append(f"--mlm_augmentation_methods {methods_str}")
-        else:
-            cmd_parts.append("--mlm_augmentation_methods")  # 空列表
-            
-        # 添加训练级增强
+        # 添加训练级增强配置
         for config_key, value in exp['train_config'].items():
-            if value:
-                cmd_parts.append(f"--{config_key}")
+            config_json["bert"]["pretraining"]["augmentation_config"][config_key] = value
+        
+        # 构建命令
+        import json
+        config_json_str = json.dumps(config_json, separators=(',', ':'))
+        
+        cmd_parts = [
+            "python run_pretrain.py",
+            "--dataset zinc",
+            "--method feuler",
+            f"--experiment_group aug_pretrain",
+            f"--experiment_name {exp['name']}",
+            "--device auto",
+            "--bpe_encode_rank_mode all",
+            "--epochs 20",  # 适中的epoch数用于快速测试
+            "--batch_size 512", 
+            "--learning_rate 0.0002",
+            f"--config_json '{config_json_str}'",
+            "--plain_logs"
+        ]
                 
         commands.append(' '.join(cmd_parts))
     
@@ -93,7 +105,7 @@ def generate_commands(experiments, output_file):
     with open(output_file, 'w') as f:
         for i, cmd in enumerate(commands):
             f.write(f"# Experiment {experiments[i]['name']}: {experiments[i]['description']}\n")
-            f.write(f"{cmd}\n\n")
+            f.write(f"CUDA_VISIBLE_DEVICES=0 {cmd}\n\n")
     
     print(f"✅ 生成了 {len(commands)} 个预训练实验命令")
     print(f"📁 输出文件: {output_file}")
