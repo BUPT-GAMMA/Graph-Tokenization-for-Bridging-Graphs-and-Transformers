@@ -67,7 +67,7 @@ def build_optimizer_and_scheduler(
         cosine = 0.5 * (1.0 + math.cos(math.pi * progress))
         return eta_min_ratio + (1.0 - eta_min_ratio) * cosine
 
-    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=total_steps, eta_min=eta_min_ratio)
     return optimizer, scheduler
 
 

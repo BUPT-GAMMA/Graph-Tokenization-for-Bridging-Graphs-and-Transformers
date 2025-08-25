@@ -108,13 +108,40 @@ bert:
     eval_steps: 500
     vocab_min_freq: 1
     max_vocab_size: 5000
-    early_stopping_patience: 10
+    early_stopping_patience: 100
     mlm_augmentation_methods:
-      # - random_deletion
-      # - random_insertion
-      # - random_replacement
-      # - random_swap
-      # - random_truncation
+      - random_deletion
+      - random_swap
+      - random_truncation
+    
+    # 数据增强配置
+    augmentation_config:
+      # 全局控制：是否使用各种增强方法的概率
+      random_deletion_probability: 0.3
+      random_swap_probability: 0.3
+      random_truncation_probability: 0.3
+      
+      # 比例控制：对整个序列有多少比例的token需要应用增强
+      random_deletion_ratio: 0.1      # 10%的token被删除
+      random_swap_ratio: 0.05          # 5%的token在窗口内交换
+      random_truncation_min_ratio: 0.7 # 保留至少70%的长度
+      
+      # 交换操作的局部窗口大小
+      swap_window_size: 3
+      
+      # 一致性正则化配置
+      use_consistency_regularization: false
+      consistency_alpha: 1.0  # R-Drop权重
+      
+      # 高斯噪声增强
+      use_gaussian_noise: false
+      gaussian_noise_std: 0.01
+      gaussian_noise_probability: 0.3
+      
+      # 特征混合增强（仅回归任务，实验性）
+      use_feature_mixup: false
+      feature_mixup_alpha: 0.2
+      feature_mixup_probability: 0.2
 
   
   # 微调配置
@@ -124,16 +151,46 @@ bert:
     learning_rate: 1e-4
     weight_decay: 0.15
     head_lr_multiplier: 2.0
-    early_stopping_patience: 20
+    early_stopping_patience: 200
     use_layered_lr: false
     max_grad_norm: 1.0
     save_models: false
     regression_augmentation_methods:
-      # - random_deletion
-      # - random_insertion
-      # - random_replacement
-      # - random_swap
-      # - random_truncation
+      - random_deletion
+      - random_swap
+      - random_truncation
+      - sequence_masking
+    
+    # 数据增强配置
+    augmentation_config:
+      # 全局控制：是否使用各种增强方法的概率
+      random_deletion_probability: 0.3
+      random_swap_probability: 0.3
+      random_truncation_probability: 0.3
+      sequence_masking_probability: 0.3
+      
+      # 比例控制：对整个序列有多少比例的token需要应用增强
+      random_deletion_ratio: 0.1      # 10%的token被删除
+      random_swap_ratio: 0.05          # 5%的token在窗口内交换
+      random_truncation_min_ratio: 0.7 # 保留至少70%的长度
+      sequence_masking_ratio: 0.05     # 5%的token被掩码
+      
+      # 交换操作的局部窗口大小
+      swap_window_size: 3
+      
+      # 一致性正则化配置
+      use_consistency_regularization: false
+      consistency_alpha: 1.0  # R-Drop权重
+      
+      # 高斯噪声增强
+      use_gaussian_noise: false
+      gaussian_noise_std: 0.01
+      gaussian_noise_probability: 0.3
+      
+      # 特征混合增强（仅回归任务，实验性）
+      use_feature_mixup: false
+      feature_mixup_alpha: 0.2
+      feature_mixup_probability: 0.2
 
 # 任务配置 - 统一管理预训练和微调
 task:

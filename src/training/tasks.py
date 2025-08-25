@@ -46,7 +46,7 @@ def build_regression_datasets(
     test_eff = _effective_max_len(test_sequences, max_pos, config)
 
     # 仅训练集启用增强；验证/测试使用NoOp
-    train_transforms = create_transforms_from_config(config, vocab_manager.get_valid_tokens(), "regression")
+    train_transforms = create_transforms_from_config(config, vocab_manager.get_valid_tokens(), "regression", vocab_manager)
     from src.models.bert.data import NoOpTransform
     eval_transforms = NoOpTransform()
     
@@ -91,7 +91,7 @@ def build_classification_datasets(
     test_eff = _effective_max_len(test_sequences, max_pos, config)
 
     # 仅训练集启用增强；验证/测试使用NoOp
-    train_transforms = create_transforms_from_config(config, vocab_manager.get_valid_tokens(), "classification")
+    train_transforms = create_transforms_from_config(config, vocab_manager.get_valid_tokens(), "classification", vocab_manager)
     from src.models.bert.data import NoOpTransform
     eval_transforms = NoOpTransform()
     
