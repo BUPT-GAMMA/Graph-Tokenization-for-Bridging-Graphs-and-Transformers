@@ -199,16 +199,12 @@ def check_pretrained_model(config: ProjectConfig) -> bool:
     # 检查标准路径
     model_base = config.get_model_dir()
     best_dir = model_base / "best"
-    final_dir = model_base / "final"
-    
+
     def _has_model(d: Path) -> bool:
         return (d / 'config.bin').exists() and (d / 'pytorch_model.bin').exists()
-    
+
     if _has_model(best_dir):
         print(f"✅ 找到预训练模型: {best_dir}")
-        return True
-    elif _has_model(final_dir):
-        print(f"✅ 找到预训练模型: {final_dir}")
         return True
     else:
         # 检查兼容路径
@@ -216,9 +212,9 @@ def check_pretrained_model(config: ProjectConfig) -> bool:
         if Path(compat_dir, 'config.bin').exists() and Path(compat_dir, 'pytorch_model.bin').exists():
             print(f"✅ 找到兼容预训练模型: {compat_dir}")
             return True
-        
+
         print("❌ 未找到预训练模型")
-        print(f"   已检查路径: {best_dir}, {final_dir}, {compat_dir}")
+        print(f"   已检查路径: {best_dir}, {compat_dir}")
         return False
 
 
@@ -386,8 +382,7 @@ def main():
         print("🎉 微调完成!")
         print("="*60)
         
-        print(f"📁 最优模型路径: {result['best_dir']}")
-        print(f"📁 最终模型路径: {result['final_dir']}")
+        print(f"📁 模型路径: {result['best_dir']}")
         print(f"📊 最优验证损失: {result['best_val_loss']:.4f}")
         
         # 显示测试结果

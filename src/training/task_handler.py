@@ -9,6 +9,7 @@
 from typing import Optional, Dict, Tuple
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 
 from src.utils.logger import get_logger
@@ -146,6 +147,91 @@ class TaskHandler:
             raise ValueError(f"不支持的任务类型: {self.task_type}")
         
         return loss
+    
+    def compute_consistency_loss(
+        self,
+        outputs1: torch.Tensor,
+        outputs2: torch.Tensor,
+        labels: torch.Tensor
+    ) -> torch.Tensor:
+        """
+        计算一致性正则化损失（R-Drop）
+        
+        Args:
+            outputs1: 第一次前向传播的输出
+            outputs2: 第二次前向传播的输出（dropout不同）
+            labels: 真实标签
+            
+        Returns:
+            一致性损失值
+        """
+        if self.task_type == "mlm":
+            # MLM任务：计算vocabulary分布的KL散度
+            logits1 = outputs1.view(-1, self.vocab_size)  # [batch*seq, vocab]
+            logits2 = outputs2.view(-1, self.vocab_size)
+            
+            # 创建mask，只对非padding位置计算KL散度
+            mask = (labels.view(-1) != -100)  # [batch*seq]
+            
+            if mask.sum() == 0:  # 如果没有有效位置，返回0
+                return torch.tensor(0.0, device=outputs1.device)
+                
+            # 只对有效位置计算KL散度
+            p = F.softmax(logits1[mask], dim=-1)
+            q = F.softmax(logits2[mask], dim=-1)
+            
+            # 双向KL散度并平均
+            kl_loss = (F.kl_div(F.log_softmax(logits1[mask], dim=-1), q, reduction='batchmean') +
+                      F.kl_div(F.log_softmax(logits2[mask], dim=-1), p, reduction='batchmean')) / 2
+            
+        elif self.task_type in ["regression", "multi_target_regression"]:
+            # 回归任务：直接计算输出的MSE
+            kl_loss = F.mse_loss(outputs1, outputs2)
+            
+        elif self.task_type in ["binary_classification", "classification", "multi_label_classification"]:
+            # 分类任务：计算logits的KL散度
+            p = F.softmax(outputs1, dim=-1)
+            q = F.softmax(outputs2, dim=-1)
+            
+            # 双向KL散度并平均
+            kl_loss = (F.kl_div(F.log_softmax(outputs1, dim=-1), q, reduction='batchmean') +
+                      F.kl_div(F.log_softmax(outputs2, dim=-1), p, reduction='batchmean')) / 2
+        else:
+            raise ValueError(f"不支持的任务类型: {self.task_type}")
+            
+        return kl_loss
+    
+    def compute_loss_with_consistency(
+        self,
+        outputs1: torch.Tensor,
+        outputs2: torch.Tensor,
+        labels: torch.Tensor,
+        consistency_alpha: float = 1.0
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """
+        计算包含一致性正则化的总损失
+        
+        Args:
+            outputs1: 第一次前向传播的输出
+            outputs2: 第二次前向传播的输出
+            labels: 真实标签
+            consistency_alpha: 一致性损失的权重
+            
+        Returns:
+            (总损失, 任务损失, 一致性损失)
+        """
+        # 计算标准任务损失（两次输出的平均）
+        task_loss1 = self.compute_loss(outputs1, labels)
+        task_loss2 = self.compute_loss(outputs2, labels)
+        task_loss = (task_loss1 + task_loss2) / 2
+        
+        # 计算一致性损失
+        consistency_loss = self.compute_consistency_loss(outputs1, outputs2, labels)
+        
+        # 总损失
+        total_loss = task_loss + consistency_alpha * consistency_loss
+        
+        return total_loss, task_loss, consistency_loss
     
     def process_outputs(
         self,

@@ -16,7 +16,13 @@ def display_startup_config(logger,config, dataset_name: str, method: str, stage:
     epochs = getattr(config.bert.pretraining if stage == "预训练" else config.bert.finetuning, 'epochs', 'N/A')
     lr = getattr(config.bert.pretraining if stage == "预训练" else config.bert.finetuning, 'learning_rate', 'N/A')
     
-    use_augmentation = len(config.bert.pretraining.mlm_augmentation_methods) > 0 if stage == "预训练" else len(config.bert.finetuning.regression_augmentation_methods) > 0
+    if config.bert.pretraining.mlm_augmentation_methods is not None and len(config.bert.pretraining.mlm_augmentation_methods) > 0:
+        use_augmentation = True
+    elif config.bert.finetuning.regression_augmentation_methods is not None and len(config.bert.finetuning.regression_augmentation_methods) > 0:
+        use_augmentation = True
+    else:
+        use_augmentation = False
+        
     
     logger.info("📋 核心配置:")
     logger.info(f"   数据集={dataset_name}, 序列化={method}, 编码器={encoder_type}, 使用增强={use_augmentation}")
