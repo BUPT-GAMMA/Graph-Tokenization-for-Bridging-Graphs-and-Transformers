@@ -17,8 +17,8 @@ from pathlib import Path
 from typing import List
 
 
-def generate_finetune_experiments(pretrain_experiments: List[str]):
-    """为给定的预训练实验生成所有微调增强组合"""
+def generate_finetune_experiments():
+    """生成128种微调增强组合（独立于预训练实验选择）"""
     
     # 微调可用的序列级增强方法
     seq_augmentations = [
@@ -37,43 +37,45 @@ def generate_finetune_experiments(pretrain_experiments: List[str]):
     
     all_experiments = []
     
-    for pretrain_exp in pretrain_experiments:
-        print(f"📋 生成基于 {pretrain_exp} 的微调实验...")
-        
-        exp_count = 0
-        # 生成所有组合 (2^4 × 2^3 = 128种)
-        for seq_combo in itertools.product([0, 1], repeat=len(seq_augmentations)):
-            for train_combo in itertools.product([0, 1], repeat=len(train_augmentations)):
+    print(f"📋 生成全部128种微调实验...")
+    
+    # 生成所有组合 (2^4 × 2^3 = 128种)
+    for seq_combo in itertools.product([0, 1], repeat=len(seq_augmentations)):
+        for train_combo in itertools.product([0, 1], repeat=len(train_augmentations)):
+            
+            # 编码实验名：F{seq4位}{train3位}
+            seq_code = ''.join(str(bit) for bit in seq_combo)
+            train_code = ''.join(str(bit) for bit in train_combo)
+            exp_name = f"F{seq_code}{train_code}"
+            
+            # 从微调编码推导对应的预训练实验名
+            # 预训练编码：P{seq前3位}{train前1位}
+            pretrain_seq_code = seq_code[:3]  # 取前3位序列级增强
+            pretrain_train_code = train_code[:1]  # 取第1位训练级增强（consistency）
+            pretrain_exp = f"P{pretrain_seq_code}{pretrain_train_code}"
+            
+            # 构建序列级增强配置
+            seq_methods = []
+            for i, (method, name) in enumerate(seq_augmentations):
+                if seq_combo[i] == 1:
+                    seq_methods.append(method)
+            
+            # 构建训练级增强配置  
+            train_config = {}
+            for i, (config_key, name) in enumerate(train_augmentations):
+                train_config[config_key] = bool(train_combo[i])
                 
-                # 编码实验名
-                seq_code = ''.join(str(bit) for bit in seq_combo)
-                train_code = ''.join(str(bit) for bit in train_combo)
-                exp_name = f"F{pretrain_exp}_{seq_code}{train_code}"
-                
-                # 构建序列级增强配置
-                seq_methods = []
-                for i, (method, name) in enumerate(seq_augmentations):
-                    if seq_combo[i] == 1:
-                        seq_methods.append(method)
-                
-                # 构建训练级增强配置  
-                train_config = {}
-                for i, (config_key, name) in enumerate(train_augmentations):
-                    train_config[config_key] = bool(train_combo[i])
-                    
-                all_experiments.append({
-                    'name': exp_name,
-                    'pretrain_base': pretrain_exp,
-                    'seq_methods': seq_methods,
-                    'train_config': train_config,
-                    'description': f"Base:{pretrain_exp} Seq:{seq_code} Train:{train_code}"
-                })
-                exp_count += 1
-        
-        print(f"   生成了 {exp_count} 种微调组合")
+            all_experiments.append({
+                'name': exp_name,
+                'pretrain_base': pretrain_exp,
+                'seq_methods': seq_methods,
+                'train_config': train_config,
+                'description': f"Pretrain:{pretrain_exp} Seq:{seq_code} Train:{train_code}"
+            })
     
     total_exp = len(all_experiments)
     print(f"✅ 总计生成 {total_exp} 个微调实验")
+    print(f"   每8个微调实验对应1个预训练实验")
     return all_experiments
 
 
@@ -109,16 +111,15 @@ def generate_finetune_commands(experiments, output_file: Path):
         cmd_parts = [
             "python run_finetune.py",
             "--dataset zinc",
-            "--method feuler", 
-            "--task regression",
-            "--target_property homo",  # zinc数据集的目标属性
-            f"--experiment_group aug_pretrain",  # 使用与预训练相同的实验组
+            "--method feuler",
+            f"--experiment_group aug_pretrain",
             f"--experiment_name {exp['name']}",
-            f"--pretrain_exp_name {exp['pretrain_base']}",  # 预训练实验名
             "--device auto",
-            "--finetune_epochs 100",  # 微调epochs
-            "--finetune_batch_size 32",
-            "--finetune_learning_rate 2e-5",
+            "--bpe_encode_rank_mode all",
+            "--epochs 30",
+            "--batch_size 512",
+            "--learning_rate 0.0001",
+            f"--pretrain_exp_name {exp['pretrain_base']}",
             f"--config_json '{config_json_str}'",
             "--plain_logs"
         ]
@@ -128,8 +129,7 @@ def generate_finetune_commands(experiments, output_file: Path):
     # 输出到文件
     with open(output_file, 'w') as f:
         for i, cmd in enumerate(commands):
-            f.write(f"# Experiment {experiments[i]['name']}: {experiments[i]['description']}\n")
-            f.write(f"CUDA_VISIBLE_DEVICES=0 {cmd}\n\n")
+            f.write(f"CUDA_VISIBLE_DEVICES=0 {cmd}\n")
     
     print(f"✅ 生成了 {len(commands)} 个微调实验命令")
     print(f"📁 输出文件: {output_file}")
@@ -154,13 +154,18 @@ def create_summary(experiments, output_dir: Path):
         f.write("=" * 50 + "\n\n")
         
         f.write("编码说明:\n")
-        f.write("F{pretrain_base}_{seq4位}{train3位}\n")
+        f.write("F{seq4位}{train3位} -> 对应预训练 P{seq前3位}{train前1位}\n")
         f.write("序列级增强: deletion(0), swap(1), truncation(2), masking(3)\n")
         f.write("训练级增强: consistency(0), noise(1), mixup(2)\n\n")
         
+        f.write("映射关系说明:\n")
+        f.write("每8个微调实验对应1个预训练实验\n")
+        f.write("例如: F0000000-F0000111 对应预训练 P0000\n")
+        f.write("      F0010000-F0010111 对应预训练 P0010\n\n")
+        
         total = 0
-        for pretrain_base, exps in by_pretrain.items():
-            f.write(f"基于预训练实验 {pretrain_base} 的微调实验 ({len(exps)} 个):\n")
+        for pretrain_base, exps in sorted(by_pretrain.items()):
+            f.write(f"预训练实验 {pretrain_base} 对应的微调实验 ({len(exps)} 个):\n")
             f.write("-" * 40 + "\n")
             
             # 分类统计
@@ -183,19 +188,17 @@ def create_summary(experiments, output_dir: Path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="基于预训练结果生成微调实验")
-    parser.add_argument("--pretrain_experiments", nargs='+', required=True,
-                       help="预训练实验名列表，如: P0000 P0001 P1010")
+    parser = argparse.ArgumentParser(description="生成全部128种微调实验")
     parser.add_argument("--output_prefix", type=str, default="finetune",
                        help="输出文件前缀")
     
     args = parser.parse_args()
     
     print(f"🚀 生成微调实验脚本...")
-    print(f"   基于预训练实验: {args.pretrain_experiments}")
+    print(f"   模式: 128种微调实验，每8个对应1个预训练实验")
     
     # 生成实验配置
-    experiments = generate_finetune_experiments(args.pretrain_experiments)
+    experiments = generate_finetune_experiments()
     
     # 创建输出目录
     output_dir = Path(__file__).parent

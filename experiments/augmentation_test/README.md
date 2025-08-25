@@ -20,10 +20,10 @@
    python collect_pretrain_results.py --experiment_group aug_pretrain
    ```
 
-### 阶段2：微调详测 (基于筛选结果)
-1. 基于最佳预训练结果生成微调实验：
+### 阶段2：微调详测 (128种固定组合)
+1. 生成全部128种微调实验：
    ```bash
-   python generate_finetune_experiments.py --pretrain_experiments P0000 P0001 P0010
+   python generate_finetune_experiments.py
    ```
 
 2. 执行微调实验：
@@ -43,10 +43,11 @@
 - **训练级**: consistency_regularization (1种)  
 - **编码**: P{seq3位}{train1位}，如P1011表示deletion+truncation+consistency
 
-### 微调增强 (128种组合 × 预训练数量)
+### 微调增强 (128种固定组合)
 - **序列级**: deletion, swap, truncation, masking (4种)
 - **训练级**: consistency_regularization, gaussian_noise, feature_mixup (3种)
-- **编码**: F{pretrain}_{seq4位}{train3位}
+- **编码**: F{seq4位}{train3位}，如F10110101
+- **映射关系**: 每8个微调实验对应1个预训练实验（前4位的前3位+训练级第1位）
 
 ## 📁 结果文件
 - `results/pretrain_results.csv` - 预训练完整结果
