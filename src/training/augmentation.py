@@ -34,7 +34,6 @@ augmentation_config:
 
 import random
 import torch
-import torch.nn.functional as F
 import numpy as np
 from typing import Dict, Tuple, Optional
 
@@ -42,14 +41,24 @@ from typing import Dict, Tuple, Optional
 class TrainingAugmentation:
     """训练时增强的统一接口"""
     
-    def __init__(self, config):
+    def __init__(self, config, task_type: str = "auto"):
         self.config = config
         
         # 预训练和微调使用不同配置
-        if hasattr(config.bert, 'pretraining'):
+        if task_type == "pretraining" or task_type == "mlm":
             self.aug_config = config.bert.pretraining.augmentation_config
-        elif hasattr(config.bert, 'finetuning'):
+        elif task_type == "finetuning" or task_type == "regression" or task_type == "classification":
             self.aug_config = config.bert.finetuning.augmentation_config
+        elif task_type == "auto":
+            # 自动检测：优先检查是否有微调配置的特有字段
+            if (hasattr(config.bert, 'finetuning') and 
+                hasattr(config.bert.finetuning, 'augmentation_config') and
+                hasattr(config.bert.finetuning.augmentation_config, 'sequence_masking_probability')):
+                self.aug_config = config.bert.finetuning.augmentation_config
+            elif hasattr(config.bert, 'pretraining'):
+                self.aug_config = config.bert.pretraining.augmentation_config
+            else:
+                self.aug_config = None
         else:
             self.aug_config = None
             
@@ -117,9 +126,9 @@ class TrainingAugmentation:
             return torch.where(mask, labels1, labels2)
 
 
-def create_augmentation(config) -> Optional[TrainingAugmentation]:
+def create_augmentation(config, task_type: str = "auto") -> Optional[TrainingAugmentation]:
     """创建增强器（如果配置启用）"""
-    aug = TrainingAugmentation(config)
+    aug = TrainingAugmentation(config, task_type)
     
     # 检查是否需要任何增强
     if (aug.should_use_gaussian_noise() or 

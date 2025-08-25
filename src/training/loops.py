@@ -58,7 +58,12 @@ def train_epoch(
             
         # 创建增强器（简洁的方式）
         from src.training.augmentation import create_augmentation
-        augmentation = create_augmentation(config)
+        # 根据task_handler类型判断任务类型
+        if hasattr(task_handler, 'task_type'):
+            task_type = task_handler.task_type
+        else:
+            task_type = "auto"
+        augmentation = create_augmentation(config, task_type)
         
         # 特征混合增强（仅用于回归任务）
         if (augmentation and augmentation.should_use_feature_mixup() and 
