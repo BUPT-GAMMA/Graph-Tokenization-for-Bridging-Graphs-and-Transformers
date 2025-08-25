@@ -85,6 +85,10 @@ def generate_finetune_commands(experiments, output_file: Path):
     for exp in experiments:
         # 构建配置JSON
         config_json = {
+            "encoder": {
+                "type": "Alibaba-NLP/gte-multilingual-base",
+                "reset_weights": True
+            },
             "bert": {
                 "finetuning": {
                     "regression_augmentation_methods": exp['seq_methods'],
@@ -112,7 +116,7 @@ def generate_finetune_commands(experiments, output_file: Path):
             f"--experiment_name {exp['name']}",
             f"--pretrain_exp_name {exp['pretrain_base']}",  # 预训练实验名
             "--device auto",
-            "--finetune_epochs 30",  # 微调epochs
+            "--finetune_epochs 100",  # 微调epochs
             "--finetune_batch_size 32",
             "--finetune_learning_rate 2e-5",
             f"--config_json '{config_json_str}'",
