@@ -43,7 +43,7 @@ def train_epoch(
     next_percent_checkpoint = 10 if log_style == "offline" else None
     
     # 为特征混合准备数据
-    dataloader_iter = iter(dataloader)
+    prev_batch = None
     
     for batch in dataloader:
         # if steps==10: break;
@@ -65,70 +65,14 @@ def train_epoch(
             task_type = "auto"
         augmentation = create_augmentation(config, task_type)
         
-        # 特征混合增强（仅用于回归任务）
-        if (augmentation and augmentation.should_use_feature_mixup() and 
-            task_handler.is_regression_task()):
-            try:
-                # 尝试获取下一个batch用于混合
-                next_batch = next(dataloader_iter)
-                next_input_ids = next_batch['input_ids'].to(device)
-                next_attention_mask = next_batch['attention_mask'].to(device) 
-                next_labels = next_batch['labels'].to(device)
-                
-                # 前向传播获取特征
-                outputs1 = model(input_ids, attention_mask)
-                outputs2 = model(next_input_ids, next_attention_mask)
-                
-                # 在特征空间混合
-                if 'pooled' in outputs1 and 'pooled' in outputs2:
-                    mixed_batch, lam = augmentation.prepare_feature_mixup_batch(
-                        {'labels': labels}, {'labels': next_labels}
-                    )
-                    
-                    if lam > 0:
-                        # 混合特征
-                        mixed_features = augmentation.mix_features(
-                            outputs1['pooled'], outputs2['pooled'], lam
-                        )
-                        # 混合标签
-                        mixed_labels = augmentation.mix_labels(
-                            labels, next_labels, lam, task_handler.task_type
-                        )
-                        
-                        # 计算混合后的预测
-                        mixed_outputs = model.task_head(mixed_features)
-                        loss = task_handler.compute_loss(mixed_outputs, mixed_labels)
-                    else:
-                        loss = task_handler.compute_loss(outputs1['outputs'], labels)
-                else:
-                    loss = task_handler.compute_loss(outputs1['outputs'], labels)
-                    
-            except StopIteration:
-                # 没有更多batch，使用标准训练
-                outputs = model(input_ids, attention_mask) 
-                loss = task_handler.compute_loss(outputs['outputs'], labels)
-                
-        elif augmentation and augmentation.should_use_consistency_regularization():
-            # R-Drop：两次前向传播
-            outputs1 = model(input_ids, attention_mask)
-            outputs2 = model(input_ids, attention_mask)
-            
-            total_loss, task_loss, consistency_loss = task_handler.compute_loss_with_consistency(
-                outputs1['outputs'], outputs2['outputs'], labels, 
-                augmentation.aug_config.consistency_alpha
-            )
-            loss = total_loss
+        # 计算损失（增强逻辑完全封装在内部）
+        current_batch = {'input_ids': input_ids, 'attention_mask': attention_mask, 'labels': labels}
+        
+        if augmentation:
+            loss = augmentation.compute_training_loss(model, current_batch, task_handler, prev_batch)
         else:
             # 标准训练
             outputs = model(input_ids, attention_mask)
-            
-            # 简洁的高斯噪声增强：在输出特征上添加噪声
-            if (augmentation and augmentation.should_use_gaussian_noise() and 
-                model.task_type != 'mlm' and 'pooled' in outputs):
-                outputs['pooled'] = augmentation.apply_gaussian_noise(outputs['pooled'])
-                # 重新计算任务输出
-                outputs['outputs'] = model.task_head(outputs['pooled'])
-                
             loss = task_handler.compute_loss(outputs['outputs'], labels)
             
         loss.backward()
@@ -162,6 +106,9 @@ def train_epoch(
         if on_step is not None and (steps % max(1, log_interval) == 0):
             current_lr = scheduler.get_last_lr()[0] if scheduler is not None else None
             on_step(steps, loss.item(), current_lr)
+            
+        # 更新prev_batch用于下一次可能的mixup
+        prev_batch = current_batch
     # 补全进度条到总数（online）
     if log_style == "online" and pbar is not None:
         if steps % 20 != 0:
