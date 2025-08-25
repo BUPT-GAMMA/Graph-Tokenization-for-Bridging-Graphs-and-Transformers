@@ -1,8 +1,8 @@
 python batch_finetune_simple.py \
     --finetune_modes bert-direct,gte-direct,gte-reset-direct \
-    --datasets zinc,molhiv,peptides_func --methods feuler,fcpp,topo --bpe_scenarios all,raw,random \
+    --datasets molhiv --methods feuler,fcpp,topo --bpe_scenarios all,raw,random \
     --epochs 60 --experiment_group gte_exploration \
-    --use_augmentation false \
+    --use_augmentation true \
     --commands_stdout \
     --plain_logs 
  

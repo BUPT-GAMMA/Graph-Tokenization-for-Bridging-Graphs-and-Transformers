@@ -119,6 +119,7 @@ def _build_encoder_config(config, encoder_type: str, task_type: str = None) -> D
             'hidden_dropout_prob': config.bert.architecture.hidden_dropout_prob,
             'attention_probs_dropout_prob': config.bert.architecture.attention_probs_dropout_prob,
             'max_position_embeddings': config.bert.architecture.max_position_embeddings,
+            'max_seq_length': config.bert.architecture.max_seq_length,
             'layer_norm_eps': config.bert.architecture.layer_norm_eps,
             'type_vocab_size': getattr(config.bert.architecture, 'type_vocab_size', 2),
             'initializer_range': getattr(config.bert.architecture, 'initializer_range', 0.02),
