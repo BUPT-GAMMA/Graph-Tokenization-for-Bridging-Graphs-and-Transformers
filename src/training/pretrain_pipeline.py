@@ -120,7 +120,7 @@ def train_bert_mlm(
     # 获取有效的token列表，用于数据增强
     valid_tokens = vocab_manager.get_valid_tokens()
     # 仅训练集启用数据增强；验证/测试使用NoOp
-    train_transforms = create_transforms_from_config(config, valid_tokens, "mlm")
+    train_transforms = create_transforms_from_config(config, valid_tokens, "mlm", vocab_manager)
     eval_transforms = NoOpTransform()
     
     # 训练集DataLoader
@@ -226,6 +226,7 @@ def train_bert_mlm(
     best_val_loss = float('inf')
     best_epoch = 0
     patience_counter = 0
+    best_model_state = None  # 存储最佳模型状态，避免频繁磁盘IO
     
     display_stage_separator(logger, "训练循环", "开始训练循环")
     train_start_time = time.time()
@@ -277,7 +278,8 @@ def train_bert_mlm(
                 log_interval=log_interval,
                 epoch_num=epoch,
                 total_epochs=config.bert.pretraining.epochs,
-                log_style=getattr(config.system, 'log_style', 'online')
+                log_style=getattr(config.system, 'log_style', 'online'),
+                config=config  # 🆕 传入config用于一致性正则化
             )
             
             # 验证
@@ -319,16 +321,22 @@ def train_bert_mlm(
                 }, step=_epoch_end_global_step)
             
             # 早停检查和最佳模型保存
-            best_model_dir = model_dir / "best"
             if val_loss < best_val_loss:
                 improvement = best_val_loss - val_loss
                 best_val_loss = val_loss
                 best_epoch = epoch
                 patience_counter = 0
                 logger.info(f"🎯 新最优 (epoch {epoch}): val_loss={val_loss:.4f} (↓ {improvement:.4f})")
-                mlm_model.save_model(str(best_model_dir))
-                if not ((best_model_dir / 'pytorch_model.bin').exists() and (best_model_dir / 'config.bin').exists()):
-                    logger.error("❌ 最佳模型保存失败 - 缺少必需文件")
+
+                # 直接在内存中保存最佳模型状态，避免频繁磁盘IO
+                best_model_state = {
+                    'model_state_dict': mlm_model.state_dict(),
+                    'config': mlm_model.config,
+                    'epoch': epoch,
+                    'val_loss': val_loss,
+                    'vocab_manager': mlm_model.vocab_manager
+                }
+                logger.info("💾 最佳模型状态已缓存到内存")
             if patience_counter >= config.bert.pretraining.early_stopping_patience:
                 logger.info(f"⏹️ 早停触发 (patience={config.bert.pretraining.early_stopping_patience})")
                 logger.info(f"  - 最佳epoch: {best_epoch}, 最佳验证损失: {best_val_loss:.4f}")
@@ -360,17 +368,24 @@ def train_bert_mlm(
         if wandb_logger is not None:
             wandb_logger.finish()
         
-        # 保存最终模型
-        logger.info("💾 保存最终模型...")
-        final_model_dir = model_dir / "final"
-        final_model_dir.mkdir(parents=True, exist_ok=True)
-        mlm_model.save_model(str(final_model_dir))
-        
-        # 验证最终模型保存
-        if (final_model_dir / 'pytorch_model.bin').exists() and (final_model_dir / 'config.bin').exists():
-            logger.info(f"✅ 最终模型保存成功: {final_model_dir}")
+        # 保存最佳模型
+        logger.info("💾 保存最佳模型...")
+
+        best_model_dir = model_dir / "best"
+        best_model_dir.mkdir(parents=True, exist_ok=True)
+
+        if best_model_state is not None:
+            # 使用深拷贝创建模型副本，然后加载最佳状态
+            import copy
+            temp_model = copy.deepcopy(mlm_model)
+            temp_model.load_state_dict(best_model_state['model_state_dict'])
+            temp_model.save_model(str(best_model_dir))
+
+            logger.info(f"✅ 最佳模型保存成功: {best_model_dir} (epoch {best_model_state['epoch']}, val_loss={best_model_state['val_loss']:.4f})")
         else:
-            logger.error(f"❌ 最终模型保存失败: {final_model_dir}")
+            # 如果没有最佳状态，使用当前模型作为最佳模型
+            mlm_model.save_model(str(best_model_dir))
+            logger.warning("⚠️ 未找到最佳模型状态，使用当前模型作为最佳模型")
         
         # 保存训练配置
         logger.info("📝 保存训练配置...")
@@ -416,7 +431,27 @@ def train_bert_mlm(
         
         display_stage_separator(logger, "预训练完成", "训练结果总结")
         display_performance_summary(logger, total_time, total_samples, best_val_loss, best_epoch, "预训练")
-        logger.info(f"💾 模型保存: {model_dir}/best/ (最优), {model_dir}/final/ (最终)")
+        logger.info(f"💾 模型保存: {model_dir}/best/")
+        
+        # 保存预训练结果到JSON文件（用于实验分析）
+        pretrain_metrics = {
+            "dataset": config.dataset.name,
+            "method": config.serialization.method, 
+            "task": "pretraining",
+            "epochs": config.bert.pretraining.epochs,
+            "best_val_loss": float(best_val_loss),
+            "best_epoch": best_epoch,
+            "total_train_time_sec": total_time,
+            "avg_epoch_time_sec": total_time / config.bert.pretraining.epochs if config.bert.pretraining.epochs > 0 else 0,
+            "model_dir": str(model_dir),
+            "effective_max_length": effective_max_length
+        }
+        
+        # 保存metrics文件
+        metrics_file = model_dir.parent / "pretrain_metrics.json"
+        with open(metrics_file, 'w', encoding='utf-8') as f:
+            json.dump(pretrain_metrics, f, indent=2, ensure_ascii=False)
+        logger.info(f"📊 预训练结果已保存: {metrics_file}")
     
     return {
         "mlm_model": mlm_model,

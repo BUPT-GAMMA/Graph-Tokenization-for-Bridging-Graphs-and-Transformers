@@ -30,8 +30,6 @@ DEFAULT_BPE_SCENARIOS = ["all"]
 DEFAULT_HYPERPARAMS = [{"epochs": 100, "batch_size": 512, "learning_rate": 2e-4}]
 DEFAULT_MLM_AUG_METHODS = [
     "random_deletion",
-    "random_insertion",
-    "random_replacement",
     "random_swap",
     "random_truncation",
 ]

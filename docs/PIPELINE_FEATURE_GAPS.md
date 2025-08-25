@@ -95,12 +95,21 @@ self.best_val_loss, self.patience_counter, should_stop = update_and_check(
     patience=early_stopping_patience,
 )
 
-# 多版本模型保存
+# 仅保存最佳模型（内存缓存优化）
 if self.best_val_loss < old_best:
+    # 内存中缓存最佳模型状态，避免频繁磁盘IO
+    best_model_state = {
+        'model_state_dict': self.mlm_model.state_dict(),
+        'config': self.mlm_model.config,
+        'vocab_manager': self.mlm_model.vocab_manager
+    }
+# 训练结束时从内存状态恢复并保存最佳模型
+if best_model_state is not None:
+    temp_model = type(self.mlm_model)(best_model_state['config'])
+    temp_model.load_state_dict(best_model_state['model_state_dict'])
+    temp_model.vocab_manager = best_model_state['vocab_manager']
     best_dir = self.model_dir / "best"
-    self.mlm_model.save_model(str(best_dir))
-final_dir = self.model_dir / "final"
-self.mlm_model.save_model(str(final_dir))
+    temp_model.save_model(str(best_dir))
 ```
 
 #### 影响分析
@@ -322,17 +331,27 @@ val_metrics = evaluate_model(
 #### 原版本实现
 ```python
 # bert_regression.py
-# 早停检查
+# 早停检查和最佳模型缓存
 if val_metrics['val_loss'] < self.best_val_loss:
     self.best_val_loss = val_metrics['val_loss']
     self.patience_counter = 0
-    # 保存最优模型和标准化器
-    best_dir = self.model_dir / "best"
-    self.finetuned_model.save_model(str(best_dir))
-    with open(best_dir / "label_normalizer.pkl", "wb") as f:
-        pickle.dump(self.label_normalizer, f)
+    # 内存中缓存最佳模型状态，避免频繁磁盘IO
+    best_model_state = {
+        'model_state_dict': self.finetuned_model.state_dict(),
+        'config': self.finetuned_model.config,
+        'label_normalizer': self.label_normalizer
+    }
 else:
     self.patience_counter += 1
+
+# 训练结束时保存最佳模型
+if best_model_state is not None:
+    temp_model = type(self.finetuned_model)(best_model_state['config'])
+    temp_model.load_state_dict(best_model_state['model_state_dict'])
+    best_dir = self.model_dir / "best"
+    temp_model.save_model(str(best_dir))
+    with open(best_dir / "label_normalizer.pkl", "wb") as f:
+        pickle.dump(best_model_state['label_normalizer'], f)
 ```
 
 ### 2.6 命令行参数支持 🟡
