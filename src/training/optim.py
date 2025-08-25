@@ -12,7 +12,7 @@ def build_optimizer_and_scheduler(
     base_lr: float,
     weight_decay: float,
     head_lr_multiplier: Optional[float] = None,
-    eta_min_ratio: float = 0.01,
+
     warmup_steps: Optional[int] = None,
     warmup_ratio: Optional[float] = None,
 ):
@@ -49,10 +49,7 @@ def build_optimizer_and_scheduler(
     if effective_warmup_steps >= total_steps:
         effective_warmup_steps = max(0, total_steps - 1)
 
-    # 使用 LambdaLR 实现：
-    # - 前 warmup 线性从 0 -> 1
-    # - 之后余弦从 1 -> eta_min_ratio
-    eta_min_ratio = float(eta_min_ratio)
+    # Lambda函数保留备用
 
     def lr_lambda(current_step: int) -> float:
         if total_steps <= 0:
@@ -65,9 +62,10 @@ def build_optimizer_and_scheduler(
         t = max(0, current_step - effective_warmup_steps)
         progress = min(1.0, float(t) / float(nonlocal_steps))
         cosine = 0.5 * (1.0 + math.cos(math.pi * progress))
+        eta_min_ratio = 0.01  # 备用参数
         return eta_min_ratio + (1.0 - eta_min_ratio) * cosine
 
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=total_steps, eta_min=eta_min_ratio)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=total_steps, eta_min=1e-6)
     return optimizer, scheduler
 
 
@@ -85,7 +83,6 @@ def build_from_config(model, config, *, total_steps: int, stage: str):
             base_lr=float(config.bert.pretraining.learning_rate),
             weight_decay=float(config.bert.pretraining.weight_decay),
             head_lr_multiplier=None,
-            eta_min_ratio=1e-7 / max(float(config.bert.pretraining.learning_rate), 1e-12),
             warmup_steps=int(getattr(config.bert.pretraining, 'warmup_steps', 0) or 0),
             warmup_ratio=float(getattr(config.bert.pretraining, 'warmup_ratio', 0.1)),
         )
@@ -100,7 +97,6 @@ def build_from_config(model, config, *, total_steps: int, stage: str):
             base_lr=float(config.bert.finetuning.learning_rate),
             weight_decay=float(config.bert.finetuning.weight_decay),
             head_lr_multiplier=head_mult,
-            eta_min_ratio=0.01,
             warmup_steps=int(getattr(config.bert.finetuning, 'warmup_steps', 0) or 0),
             warmup_ratio=float(getattr(config.bert.finetuning, 'warmup_ratio', 0.1)),
         )
