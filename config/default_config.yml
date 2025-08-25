@@ -101,7 +101,6 @@ bert:
     batch_size: 32
     learning_rate: 2e-4
     mask_prob: 0.15
-    warmup_steps: 100
     weight_decay: 0.05
     max_grad_norm: 1.0
     save_steps: 1000
