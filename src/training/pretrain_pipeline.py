@@ -331,10 +331,8 @@ def train_bert_mlm(
                 # 直接在内存中保存最佳模型状态，避免频繁磁盘IO
                 best_model_state = {
                     'model_state_dict': mlm_model.state_dict(),
-                    'config': mlm_model.config,
                     'epoch': epoch,
                     'val_loss': val_loss,
-                    'vocab_manager': mlm_model.vocab_manager
                 }
                 logger.info("💾 最佳模型状态已缓存到内存")
             if patience_counter >= config.bert.pretraining.early_stopping_patience:
@@ -387,44 +385,7 @@ def train_bert_mlm(
             mlm_model.save_model(str(best_model_dir))
             logger.warning("⚠️ 未找到最佳模型状态，使用当前模型作为最佳模型")
         
-        # 保存训练配置
-        logger.info("📝 保存训练配置...")
-        config_path = model_dir / "config.json"
-        config_data = {
-            "model_config": {
-                "encoder_type": config.encoder.type,
-                "hidden_size": config.bert.architecture.hidden_size,
-                "num_hidden_layers": config.bert.architecture.num_hidden_layers,
-                "num_attention_heads": config.bert.architecture.num_attention_heads,
-                "intermediate_size": config.bert.architecture.intermediate_size,
-                "max_position_embeddings": effective_max_length,
-                "vocab_size": vocab_info['vocab_size'],
-            },
-            "training_config": {
-                "task_type": "mlm",
-                "epochs": config.bert.pretraining.epochs,
-                "batch_size": config.bert.pretraining.batch_size,
-                "learning_rate": config.bert.pretraining.learning_rate,
-                "mask_prob": config.bert.pretraining.mask_prob,
-                "final_epoch": epoch,
-                "best_epoch": best_epoch,
-                "best_val_loss": best_val_loss,
-            },
-            "serialization_config": {
-                "method": method,
-                "bpe_mode": config.serialization.bpe.engine.encode_rank_mode,
-                "bpe_merges": config.serialization.bpe.num_merges if config.serialization.bpe.num_merges > 0 else None,
-            }
-        }
-        
-        with open(config_path, 'w', encoding='utf-8') as f:
-            json.dump(config_data, f, indent=2, ensure_ascii=False)
-        
-        if config_path.exists():
-            logger.info(f"✅ 训练配置保存成功: {config_path}")
-        else:
-            logger.error(f"❌ 训练配置保存失败: {config_path}")
-        
+
         # 训练总结
         total_time = time.time() - train_start_time
         total_samples = len(train) * epoch if epoch > 0 else 0

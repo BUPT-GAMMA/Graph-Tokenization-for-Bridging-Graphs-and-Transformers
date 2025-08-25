@@ -275,7 +275,6 @@ def run_finetune(
             # 在内存中缓存最佳模型状态，避免频繁磁盘IO
             best_model_state = {
                 'model_state_dict': model.state_dict(),
-                'config': model.config,
                 'epoch': epoch + 1,
                 pk: val_metrics[pk],
                 'label_normalizer': normalizer if task_handler.is_regression_task() else None
