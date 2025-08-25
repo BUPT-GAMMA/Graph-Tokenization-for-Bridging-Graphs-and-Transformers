@@ -68,6 +68,10 @@ def generate_commands(experiments, output_file):
     for exp in experiments:
         # 构建配置JSON
         config_json = {
+            "encoder": {
+                "type": "Alibaba-NLP/gte-multilingual-base",
+                "reset_weights": True
+            },
             "bert": {
                 "pretraining": {
                     "mlm_augmentation_methods": exp['seq_methods'],
@@ -92,7 +96,7 @@ def generate_commands(experiments, output_file):
             f"--experiment_name {exp['name']}",
             "--device auto",
             "--bpe_encode_rank_mode all",
-            "--epochs 20",  # 适中的epoch数用于快速测试
+            "--epochs 100",  # 适中的epoch数用于快速测试
             "--batch_size 512", 
             "--learning_rate 0.0002",
             f"--config_json '{config_json_str}'",
