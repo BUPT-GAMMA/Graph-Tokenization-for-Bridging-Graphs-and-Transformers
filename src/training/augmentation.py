@@ -35,7 +35,7 @@ augmentation_config:
 import random
 import torch
 import numpy as np
-from typing import Dict, Tuple, Optional
+from typing import Optional
 
 
 class TrainingAugmentation:
@@ -76,39 +76,20 @@ class TrainingAugmentation:
     
     def apply_gaussian_noise(self, embeddings: torch.Tensor) -> torch.Tensor:
         """对嵌入添加高斯噪声"""
-        if not self.should_use_gaussian_noise():
-            return embeddings
-            
         if random.random() > self.aug_config.gaussian_noise_probability:
             return embeddings
             
         noise = torch.randn_like(embeddings) * self.aug_config.gaussian_noise_std
         return embeddings + noise
     
-    def prepare_feature_mixup_batch(self, batch1: Dict, batch2: Dict) -> Tuple[Dict, float]:
-        """准备特征混合的batch对"""
-        if not self.should_use_feature_mixup():
-            return batch1, 0.0
-            
-        if random.random() > self.aug_config.feature_mixup_probability:
-            return batch1, 0.0
-            
-        # Beta分布采样混合系数
+    def should_do_mixup_this_step(self) -> bool:
+        """判断这一步是否要做特征混合"""
+        return random.random() <= self.aug_config.feature_mixup_probability
+    
+    def get_mixup_lambda(self) -> float:
+        """生成mixup的混合系数（调用前已确定要做mixup）"""
         alpha = self.aug_config.feature_mixup_alpha
-        lam = np.random.beta(alpha, alpha)
-        
-        # 创建混合batch（只混合标签，特征在模型内部混合）
-        mixed_batch = {
-            'input_ids1': batch1['input_ids'],
-            'attention_mask1': batch1['attention_mask'],
-            'labels1': batch1['labels'],
-            'input_ids2': batch2['input_ids'],
-            'attention_mask2': batch2['attention_mask'], 
-            'labels2': batch2['labels'],
-            'mixup_lambda': lam
-        }
-        
-        return mixed_batch, lam
+        return np.random.beta(alpha, alpha)
     
     def mix_features(self, features1: torch.Tensor, features2: torch.Tensor, 
                     lam: float) -> torch.Tensor:
@@ -124,6 +105,91 @@ class TrainingAugmentation:
             # 分类任务：随机选择一个标签
             mask = torch.rand(labels1.shape[0], device=labels1.device) < lam
             return torch.where(mask, labels1, labels2)
+    
+    def compute_training_loss(self, model, batch, task_handler, prev_batch=None):
+        """计算训练损失（流水式处理所有增强逻辑）"""
+        input_ids = batch['input_ids']
+        attention_mask = batch['attention_mask'] 
+        labels = batch['labels']
+        
+        # 步骤1：确定增强策略
+        use_mixup = (self.should_use_feature_mixup() and 
+                    task_handler.is_regression_task() and 
+                    self.should_do_mixup_this_step() and 
+                    prev_batch is not None)
+        use_consistency = self.should_use_consistency_regularization()
+        use_noise = (self.should_use_gaussian_noise() and model.task_type != 'mlm')
+        
+        # 步骤2：获取特征和标签
+        if use_mixup:
+            # 特征混合路径
+            prev_input_ids = prev_batch['input_ids'].to(input_ids.device)
+            prev_attention_mask = prev_batch['attention_mask'].to(input_ids.device)
+            prev_labels = prev_batch['labels'].to(input_ids.device)
+            
+            outputs1 = model(input_ids, attention_mask)
+            outputs2 = model(prev_input_ids, prev_attention_mask)
+            
+            # 混合特征和标签
+            lam = self.get_mixup_lambda()
+            final_features = self.mix_features(outputs1['pooled'], outputs2['pooled'], lam)
+            final_labels = self.mix_labels(labels, prev_labels, lam, task_handler.task_type)
+        else:
+            # 标准路径
+            outputs = model(input_ids, attention_mask)
+            final_features = outputs.get('pooled')
+            final_labels = labels
+            
+        # 步骤3：应用高斯噪声
+        if use_noise and final_features is not None:
+            final_features = self.apply_gaussian_noise(final_features)
+            
+        # 步骤4：计算损失
+        if use_consistency:
+            if use_mixup:
+                # Mixup + Consistency组合：
+                # 1. 已经得到mixed_features和mixed_labels
+                # 2. 用mixed_features通过task_head做两次前向传播（利用task_head的dropout）
+                outputs1 = model.task_head(final_features)
+                outputs2 = model.task_head(final_features)
+                
+                # 返回总损失
+                total_loss, _, _ = task_handler.compute_loss_with_consistency(
+                    outputs1, outputs2, final_labels, 
+                    self.aug_config.consistency_alpha
+                )
+                return total_loss
+            else:
+                # 纯R-Drop：对整个模型做两次完整前向传播
+                outputs1 = model(input_ids, attention_mask)
+                outputs2 = model(input_ids, attention_mask)
+                
+                # 如果启用高斯噪声，在每次前向传播后单独应用
+                if use_noise and outputs1.get('pooled') is not None:
+                    # 第一次前向传播加噪声
+                    noisy_pooled1 = self.apply_gaussian_noise(outputs1['pooled'])
+                    outputs1['outputs'] = model.task_head(noisy_pooled1)
+                    
+                    # 第二次前向传播加噪声
+                    noisy_pooled2 = self.apply_gaussian_noise(outputs2['pooled'])
+                    outputs2['outputs'] = model.task_head(noisy_pooled2)
+                
+                # 返回总损失
+                total_loss, _, _ = task_handler.compute_loss_with_consistency(
+                    outputs1['outputs'], outputs2['outputs'], final_labels, 
+                    self.aug_config.consistency_alpha
+                )
+                return total_loss
+        else:
+            # 标准损失计算
+            if use_mixup or use_noise:
+                # 使用处理过的特征
+                final_outputs = model.task_head(final_features)
+            else:
+                # 使用原始输出
+                final_outputs = outputs['outputs']
+                
+            return task_handler.compute_loss(final_outputs, final_labels)
 
 
 def create_augmentation(config, task_type: str = "auto") -> Optional[TrainingAugmentation]:
