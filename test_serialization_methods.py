@@ -6,7 +6,6 @@
 示例：
   python test_serialization_methods.py --datasets qm9test
   python test_serialization_methods.py --datasets "mutagenicity,coil_del,dblp_v1"
-  python test_serialization_methods.py --num_samples 3 --methods "graph_seq"
 """
 
 import sys
