@@ -503,41 +503,6 @@ class ProjectConfig:
         return out_dir / "bpe_codebook.pkl"
 
     # ================= 实验ID与快照/目录辅助 =================
-    def build_experiment_id(self) -> str:
-        """构建 experiment_id。
-
-        说明：experiment_id = "{group}/{exp_name}"，其中：
-          - group 来源于 self.experiment_group（必须存在）
-          - exp_name 由 build_exp_name(self.experiment_name) 生成
-          - 仅包含一处时间戳：exp_name 内的简单时间戳（mmdd_HHMM）
-
-        返回：
-          str: experiment_id 字符串。
-
-        异常：
-          ValueError: 当 experiment_group 未设置时抛出。
-        """
-        if self.experiment_group is None:
-            raise ValueError("experiment_group 未设置，无法构建 experiment_id")
-        exp_name = self.build_exp_name(self.experiment_name)
-        return f"{self.experiment_group}/{exp_name}"
-
-    def get_config_snapshot_path(self, exp_id: str) -> Path:
-        """获取配置快照写入路径。
-
-        说明：快照写入到日志目录的根层级：
-          logs/<group>/<exp_name>/<dataset>/<method>/<exp_id>_config.json
-          注意：作为文件名使用时将 '/' 替换为 '_'。
-
-        参数：
-          exp_id (str): 调用 build_experiment_id() 得到的 experiment_id。
-
-        返回：
-          Path: 配置快照文件路径。
-        """
-        logs_dir = self.get_logs_dir()
-        filename = f"{exp_id.replace('/', '_')}_config.json"
-        return logs_dir / filename
 
     def ensure_experiment_dirs(self) -> tuple[Path, Path]:
         """确保实验目录存在（logs与model）。
@@ -637,9 +602,6 @@ class ProjectConfig:
         # 兼容旧接口：统一回到 log_dir 下
         return self.log_dir / experiment_name
     
-    # 旧路径接口已在重构中移除；请使用以下统一接口：
-    # - get_logs_dir()/get_model_dir()/ensure_experiment_dirs()
-    # - get_config_snapshot_path(build_experiment_id())
 
 # ===========================================
 # 全局配置实例和工具函数
