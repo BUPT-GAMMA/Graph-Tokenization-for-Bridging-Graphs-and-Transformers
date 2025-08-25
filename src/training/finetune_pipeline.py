@@ -5,6 +5,7 @@ import time
 import pickle
 import torch
 import json
+import copy
 from config import ProjectConfig
 from src.data.unified_data_interface import UnifiedDataInterface
 # 直接使用UDI接口，不再需要common中的包装函数
@@ -131,6 +132,7 @@ def run_finetune(
     best_val = float('-inf') if task_handler.should_maximize_metric else float('inf')
     patience = config.bert.finetuning.early_stopping_patience
     patience_ctr = 0
+    best_model_state = None  # 存储最佳模型状态，避免频繁磁盘IO
     # 为避免覆盖预训练权重，微调阶段保存到独立子目录，可选加前后缀
     _base = config.get_model_dir()
     _save_name = "finetune"
@@ -141,7 +143,6 @@ def run_finetune(
     _save_root = _base / _save_name
     _save_root.mkdir(parents=True, exist_ok=True)
     best_dir = _save_root / "best"
-    final_dir = _save_root / "final"
 
     # 训练时长统计与步级日志间隔
     epoch_times = []
@@ -193,6 +194,7 @@ def run_finetune(
             epoch_num=epoch + 1,
             total_epochs=config.bert.finetuning.epochs,
             log_style=getattr(config.system, 'log_style', 'online'),
+            config=config,  # 🆕 传入config用于一致性正则化
         )
         # 训练期验证：无论传入模式如何，均计算三种聚合模式并分别记录；
         # learned 在验证阶段若无聚合器则回退为 avg（仅用于参考日志）。
@@ -269,38 +271,65 @@ def run_finetune(
             best_val = val_metrics[pk]
             patience_ctr = 0
             logger.info(f"🎯 新的最优模型! {pk}={val_metrics[pk]:.4f} (↓ {improvement:.4f})")
-            if config.bert.finetuning.save_models:
-                model.save_model(str(best_dir))
+
+            # 在内存中缓存最佳模型状态，避免频繁磁盘IO
+            best_model_state = {
+                'model_state_dict': model.state_dict(),
+                'config': model.config,
+                'epoch': epoch + 1,
+                pk: val_metrics[pk],
+                'label_normalizer': normalizer if task_handler.is_regression_task() else None
+            }
+            logger.info("💾 最佳模型状态已缓存到内存")
+
             best_epoch_index = epoch + 1
-            if task_handler.is_regression_task():
-                if config.bert.finetuning.save_models :
-                    with open(best_dir / "label_normalizer.pkl", "wb") as f:
-                        pickle.dump(normalizer, f)
         else:
             patience_ctr += 1
             if patience_ctr >= patience:
                 break
 
-    display_stage_separator(logger, "最终保存与测试", "保存模型与测试")
-    # 最终保存与测试
-    if config.bert.finetuning.save_models:
-        model.save_model(str(final_dir))
-        if task == "regression":
-            with open(final_dir / "label_normalizer.pkl", "wb") as f:
-                pickle.dump(normalizer, f)
+    display_stage_separator(logger, "保存与测试", "保存模型与测试")
+    # 加载最佳模型用于测试和保存
+    if best_model_state is not None:
+        logger.info("🔄 加载最佳模型状态...")
+        # 使用深拷贝创建模型副本，然后加载最佳状态
+        test_model = copy.deepcopy(model)
+        test_model.load_state_dict(best_model_state['model_state_dict'])
+        test_normalizer = best_model_state.get('label_normalizer', normalizer)
+        
+        # 保存最佳模型
+        if config.bert.finetuning.save_models:
+            test_model.save_model(str(best_dir))
+            # 保存标准化器（如果存在）
+            if task == "regression" and best_model_state.get('label_normalizer') is not None:
+                with open(best_dir / "label_normalizer.pkl", "wb") as f:
+                    pickle.dump(best_model_state['label_normalizer'], f)
+            logger.info(f"✅ 最佳模型保存成功: {best_dir} (epoch {best_model_state['epoch']}, {pk}={best_model_state[pk]:.4f})")
+    else:
+        logger.info("⚠️ 未找到最佳模型状态，使用当前模型进行测试")
+        test_model = model
+        test_normalizer = normalizer
+        
+        # 保存当前模型作为最佳模型
+        if config.bert.finetuning.save_models:
+            model.save_model(str(best_dir))
+            if task == "regression":
+                with open(best_dir / "label_normalizer.pkl", "wb") as f:
+                    pickle.dump(normalizer, f)
+            logger.info(f"✅ 模型保存成功: {best_dir}")
 
     # 可学习聚合：在测试前尝试训练聚合器（无论传入模式为何，都为 learned 评估做准备）
     aggregator = None
     try:
         from src.training.learned_aggregation import train_variant_aggregator
         aggregator = train_variant_aggregator(
-            model=model,
+            model=test_model,
             train_loader=train_dl,
             val_loader=val_dl,
             device=device,
             task=task,
-            label_normalizer=normalizer if task_handler.is_regression_task() else None,
-            save_dir=(str(final_dir / "aggregator") if config.bert.finetuning.save_models else None),
+            label_normalizer=test_normalizer if task_handler.is_regression_task() else None,
+            save_dir=(str(best_dir / "aggregator") if config.bert.finetuning.save_models else None),
         )
     except Exception as e:
         logger.warning(f"训练聚合器失败，将回退到 avg 聚合: {e}")
@@ -310,12 +339,12 @@ def run_finetune(
     test_metrics_by_mode: Dict[str, Dict[str, float]] = {}
     for _mode in ("avg", "best", "learned"):
         _metrics = evaluate_model(
-                model,
+                test_model,
                 test_dl,
                 device,
                 task,
                 task_handler=task_handler,
-                label_normalizer=normalizer if task_handler.is_regression_task() else None,
+                label_normalizer=test_normalizer if task_handler.is_regression_task() else None,
                 aggregation_mode=_mode if not (_mode == "learned" and aggregator is None) else "avg",
                 epoch_num=None,
                 total_epochs=None,
@@ -353,7 +382,6 @@ def run_finetune(
             'epochs': int(config.bert.finetuning.epochs),
             'steps_per_epoch': int(steps_per_epoch),
             'best_dir': str(best_dir),
-            'final_dir': str(final_dir),
             'train': {
                 'last_loss': float(last_train_loss) if last_train_loss is not None else None,
                 'learning_rate_last': float(last_learning_rate) if last_learning_rate is not None else None,
@@ -420,8 +448,7 @@ def run_finetune(
         'best_val_loss': best_val,
         'test_metrics': test_metrics,
         'best_dir': str(best_dir),
-        'final_dir': str(final_dir),
-        'aggregator_dir': str(final_dir / "aggregator") if aggregator is not None else None,
+        'aggregator_dir': str(best_dir / "aggregator") if aggregator is not None else None,
     }
 
 

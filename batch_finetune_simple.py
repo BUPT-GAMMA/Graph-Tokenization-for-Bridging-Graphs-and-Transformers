@@ -39,8 +39,6 @@ DEFAULT_LOG_DIR = "logs/batch_finetune"
 # 回归任务增强方法默认集合（与预训练方法名一致，作用于回归任务）
 DEFAULT_REG_AUG_METHODS = [
     "random_deletion",
-    "random_insertion",
-    "random_replacement",
     "random_swap",
     "random_truncation",
 ]

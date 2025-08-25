@@ -450,14 +450,16 @@ class NormalizedRegressionDataset:
 
 
 
-def create_transforms_from_config(project_config, valid_tokens, task_type: str = "mlm") -> TokenTransform:
+def create_transforms_from_config(project_config, valid_tokens, task_type: str = "mlm", vocab_manager=None) -> TokenTransform:
     """根据配置创建统一的transform pipeline，总是返回有效的transform"""
     
-    # 获取指定任务的方法列表
+    # 获取指定任务的方法列表和增强配置
     if task_type == "mlm":
         methods = project_config.bert.pretraining.mlm_augmentation_methods
+        aug_config = project_config.bert.pretraining.augmentation_config
     else:
         methods = project_config.bert.finetuning.regression_augmentation_methods
+        aug_config = project_config.bert.finetuning.augmentation_config
     
     # 根据指定的方法创建transforms
     transforms = []
@@ -467,19 +469,33 @@ def create_transforms_from_config(project_config, valid_tokens, task_type: str =
         for method in methods:
             if method == "random_deletion":
                 from .transforms import RandomDeletion
-                transforms.append(RandomDeletion(deletion_prob=0.1, probability=0.3))
-            elif method == "random_insertion":
-                from .transforms import RandomInsertion
-                transforms.append(RandomInsertion(valid_tokens, insertion_prob=0.1, probability=0.3))
-            elif method == "random_replacement":
-                from .transforms import RandomReplacement
-                transforms.append(RandomReplacement(valid_tokens, replacement_prob=0.1, probability=0.3))
+                transforms.append(RandomDeletion(
+                    deletion_ratio=aug_config.random_deletion_ratio,
+                    probability=aug_config.random_deletion_probability
+                ))
             elif method == "random_swap":
                 from .transforms import RandomSwap
-                transforms.append(RandomSwap(swap_prob=0.1, probability=0.3))
+                transforms.append(RandomSwap(
+                    swap_ratio=aug_config.random_swap_ratio,
+                    probability=aug_config.random_swap_probability,
+                    window_size=aug_config.swap_window_size
+                ))
             elif method == "random_truncation":
                 from .transforms import RandomTruncation
-                transforms.append(RandomTruncation(min_ratio=0.7, probability=0.3))
+                transforms.append(RandomTruncation(
+                    min_ratio=aug_config.random_truncation_min_ratio,
+                    probability=aug_config.random_truncation_probability
+                ))
+            elif method == "sequence_masking":
+                from .transforms import SequenceMasking
+                sequence_masking = SequenceMasking(
+                    mask_ratio=aug_config.sequence_masking_ratio,
+                    probability=aug_config.sequence_masking_probability
+                )
+                # 设置mask token ID（从vocab_manager获取）
+                if vocab_manager is not None and hasattr(vocab_manager, 'mask_token_id'):
+                    sequence_masking.set_mask_token_id(vocab_manager.mask_token_id)
+                transforms.append(sequence_masking)
             else:
                 print(f"警告：未知的数据增强方法 '{method}'，跳过")
     
