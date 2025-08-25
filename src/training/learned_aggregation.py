@@ -122,7 +122,7 @@ def _collect_variant_sets(
     model: nn.Module,
     loader: DataLoader,
     device: str,
-    task: Literal['regression', 'classification'],
+    task: Literal['regression', 'classification', 'multi_label_classification'],
     *,
     label_normalizer=None,
     use_pred_as_feat: bool = True,
@@ -165,11 +165,21 @@ def _collect_variant_sets(
                 # 修正：使用正确的字段名 'outputs'（而非 'logits'）
                 logits = outputs['outputs'].detach().to(torch.float32).cpu().numpy()
                 pooled_np = pooled.detach().to(torch.float32).cpu().numpy()
-                y_true = labels.detach().cpu().numpy().reshape(-1)
-                for gid, f, lg, y in zip(graph_ids, pooled_np, logits, y_true):
-                    features_by_gid.setdefault(gid, []).append(f.astype(np.float32))
-                    aux_by_gid.setdefault(gid, []).append(lg.astype(np.float32))
-                    label_by_gid[gid] = int(y)
+                y_true = labels.detach().cpu().numpy()
+                
+                if task == 'multi_label_classification':
+                    # 多标签分类：labels是[batch_size, num_labels]的二进制矩阵
+                    for gid, f, lg, y in zip(graph_ids, pooled_np, logits, y_true):
+                        features_by_gid.setdefault(gid, []).append(f.astype(np.float32))
+                        aux_by_gid.setdefault(gid, []).append(lg.astype(np.float32))
+                        label_by_gid[gid] = y.astype(np.float32)  # 保持多标签格式
+                else:
+                    # 单标签分类：labels是[batch_size]的整数数组
+                    y_true = y_true.reshape(-1)
+                    for gid, f, lg, y in zip(graph_ids, pooled_np, logits, y_true):
+                        features_by_gid.setdefault(gid, []).append(f.astype(np.float32))
+                        aux_by_gid.setdefault(gid, []).append(lg.astype(np.float32))
+                        label_by_gid[gid] = int(y)
 
     # 整理为列表
     features_per_graph: List[np.ndarray] = []
@@ -190,7 +200,7 @@ def train_variant_aggregator(
     train_loader: DataLoader,
     val_loader: DataLoader,
     device: str,
-    task: Literal['regression', 'classification'],
+    task: Literal['regression', 'classification', 'multi_label_classification'],
     *,
     label_normalizer=None,
     save_dir: Optional[str] = None,
@@ -220,9 +230,13 @@ def train_variant_aggregator(
     val_dl = DataLoader(val_ds, batch_size=cfg_obj.batch_size, shuffle=False, collate_fn=collate)
 
     # 3) 创建聚合器
-    D = train_feats[0].shape[1]
-    if task == 'regression' and cfg_obj.use_pred_as_feat:
-        input_dim = D + 1
+    D = train_feats[0].shape[1]  # pooled特征维度
+    if cfg_obj.use_pred_as_feat:
+        if task == 'regression':
+            input_dim = D + 1  # pooled + 1维预测值
+        else:  # classification 或 multi_label_classification
+            C = train_aux[0].shape[1]  # logits/概率维度
+            input_dim = D + C  # pooled + C维概率
     else:
         input_dim = D
     aggregator = VariantWeightingAggregator(input_dim=input_dim, hidden_dim=cfg_obj.hidden_dim,
@@ -233,8 +247,10 @@ def train_variant_aggregator(
 
     if task == 'regression':
         loss_fn = nn.MSELoss()
-    else:
+    elif task == 'classification':
         loss_fn = nn.CrossEntropyLoss()
+    else:  # multi_label_classification
+        loss_fn = nn.BCEWithLogitsLoss()
 
     # 统一将验证指标视为“越小越好”：
     # 回归: MSE；分类: 1-accuracy
@@ -262,13 +278,26 @@ def train_variant_aggregator(
                 preds = aux.squeeze(-1)                      # [B, K]
                 y_hat = (weights * preds).sum(dim=1)         # [B]
                 loss = loss_fn(y_hat, labels.float())
-            else:
-                weights = aggregator(feats, mask=mask)       # [B, K]
+            elif task == 'classification':
+                # 单标签分类：拼接概率作为特征
                 logits = aux                                  # [B, K, C]
                 probs = torch.softmax(logits, dim=-1)        # [B, K, C]
+                if cfg_obj.use_pred_as_feat:
+                    feats = torch.cat([feats, probs], dim=-1)  # [B, K, D+C]
+                weights = aggregator(feats, mask=mask)       # [B, K]
                 weights_exp = weights.unsqueeze(-1)          # [B, K, 1]
                 p_agg = (weights_exp * probs).sum(dim=1)     # [B, C]
                 loss = loss_fn(p_agg, labels.long())
+            else:  # multi_label_classification
+                # 多标签分类：拼接sigmoid概率作为特征
+                logits = aux                                  # [B, K, L]
+                probs = torch.sigmoid(logits)                # [B, K, L]
+                if cfg_obj.use_pred_as_feat:
+                    feats = torch.cat([feats, probs], dim=-1)  # [B, K, D+L]
+                weights = aggregator(feats, mask=mask)       # [B, K]
+                weights_exp = weights.unsqueeze(-1)          # [B, K, 1]
+                logits_agg = (weights_exp * logits).sum(dim=1)  # [B, L] - 聚合logits而不是概率
+                loss = loss_fn(logits_agg, labels.float())
 
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
@@ -295,15 +324,26 @@ def train_variant_aggregator(
                     y_hat = (weights * preds).sum(dim=1)
                     # 用 MSE 作验证指标（你也可以换 MAE）
                     metric = nn.functional.mse_loss(y_hat, labels.float())
-                else:
-                    weights = aggregator(feats, mask=mask)
+                elif task == 'classification':
                     logits = aux
                     probs = torch.softmax(logits, dim=-1)
+                    if cfg_obj.use_pred_as_feat:
+                        feats = torch.cat([feats, probs], dim=-1)
+                    weights = aggregator(feats, mask=mask)
                     p_agg = (weights.unsqueeze(-1) * probs).sum(dim=1)
-                    # 验证用 1-accuracy 作为“损失型”指标便于早停（亦可直接accuracy并取最大）
+                    # 验证用 1-accuracy 作为"损失型"指标便于早停（亦可直接accuracy并取最大）
                     pred_cls = torch.argmax(p_agg, dim=-1)
                     acc = (pred_cls == labels).float().mean()
                     metric = 1.0 - acc
+                else:  # multi_label_classification
+                    logits = aux
+                    probs = torch.sigmoid(logits)
+                    if cfg_obj.use_pred_as_feat:
+                        feats = torch.cat([feats, probs], dim=-1)
+                    weights = aggregator(feats, mask=mask)
+                    logits_agg = (weights.unsqueeze(-1) * logits).sum(dim=1)
+                    # 多标签验证用BCE loss作为指标
+                    metric = nn.functional.binary_cross_entropy_with_logits(logits_agg, labels.float())
                 val_metric_accum += float(metric.detach().cpu().item())
                 val_steps += 1
 

@@ -119,6 +119,7 @@ def _build_encoder_config(config, encoder_type: str, task_type: str = None) -> D
             'hidden_dropout_prob': config.bert.architecture.hidden_dropout_prob,
             'attention_probs_dropout_prob': config.bert.architecture.attention_probs_dropout_prob,
             'max_position_embeddings': config.bert.architecture.max_position_embeddings,
+            'max_seq_length': config.bert.architecture.max_seq_length,
             'layer_norm_eps': config.bert.architecture.layer_norm_eps,
             'type_vocab_size': getattr(config.bert.architecture, 'type_vocab_size', 2),
             'initializer_range': getattr(config.bert.architecture, 'initializer_range', 0.02),
@@ -182,17 +183,17 @@ def _load_and_copy_pretrained_weights(model, pretrained_path):
     assert isinstance(checkpoint, dict) and len(checkpoint) > 0, "无效的checkpoint：内容为空"
 
     # 提取 encoder 权重并去掉前缀 'encoder.'
-    raw_encoder_keys_sample = [k for k in checkpoint.keys() if k.startswith('encoder.')][:5]
-    logger.info(f"🔎 预训练原始encoder键(示例): {raw_encoder_keys_sample}")
-    # 只剥离最前面的 'encoder.' 前缀，避免意外移除中间的 '...gte_model.encoder.layer...'
+    # raw_encoder_keys_sample = [k for k in checkpoint.keys() if k.startswith('encoder.')][:5]
+    # logger.info(f"🔎 预训练原始encoder键(示例): {raw_encoder_keys_sample}")
+    # # 只剥离最前面的 'encoder.' 前缀，避免意外移除中间的 '...gte_model.encoder.layer...'
     encoder_state = {}
     for k, v in checkpoint.items():
         if k.startswith('encoder.'):
             new_k = k[len('encoder.'):]
             encoder_state[new_k] = v
-    enc_keys_sample = list(encoder_state.keys())[:5]
-    logger.info(f"🔎 处理后的encoder键(示例): {enc_keys_sample}")
-    assert encoder_state, "预训练模型中未找到 encoder.* 权重键"
+    # enc_keys_sample = list(encoder_state.keys())[:5]
+    # logger.info(f"🔎 处理后的encoder键(示例): {enc_keys_sample}")
+    # assert encoder_state, "预训练模型中未找到 encoder.* 权重键"
 
     # 确认保存的模型类型与当前一致（bert 或 gte）
     expect_submodule = 'bert' if hasattr(model.encoder, 'bert') else ('gte_model' if hasattr(model.encoder, 'gte_model') else None)
