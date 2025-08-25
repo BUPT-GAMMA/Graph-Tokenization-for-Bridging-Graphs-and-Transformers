@@ -444,7 +444,9 @@ def train_bert_mlm(
             "total_train_time_sec": total_time,
             "avg_epoch_time_sec": total_time / config.bert.pretraining.epochs if config.bert.pretraining.epochs > 0 else 0,
             "model_dir": str(model_dir),
-            "effective_max_length": effective_max_length
+            "effective_max_length": effective_max_length,
+            # 完整配置信息（用于事后排查）
+            "config": config.to_dict()
         }
         
         # 保存metrics文件
