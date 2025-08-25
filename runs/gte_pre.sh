@@ -12,7 +12,7 @@ python batch_finetune_simple.py \
     --finetune_modes bert,gte-pretrain,gte-reset-pretrain \
     --datasets molhiv --methods feuler,fcpp,topo --bpe_scenarios all,raw,random \
     --epochs 60 --experiment_group gte_exploration \
-    --use_augmentation true \
+    --use_augmentation false \
     --commands_stdout \
     --plain_logs 
  
