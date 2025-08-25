@@ -5,27 +5,6 @@
 
 支持对指定数据集和序列化方法进行BERT微调，具备灵活的配置参数覆盖功能。
 
-使用示例:
-  # 基本回归任务
-  python run_finetune.py --dataset qm9test --method feuler --task regression
-  
-  # 指定目标属性
-  python run_finetune.py --dataset qm9test --method feuler --task regression --target_property homo
-  
-  # 分类任务
-  python run_finetune.py --dataset mnist --method feuler --task classification --num_classes 10
-  
-  # 自定义微调参数
-  python run_finetune.py --dataset qm9test --method feuler --task regression \\
-    --finetune_epochs 20 --finetune_batch_size 16 --finetune_learning_rate 2e-5
-  
-  # 自定义数据处理
-  python run_finetune.py --dataset qm9test --method feuler --task regression \\
-    --normalization standard --pooling_method mean
-  
-  # 高级配置覆盖
-  python run_finetune.py --dataset qm9test --method feuler --task regression \\
-    --config_override bert.finetuning.warmup_ratio=0.1 system.device=cuda:1
 """
 
 from __future__ import annotations
@@ -269,30 +248,6 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 使用示例:
-  # 基本回归任务（默认BPE all模式）
-  python run_finetune.py --dataset qm9test --method feuler --task regression
-  
-  # 无BPE压缩微调（使用原始序列）
-  python run_finetune.py --dataset qm9test --method feuler --task regression --bpe_encode_rank_mode none
-  
-  # BPE Top-K压缩微调
-  python run_finetune.py --dataset qm9test --method feuler --task regression \\
-    --bpe_encode_rank_mode topk --bpe_encode_rank_k 1000
-  
-  # BPE随机压缩微调（训练时随机，评估时确定性）
-  python run_finetune.py --dataset qm9test --method feuler --task regression \\
-    --bpe_encode_rank_mode random --bpe_eval_mode all
-  
-  # 指定回归目标属性
-  python run_finetune.py --dataset qm9test --method feuler --task regression --target_property homo
-  
-  # 分类任务（自动推断类别数）
-  python run_finetune.py --dataset mnist --method feuler --task classification
-  
-  # JSON配置覆盖
-  python run_finetune.py --dataset qm9test --method feuler --task regression \\
-    --config_json '{"bert": {"finetuning": {"epochs": 30, "learning_rate": 1e-5}},
-                    "serialization": {"bpe": {"engine": {"encode_rank_mode": "topk", "encode_rank_k": 1000}}}}'
         """
     )
     

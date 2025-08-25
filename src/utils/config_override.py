@@ -67,8 +67,7 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
     
     # 任务参数
     task_group = parser.add_argument_group('任务参数')
-    task_group.add_argument("--task", choices=["mlm", "regression", "classification", "multi_label_classification", "multi_target_regression"], 
-                           help="任务类型（可选，不指定时从数据集自动推断）")
+
     task_group.add_argument("--target_property", type=str, help="回归目标属性")
     
     # 编码器参数
@@ -340,8 +339,6 @@ def add_all_args(parser: argparse.ArgumentParser, include_finetune: bool = True)
     # 任务参数 (仅微调需要)
     if include_finetune:
         task_group = parser.add_argument_group('任务配置')
-        task_group.add_argument("--task", type=str, choices=["mlm", "regression", "classification", "multi_label_classification", "multi_target_regression"], 
-                             help="任务类型（可选，不指定时从数据集自动推断）")
         task_group.add_argument("--target_property", type=str, help="目标属性名称")
     
     add_json_override_args(parser)
