@@ -141,6 +141,9 @@ class ProjectConfig:
         # 初始化后处理
         self.__post_init__()
         setup_global_seeds(self.system.seed)
+        
+        # 🆕 Optuna超参数搜索支持
+        self.optuna_trial = None  # 存储optuna trial对象，用于剪枝支持
     
     def _process_special_configs(self):
         """

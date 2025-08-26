@@ -18,6 +18,12 @@ from typing import Dict, List, Any
 # from pathlib import Path  # unused
 import json
 
+# 🆕 Optuna剪枝支持
+try:
+    import optuna
+except ImportError:
+    optuna = None  # 可选依赖，不强制要求
+
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
@@ -303,6 +309,16 @@ def train_bert_mlm(
             
             logger.info(f"📊 Epoch {epoch:3d}: train_loss={train_loss:.4f}, val_loss={val_loss:.4f}, lr={current_lr:.2e}, time={epoch_time:.1f}s")
             
+            # 🆕 Optuna剪枝支持：报告当前epoch的验证损失
+            if getattr(config, 'optuna_trial', None) is not None:
+                try:
+                    config.optuna_trial.report(val_loss, epoch)
+                    if config.optuna_trial.should_prune():
+                        logger.info(f"⚠️ Optuna剪枝触发 (epoch {epoch})")
+                        raise optuna.TrialPruned()
+                except Exception as e:
+                    logger.warning(f"⚠️ Optuna剪枝检查失败: {e}")
+            
             # TensorBoard记录
             writer.add_scalar('Loss/Train', train_loss, epoch)
             writer.add_scalar('Loss/Validation', val_loss, epoch)
@@ -395,6 +411,10 @@ def train_bert_mlm(
         logger.info(f"💾 模型保存: {model_dir}/best/")
         
         # 保存预训练结果到JSON文件（用于实验分析）
+        # 🔧 关键修复：临时清理optuna_trial以避免JSON序列化问题
+        temp_optuna_trial = getattr(config, 'optuna_trial', None)
+        config.optuna_trial = None  # 临时清理
+        
         pretrain_metrics = {
             "dataset": config.dataset.name,
             "method": config.serialization.method, 
@@ -409,6 +429,9 @@ def train_bert_mlm(
             # 完整配置信息（用于事后排查）
             "config": config.to_dict()
         }
+        
+        # 🔧 序列化完成后恢复optuna_trial（虽然通常为None）
+        config.optuna_trial = temp_optuna_trial
         
         # 保存metrics文件
         metrics_file = model_dir.parent / "pretrain_metrics.json"
