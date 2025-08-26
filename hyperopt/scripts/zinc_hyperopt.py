@@ -12,10 +12,11 @@ import sys
 from pathlib import Path
 
 import optuna
-from optuna.storages import JournalStorage, JournalFileStorage
+from optuna.storages import JournalStorage
+from optuna.storages.journal import JournalFileBackend
 
-# 添加项目路径
-sys.path.insert(0, str(Path(__file__).parent))
+# 添加项目路径（假设从项目根目录运行）
+sys.path.append('.')
 
 from config import ProjectConfig
 from src.training.pretrain_pipeline import train_bert_mlm
@@ -58,7 +59,14 @@ def pretrain_objective(trial):
     try:
         # 在训练函数调用的前一刻设置，确保剪枝功能可用
         config.optuna_trial = temp_trial
+        
+        # ⏱️ 记录训练时间开始
+        import time
+        start_time = time.time()
         result = train_bert_mlm(config)
+        end_time = time.time()
+        training_time_minutes = (end_time - start_time) / 60.0  # 转换为分钟
+        
         # 训练完成立即清理，避免后续序列化问题
         config.optuna_trial = None
         
@@ -81,6 +89,7 @@ def pretrain_objective(trial):
             'bpe_mode': str(args.bpe_mode),
             'hyperparameters': safe_hyperparams,
             'val_loss': float(val_loss),
+            'training_time_minutes': float(training_time_minutes),  # 🆕 训练时间记录
             'model_path': str(model_dir / "best"),
             'stage': 'pretrain'
         }
@@ -90,7 +99,12 @@ def pretrain_objective(trial):
         with open(model_dir / 'trial_info.json', 'w') as f:
             json.dump(trial_info, f, indent=2)
         
-        print(f"✅ 试验 {trial.number} 完成: val_loss={val_loss:.4f}")
+        # 🎯 将时间和其他信息作为user_attr记录到Optuna中
+        trial.set_user_attr('training_time_minutes', training_time_minutes)
+        trial.set_user_attr('experiment_name', config.experiment_name)
+        trial.set_user_attr('bpe_mode', args.bpe_mode)
+        
+        print(f"✅ 试验 {trial.number} 完成: val_loss={val_loss:.4f}, time={training_time_minutes:.1f}min, bs={config.bert.pretraining.batch_size}")
         print(f"📁 模型路径: {model_dir}")
         return float(val_loss)  # 🔧 确保返回值是基本float类型
     except optuna.TrialPruned:
@@ -168,11 +182,18 @@ def finetune_objective(trial, top_pretrain_trials):
     try:
         # 在训练函数调用的前一刻设置，确保剪枝功能可用
         config.optuna_trial = temp_trial
+        
+        # ⏱️ 记录微调时间开始
+        import time
+        start_time = time.time()
         result = run_finetune(
             config,
             pretrained_dir=pretrained_dir,
             pretrain_exp_name=pretrain_exp_name
         )
+        end_time = time.time()
+        training_time_minutes = (end_time - start_time) / 60.0  # 转换为分钟
+        
         # 训练完成立即清理，避免后续序列化问题
         config.optuna_trial = None
         
@@ -188,7 +209,14 @@ def finetune_objective(trial, top_pretrain_trials):
         else:
             target = result['best_val_loss']
             
-        print(f"✅ 微调试验 {trial.number} 完成: target={target:.4f}")
+        # 🎯 将时间和其他信息作为user_attr记录到Optuna中
+        trial.set_user_attr('training_time_minutes', training_time_minutes)
+        trial.set_user_attr('experiment_name', config.experiment_name)
+        trial.set_user_attr('bpe_mode', args.bpe_mode)
+        trial.set_user_attr('pretrain_trial', pretrain_trial)
+        trial.set_user_attr('target_metric', target)
+        
+        print(f"✅ 微调试验 {trial.number} 完成: target={target:.4f}, time={training_time_minutes:.1f}min, bs={config.bert.finetuning.batch_size}")
         return float(target)  # 🔧 确保返回值是基本float类型
         
     except optuna.TrialPruned:
@@ -204,7 +232,7 @@ def finetune_objective(trial, top_pretrain_trials):
 
 def run_pretrain_search(journal_file, study_name, n_trials):
     """运行预训练搜索"""
-    storage = JournalStorage(JournalFileStorage(journal_file))
+    storage = JournalStorage(JournalFileBackend(journal_file))
     
     # 🆕 配置剪枝器：预训练阶段使用MedianPruner，在训练早期就能剪枝差的试验
     pruner = optuna.pruners.MedianPruner(
@@ -269,7 +297,7 @@ def run_finetune_search(journal_file, study_name, pretrain_study, top_k, n_trial
         except Exception as e:
             print(f"       模型路径: ❌ 查找失败: {e}")
     
-    storage = JournalStorage(JournalFileStorage(journal_file))
+    storage = JournalStorage(JournalFileBackend(journal_file))
     
     # 🆕 配置剪枝器：微调阶段使用PercentilePruner，更激进的剪枝策略
     pruner = optuna.pruners.PercentilePruner(
@@ -331,7 +359,7 @@ def run_finetune_search(journal_file, study_name, pretrain_study, top_k, n_trial
 def main():
     parser = argparse.ArgumentParser(description="ZINC超参数搜索")
     parser.add_argument("--bpe_mode", default='all', choices=['none', 'all', 'random', 'gaussian'])
-    parser.add_argument("--journal_file", default='./journal/zinc_hyperopt.db', help="Journal存储文件")
+    parser.add_argument("--journal_file", default='hyperopt/journal/zinc_hyperopt.db', help="Journal存储文件")
     parser.add_argument("--study_name", default="zinc_hyperopt", help="研究名称")
     parser.add_argument("--experiment_group", default=None, help="实验组名称，默认为hyperopt_{bpe_mode}")
     parser.add_argument("--stage", choices=['pretrain', 'finetune', 'both'], default='both')
@@ -376,7 +404,7 @@ def main():
     
     elif args.stage == 'finetune':
         # 加载预训练结果
-        storage = JournalStorage(JournalFileStorage(args.journal_file))
+        storage = JournalStorage(JournalFileBackend(args.journal_file))
         pretrain_study = optuna.load_study(
             study_name=f"{args.study_name}_pretrain_{args.bpe_mode}",
             storage=storage
