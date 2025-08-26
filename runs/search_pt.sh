@@ -1,0 +1,16 @@
+python zinc_hyperopt.py --stage pretrain --pretrain_trials 40
+python zinc_hyperopt.py --stage pretrain --pretrain_trials 40
+python zinc_hyperopt.py --stage pretrain --pretrain_trials 40
+python zinc_hyperopt.py --stage pretrain --pretrain_trials 40
+python zinc_hyperopt.py --stage pretrain --pretrain_trials 40
+python zinc_hyperopt.py --stage pretrain --pretrain_trials 40
+python zinc_hyperopt.py --stage pretrain --pretrain_trials 40
+python zinc_hyperopt.py --stage pretrain --pretrain_trials 40
+python zinc_hyperopt.py --stage pretrain --pretrain_trials 40
+python zinc_hyperopt.py --stage pretrain --pretrain_trials 40
+python zinc_hyperopt.py --stage pretrain --pretrain_trials 40
+python zinc_hyperopt.py --stage pretrain --pretrain_trials 40
+python zinc_hyperopt.py --stage pretrain --pretrain_trials 40
+python zinc_hyperopt.py --stage pretrain --pretrain_trials 40
+python zinc_hyperopt.py --stage pretrain --pretrain_trials 40
+python zinc_hyperopt.py --stage pretrain --pretrain_trials 40
