@@ -107,7 +107,7 @@ bert:
     eval_steps: 500
     vocab_min_freq: 1
     max_vocab_size: 5000
-    early_stopping_patience: 30
+    early_stopping_patience: 40
     mlm_augmentation_methods:
       # - random_deletion  # 这个和下面几种都是要么加了没用，要么加了还会略微变差一点。也不排除是我测试的问题，但是目前初步决定不再采用，只采用swap和r-drop
       - random_swap  # 这个是效果显著最好的。就是只要加了他就能提一截。再往后训练时，那个一致性正则化也只能略微提一点。
@@ -150,7 +150,7 @@ bert:
     learning_rate: 1e-4
     weight_decay: 0.15
     head_lr_multiplier: 2.0
-    early_stopping_patience: 30
+    early_stopping_patience: 40
     use_layered_lr: false
     max_grad_norm: 1.0
     save_models: false

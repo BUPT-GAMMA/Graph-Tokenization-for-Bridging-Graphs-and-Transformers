@@ -30,14 +30,15 @@ def pretrain_objective(trial):
     config.encoder.type = 'gte'
     
     # 超参数
-    config.bert.pretraining.learning_rate = trial.suggest_float('lr', 1e-5, 1e-3, log=True)
+    config.bert.pretraining.learning_rate = trial.suggest_float('lr', 8e-5, 5e-4, log=True)
     # 🔧 动态batch size范围，根据max_batch_size限制
-    batch_sizes = [bs for bs in [16,32,64,128,256,512,1024] if bs <= args.max_batch_size]
+    # batch_sizes = [bs for bs in [16,32,64,128,256,512] if bs <= args.max_batch_size]
+    batch_sizes = [bs for bs in [128,256,512] if bs <= args.max_batch_size]
     config.bert.pretraining.batch_size = trial.suggest_categorical('bs', batch_sizes)
-    config.bert.pretraining.weight_decay = trial.suggest_float('wd', 0.0, 0.3)
-    config.bert.pretraining.max_grad_norm = trial.suggest_float('grad_norm', 0.0, 3.0)
-    config.bert.pretraining.mask_prob = trial.suggest_float('mask_prob', 0.10, 0.25)
-    config.bert.pretraining.warmup_ratio = trial.suggest_float('warmup_ratio', 0.0, 0.3)  # 🆕 warmup比例搜索
+    config.bert.pretraining.weight_decay = trial.suggest_float('wd', 0.05, 0.25)
+    config.bert.pretraining.max_grad_norm = trial.suggest_float('grad_norm', 1.5, 5.0)
+    config.bert.pretraining.mask_prob = trial.suggest_float('mask_prob', 0.05, 0.15)
+    config.bert.pretraining.warmup_ratio = trial.suggest_float('warmup_ratio', 0.05, 0.15)  # 🆕 warmup比例搜索
     config.serialization.method = 'fcpp'  # 🔧 固定使用fcpp序列化方法
     
     # 🔧 修正：使用固定格式的实验名，不依赖时间戳
