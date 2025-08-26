@@ -92,11 +92,15 @@ def pretrain_objective(trial):
         print(f"✅ 试验 {trial.number} 完成: val_loss={val_loss:.4f}")
         print(f"📁 模型路径: {model_dir}")
         return float(val_loss)  # 🔧 确保返回值是基本float类型
+    except optuna.TrialPruned:
+        # 🔧 剪枝异常：清理后重新抛出
+        config.optuna_trial = None
+        raise  # 保持剪枝语义，向上传播
     except Exception as e:
-        # 🔧 清理trial对象引用
+        # 🔧 其他异常：清理后重新抛出原异常
         config.optuna_trial = None
         print(f"❌ 试验 {trial.number} 失败: {e}")
-        raise optuna.TrialPruned()
+        raise  # 让Optuna正确处理失败，而不是误认为剪枝
 
 
 def get_pretrain_model_path(trial_number, bpe_mode):
@@ -186,11 +190,15 @@ def finetune_objective(trial, top_pretrain_trials):
         print(f"✅ 微调试验 {trial.number} 完成: target={target:.4f}")
         return float(target)  # 🔧 确保返回值是基本float类型
         
+    except optuna.TrialPruned:
+        # 🔧 剪枝异常：清理后重新抛出
+        config.optuna_trial = None
+        raise  # 保持剪枝语义，向上传播
     except Exception as e:
-        # 🔧 清理trial对象引用
+        # 🔧 其他异常：清理后重新抛出原异常
         config.optuna_trial = None
         print(f"❌ 微调试验 {trial.number} 失败: {e}")
-        raise optuna.TrialPruned()
+        raise  # 让Optuna正确处理失败，而不是误认为剪枝
 
 
 def run_pretrain_search(journal_file, study_name, n_trials):
@@ -226,7 +234,7 @@ def run_pretrain_search(journal_file, study_name, n_trials):
     )
     
     print(f"🔍 开始预训练搜索 (BPE: {args.bpe_mode})")
-    study.optimize(pretrain_objective, n_trials=n_trials, catch=(Exception,))
+    study.optimize(pretrain_objective, n_trials=n_trials)  # 🔧 移除catch，让TrialPruned正确传播
     
     print("📈 预训练搜索完成")
     print(f"🏆 最优验证损失: {study.best_value:.4f}")
@@ -302,7 +310,7 @@ def run_finetune_search(journal_file, study_name, pretrain_study, top_k, n_trial
     def objective_wrapper(trial):
         return finetune_objective(trial, top_trials)
     
-    study.optimize(objective_wrapper, n_trials=n_trials, catch=(Exception,))
+    study.optimize(objective_wrapper, n_trials=n_trials)  # 🔧 移除catch，让TrialPruned正确传播
     
     print("🎉 微调搜索完成")
     if study.best_trial is not None:

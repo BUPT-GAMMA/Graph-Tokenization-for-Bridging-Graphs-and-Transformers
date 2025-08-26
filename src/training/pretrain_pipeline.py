@@ -316,8 +316,11 @@ def train_bert_mlm(
                     if config.optuna_trial.should_prune():
                         logger.info(f"⚠️ Optuna剪枝触发 (epoch {epoch})")
                         raise optuna.TrialPruned()
+                except optuna.TrialPruned:
+                    raise  # 🔧 剪枝异常必须向上传播到Optuna
                 except Exception as e:
                     logger.warning(f"⚠️ Optuna剪枝检查失败: {e}")
+                    # 其他异常不影响训练继续
             
             # TensorBoard记录
             writer.add_scalar('Loss/Train', train_loss, epoch)
