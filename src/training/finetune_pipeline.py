@@ -6,6 +6,12 @@ import pickle
 import torch
 import json
 import copy
+
+# 🆕 Optuna剪枝支持
+try:
+    import optuna
+except ImportError:
+    optuna = None  # 可选依赖，不强制要求
 from config import ProjectConfig
 from src.data.unified_data_interface import UnifiedDataInterface
 # 直接使用UDI接口，不再需要common中的包装函数
@@ -227,6 +233,18 @@ def run_finetune(
             f"📈 Finetune Epoch {epoch + 1}: train_loss={train_loss:.4f} | "
             + ", ".join(f"{k}={v:.4f}" for k, v in val_metrics.items())
         )
+        
+        # 🆕 Optuna剪枝支持：报告当前epoch的主要指标
+        if getattr(config, 'optuna_trial', None) is not None:
+            try:
+                # 使用主要指标进行剪枝判断（与early stopping一致）
+                metric_value = val_metrics[pk]
+                config.optuna_trial.report(metric_value, epoch + 1)
+                if config.optuna_trial.should_prune():
+                    logger.info(f"⚠️ Optuna剪枝触发 (epoch {epoch + 1})")
+                    raise optuna.TrialPruned()
+            except Exception as e:
+                logger.warning(f"⚠️ Optuna剪枝检查失败: {e}")
         
         # 通用指标
         writer.add_scalar('Loss/Train', float(train_loss), epoch + 1)
