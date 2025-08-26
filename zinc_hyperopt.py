@@ -199,8 +199,8 @@ def run_pretrain_search(journal_file, study_name, n_trials):
     
     # 🆕 配置剪枝器：预训练阶段使用MedianPruner，在训练早期就能剪枝差的试验
     pruner = optuna.pruners.MedianPruner(
-        n_startup_trials=5,      # 前5个trial不剪枝，积累基础统计
-        n_warmup_steps=10,       # 前10个epoch不剪枝，让模型有基本的训练
+        n_startup_trials=10,      # 前5个trial不剪枝，积累基础统计
+        n_warmup_steps=40,       # 前10个epoch不剪枝，让模型有基本的训练
         interval_steps=1,        # 每个epoch都检查剪枝
         n_min_trials=3           # 至少需要3个trial完成才开始剪枝（避免过度剪枝）
     )
@@ -209,7 +209,7 @@ def run_pretrain_search(journal_file, study_name, n_trials):
     # 🔧 并发优化：移除固定种子，启用constant_liar避免并发重复
     sampler = optuna.samplers.TPESampler(
         seed=None,               # 🚨 并发环境下不固定种子，避免重复采样
-        n_startup_trials=5,     # 前10个trial用随机采样
+        n_startup_trials=10,     # 前10个trial用随机采样
         n_ei_candidates=24,      # TPE候选数量
         multivariate=True,       # 考虑参数间的相关性
         constant_liar=True,      # 🆕 启用constant_liar策略，减少并发重复
