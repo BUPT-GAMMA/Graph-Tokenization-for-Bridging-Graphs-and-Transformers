@@ -41,18 +41,18 @@ SEED_PARAMS = {
     128: [
         # fcpp最优参数 + 其他高质量序列化方法
         {'lr': 3.22e-04, 'bs': 128, 'wd': 0.243, 'grad_norm': 1.72, 'mask_prob': 0.159, 'warmup_ratio': 0.159, 'method': 'fcpp'},
-        {'lr': 2.83e-04, 'bs': 128, 'wd': 0.248, 'grad_norm': 2.85, 'mask_prob': 0.157, 'warmup_ratio': 0.157, 'method': 'feuler'},
-        {'lr': 3.97e-04, 'bs': 128, 'wd': 0.199, 'grad_norm': 1.75, 'mask_prob': 0.175, 'warmup_ratio': 0.175, 'method': 'eulerian'}
+        {'lr': 2.83e-04, 'bs': 128, 'wd': 0.248, 'grad_norm': 2.85, 'mask_prob': 0.157, 'warmup_ratio': 0.157, 'method': 'fcpp'},
+        {'lr': 3.97e-04, 'bs': 128, 'wd': 0.199, 'grad_norm': 1.75, 'mask_prob': 0.175, 'warmup_ratio': 0.175, 'method': 'fcpp'}
     ],
     256: [
         {'lr': 3.15e-04, 'bs': 256, 'wd': 0.271, 'grad_norm': 1.72, 'mask_prob': 0.105, 'warmup_ratio': 0.105, 'method': 'fcpp'},
-        {'lr': 3.12e-04, 'bs': 256, 'wd': 0.235, 'grad_norm': 2.23, 'mask_prob': 0.123, 'warmup_ratio': 0.123, 'method': 'feuler'},
-        {'lr': 3e-04, 'bs': 256, 'wd': 0.180, 'grad_norm': 1.50, 'mask_prob': 0.10, 'warmup_ratio': 0.10, 'method': 'cpp'}
+        {'lr': 3.12e-04, 'bs': 256, 'wd': 0.235, 'grad_norm': 2.23, 'mask_prob': 0.123, 'warmup_ratio': 0.123, 'method': 'fcpp'},
+        {'lr': 3e-04, 'bs': 256, 'wd': 0.180, 'grad_norm': 1.50, 'mask_prob': 0.10, 'warmup_ratio': 0.10, 'method': 'fcpp'}
     ],
     512: [
         {'lr': 3.01e-04, 'bs': 512, 'wd': 0.252, 'grad_norm': 2.85, 'mask_prob': 0.161, 'warmup_ratio': 0.130, 'method': 'fcpp'},
-        {'lr': 5.11e-04, 'bs': 512, 'wd': 0.006, 'grad_norm': 2.91, 'mask_prob': 0.291, 'warmup_ratio': 0.291, 'method': 'dfs'},
-        {'lr': 1.70e-04, 'bs': 512, 'wd': 0.261, 'grad_norm': 2.03, 'mask_prob': 0.030, 'warmup_ratio': 0.030, 'method': 'bfs'}
+        {'lr': 5.11e-04, 'bs': 512, 'wd': 0.006, 'grad_norm': 2.91, 'mask_prob': 0.291, 'warmup_ratio': 0.291, 'method': 'fcpp'},
+        {'lr': 1.70e-04, 'bs': 512, 'wd': 0.261, 'grad_norm': 2.03, 'mask_prob': 0.030, 'warmup_ratio': 0.030, 'method': 'fcpp'}
     ]
 }
 
@@ -244,7 +244,7 @@ def main():
         print(f"\n{'='*30} 微调搜索 {'='*30}")
         
         # 加载预训练结果
-        pretrain_study = optuna.load_study(f"large_batch_pretrain_{args.bpe_mode}", storage)
+        pretrain_study = optuna.load_study(f"methods_large_batch_pretrain_{args.bpe_mode}", storage)
         completed = [t for t in pretrain_study.trials if t.state == optuna.trial.TrialState.COMPLETE]
         completed.sort(key=lambda x: x.value)
         top_trials = [t.number for t in completed[:args.top_k]]
