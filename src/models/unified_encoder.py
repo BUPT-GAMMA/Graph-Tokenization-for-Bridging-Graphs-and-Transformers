@@ -223,7 +223,7 @@ class GTEEncoder(BaseEncoder):
 
 def create_encoder(model_name: str, config: Dict[str, Any], vocab_manager: VocabManager) -> BaseEncoder:
     name = (model_name or '').lower()
-    if 'gte' in name or 'alibaba-nlp' in name:
+    if 'gte' in name:
       #note： 这个是必要的，因为如果不用本地这个目录的话，他会去尝试访问huggingface的。模型接口那个需要联网，而在服务器上会卡死。
         return GTEEncoder('./gte_model', config, vocab_manager)
     # 默认走bert
