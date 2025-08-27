@@ -1,25 +1,47 @@
 #!/usr/bin/env python3
 """
-单个方法BERT预训练脚本
-====================
+单个方法 BERT 预训练脚本（权威用法）
+================================
 
-支持对指定数据集和序列化方法进行BERT预训练，具备灵活的配置参数覆盖功能。
+本脚本是项目内“标准/唯一”的预训练入口，被批量脚本与超参搜索脚本调用。
 
-使用示例:
-  # 基本使用
-  python run_pretrain.py --dataset qm9test --method feuler
-  
-  # 使用BPE压缩
-  python run_pretrain.py --dataset qm9test --method feuler --bpe
-  
-  # 自定义训练参数
-  python run_pretrain.py --dataset qm9test --method feuler --epochs 10 --batch_size 32 --learning_rate 1e-4
-  
-  # 自定义模型架构
-  python run_pretrain.py --dataset qm9test --method feuler --hidden_size 768 --num_layers 6 --num_heads 12
-  
-  # 高级配置覆盖
-  python run_pretrain.py --dataset qm9test --method feuler --config_override bert.pretraining.warmup_steps=1000 system.device=cuda:1
+必须参数（命令行）:
+  --dataset DATASET   例如: qm9, qm9test, zinc, ...
+  --method  METHOD    例如: feuler, eulerian, cpp, fcpp, topo, smiles
+
+常用参数（命令行）:
+  --experiment_group NAME     归档分组（例如 large_bs_hyperopt_all）
+  --experiment_name  NAME     实验名（例如 large_bs_all_pt_default）
+  --bpe_encode_rank_mode MODE BPE模式: none|all|topk|random|gaussian
+  --epochs E                  训练轮数
+  --batch_size B              批大小
+  --learning_rate LR          学习率
+  --config_json JSON_OR_PATH  高级配置（JSON字符串或文件路径），用于嵌套项覆盖
+
+推荐实践：用显式 CLI 参数或 --config_json，不要使用其他“覆盖器”。
+
+示例：用默认配置训练一个可被微调脚本识别的“默认预训练模型”
+  python run_pretrain.py \
+    --dataset qm9 \
+    --method feuler \
+    --experiment_group large_bs_hyperopt_all \
+    --experiment_name  large_bs_all_pt_default \
+    --bpe_encode_rank_mode all
+
+示例：显式指定基础训练超参
+  python run_pretrain.py \
+    --dataset qm9 --method feuler \
+    --experiment_group large_bs_hyperopt_all \
+    --experiment_name  large_bs_all_pt_default \
+    --bpe_encode_rank_mode all \
+    --epochs 200 --batch_size 256 --learning_rate 4e-4
+
+示例：用 JSON 覆盖嵌套配置（不建议滥用，仅用于必要场景）
+  python run_pretrain.py \
+    --dataset qm9 --method feuler \
+    --experiment_group large_bs_hyperopt_all \
+    --experiment_name  large_bs_all_pt_default \
+    --config_json '{"serialization": {"bpe": {"engine": {"encode_rank_mode": "all"}}}}'
 """
 
 from __future__ import annotations

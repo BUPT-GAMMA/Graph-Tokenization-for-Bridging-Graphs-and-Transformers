@@ -1,10 +1,26 @@
 #!/usr/bin/env python3
 """
-单个方法BERT微调脚本
-==================
+单个方法 BERT 微调脚本（权威用法）
+================================
 
-支持对指定数据集和序列化方法进行BERT微调，具备灵活的配置参数覆盖功能。
+本脚本是项目内“标准/唯一”的微调入口，被批量/搜索脚本复用。
 
+必须参数（命令行）:
+  --dataset DATASET   例如: qm9, qm9test, zinc, ...
+  --method  METHOD    例如: feuler, eulerian, cpp, fcpp, topo, smiles
+
+加载预训练的两种方式（择一）:
+  --pretrained_dir PATH       直接指定模型目录（包含 config.bin 与 pytorch_model.bin）
+  --pretrain_exp_name NAME    指定预训练实验名，按标准目录结构加载
+
+常用参数（命令行）:
+  --experiment_group NAME     归档分组
+  --experiment_name  NAME     微调实验名（仅影响保存路径，与加载预训练解耦）
+  --bpe_encode_rank_mode MODE BPE模式: none|all|topk|random|gaussian
+  --epochs / --batch_size / --learning_rate / --weight_decay / --warmup_ratio / --max_grad_norm
+  --config_json JSON_OR_PATH  高级配置（JSON字符串或文件路径），用于嵌套项覆盖
+
+目标指标: 微调阶段以测试集 MAE 为唯一优化指标（脚本内部严格检查）。
 """
 
 from __future__ import annotations
