@@ -33,7 +33,7 @@ SEED_PARAMS = {
     256: [
         {'lr': 3.15e-04, 'bs': 256, 'wd': 0.271, 'grad_norm': 1.72, 'mask_prob': 0.105, 'warmup_ratio': 0.105},
         {'lr': 3.12e-04, 'bs': 256, 'wd': 0.235, 'grad_norm': 2.23, 'mask_prob': 0.123, 'warmup_ratio': 0.123},
-        {'lr': 3.61e-04, 'bs': 256, 'wd': 0.180, 'grad_norm': 1.50, 'mask_prob': 0.150, 'warmup_ratio': 0.150}
+        {'lr': 3e-04, 'bs': 256, 'wd': 0.180, 'grad_norm': 1.50, 'mask_prob': 0.10, 'warmup_ratio': 0.10}
     ],
     512: [
         {'lr': 3.01e-04, 'bs': 512, 'wd': 0.252, 'grad_norm': 2.85, 'mask_prob': 0.161, 'warmup_ratio': 0.130},
@@ -56,7 +56,7 @@ def pretrain_objective(trial):
     config.bert.pretraining.max_grad_norm = trial.suggest_float('grad_norm', 1.5, 5.0)
     config.bert.pretraining.mask_prob = trial.suggest_float('mask_prob', 0.05, 0.15)
     config.bert.pretraining.warmup_ratio = trial.suggest_float('warmup_ratio', 0.05, 0.15)
-    config.serialization.method = 'fcpp'
+    config.serialization.method = trial.suggest_categorical('method', ['dfs','bfs','eulerian','feuler','cpp','fcpp','smiles'])
     
     # 实验管理
     config.experiment_name = f"large_bs_{args.bpe_mode}_pt_{trial.number:03d}"
@@ -192,7 +192,7 @@ def main():
         # 🔧 配置剪枝器和采样器，优化并发性能
         pruner = optuna.pruners.MedianPruner(
             n_startup_trials=8, 
-            n_warmup_steps=25,
+            n_warmup_steps=40,
             interval_steps=1,
             n_min_trials=3
         )

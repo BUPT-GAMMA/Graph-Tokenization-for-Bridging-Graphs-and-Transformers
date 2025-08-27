@@ -51,3 +51,5 @@ create_summary_visualization.py
 detailed_visualization_analysis.py
 gte_exploration_results.csv
 key_findings_summary.png
+hyperopt/journal/large_batch.db
+hyperopt/journal/test_large_batch.db
