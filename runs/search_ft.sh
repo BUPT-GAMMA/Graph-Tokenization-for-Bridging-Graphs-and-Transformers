@@ -13,3 +13,4 @@ python hyperopt/scripts/finetune_with_pretrain_options.py
 python hyperopt/scripts/finetune_with_pretrain_options.py
 python hyperopt/scripts/finetune_with_pretrain_options.py
 python hyperopt/scripts/finetune_with_pretrain_options.py
+python hyperopt/scripts/finetune_with_pretrain_options.py

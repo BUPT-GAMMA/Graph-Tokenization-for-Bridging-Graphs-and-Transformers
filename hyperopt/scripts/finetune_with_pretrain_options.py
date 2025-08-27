@@ -187,7 +187,7 @@ def main():
     parser.add_argument("--journal_file", default='hyperopt/journal/finetune_with_options.db')
     parser.add_argument("--seed_file", default='hyperopt/results/best_pretrain_params_for_finetuning.json')
     parser.add_argument("--pretrain_journal", default='hyperopt/journal/large_batch.db')
-    parser.add_argument("--trials", type=int, default=50)
+    parser.add_argument("--trials", type=int, default=200)
     
     args = parser.parse_args()
     
