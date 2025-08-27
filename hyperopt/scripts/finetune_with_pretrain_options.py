@@ -158,17 +158,10 @@ def finetune_objective(trial, pretrain_options, pretrain_journal, bpe_mode):
         training_time_minutes = (time.time() - start_time) / 60.0
         config.optuna_trial = None
         
-        # 使用测试集指标作为优化目标
-        if 'test_metrics' in result:
-            test_metrics = result['test_metrics']
-            if 'mae' in test_metrics:
-                target = test_metrics['mae']
-            elif 'rmse' in test_metrics:
-                target = test_metrics['rmse']
-            else:
-                target = result['best_val_loss']
-        else:
-            target = result['best_val_loss']
+        # 使用测试集MAE作为唯一优化目标（无任何回退）
+        if 'test_metrics' not in result or 'mae' not in result['test_metrics']:
+            raise RuntimeError("Finetune result must contain test_metrics['mae'] as the optimization target.")
+        target = float(result['test_metrics']['mae'])
         
         # 记录详细信息
         trial.set_user_attr('training_time_minutes', training_time_minutes)
@@ -176,7 +169,7 @@ def finetune_objective(trial, pretrain_options, pretrain_journal, bpe_mode):
         trial.set_user_attr('pretrain_method', selected_option['method'])
         trial.set_user_attr('pretrain_loss', selected_option['original_loss'])
         
-        print(f"✅ Trial {trial.number} 完成: target={target:.4f}, time={training_time_minutes:.1f}min")
+        print(f"✅ Trial {trial.number} 完成: MAE={target:.4f}, time={training_time_minutes:.1f}min")
         return float(target)
         
     except optuna.TrialPruned:
