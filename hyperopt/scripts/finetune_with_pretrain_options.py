@@ -1,19 +1,33 @@
 #!/usr/bin/env python3
 """
-基于最佳预训练参数的微调超参数搜索
-==================================
-直接使用最佳预训练参数作为微调搜索的候选选项，
-让Optuna从这些已验证的好参数中选择和组合。
+基于已训练预训练模型集合的微调超参搜索（权威用法）
+================================================
 
-🎯 候选参数来源：
-- Top3 overall结果
-- eulerian、feuler、cpp、fcpp的最佳参数
-- 默认配置参数（如有预训练模型）
+作用：从 `best_pretrain_params_for_finetuning.json` 读取一组“预训练实验选项”，
+      仅用于决定“加载哪个预训练模型与采用哪个 method”。
+      微调阶段的所有超参数（lr/bs/wd/grad_norm/warmup_ratio/epochs）均重新搜索。
 
-🔧 微调搜索逻辑：
-- 直接使用预训练的学习率/batch size等参数
-- 只对微调特有的参数（如epochs）进行搜索
-- 不做任何参数转换假设
+要求：
+- 预训练模型应已按标准目录命名落盘（例如 large_bs_hyperopt_all/large_bs_all_pt_default/best/）
+- 默认配置模型（default_config）需先用 run_pretrain.py 显式训练一次
+
+使用示例：
+1) 准备预训练选项文件（如无）：
+   python hyperopt/scripts/extract_best_params_for_finetuning.py
+
+2) 运行微调超参搜索（基于预训练选项集合）：
+   CUDA_VISIBLE_DEVICES=0 \\
+   python hyperopt/scripts/finetune_with_pretrain_options.py \\
+     --bpe_mode all \\
+     --trials 100 \\
+     --journal_file hyperopt/journal/finetune_with_options.db \\
+     --seed_file hyperopt/results/best_pretrain_params_for_finetuning.json \\
+     --pretrain_journal hyperopt/journal/large_batch.db
+
+说明：
+- bpe_mode 可选 none|all|random|gaussian，应与对应的预训练模型目录一致。
+- journal_file 为当前微调搜索结果的日志（可断点续跑）。
+- pretrain_journal 指向大批量预训练的 optuna 日志，用于定位对应 Trial 的模型落盘路径。
 """
 
 import argparse
@@ -61,18 +75,31 @@ def load_pretrain_options(seed_file):
     return pretrain_options
 
 
-def find_pretrained_model_for_option(option_key, method, bpe_mode, original_loss, search_journal_file):
-    """根据预训练选项查找对应的预训练模型路径"""
+def find_pretrained_model_for_option(option_key, method, bpe_mode, original_loss, search_journal_file, dataset_name):
+    """根据预训练选项查找对应的预训练模型路径
+
+    说明：
+      - 路径规范为: model/<group>/<exp_name>/<dataset>/<method>/best
+      - 此函数不依赖默认配置中的 dataset/method，均由入参控制
+    """
     # 特殊处理默认配置
     if option_key == 'default_config':
         config = ProjectConfig()
-        config.experiment_name = f"large_bs_{bpe_mode}_pt_default"
-        config.experiment_group = f"large_bs_hyperopt_{bpe_mode}"
-        pretrained_dir = config.get_model_dir() / config.experiment_name / "best"
+        exp_name = f"large_bs_{bpe_mode}_pt_default"
+        group = f"large_bs_hyperopt_{bpe_mode}"
+        # 显式按规约构建: model/<group>/<exp_name>/<dataset>/<method>/best
+        pretrained_dir = (
+            config.get_model_dir(
+                group=group,
+                exp_name=exp_name,
+                dataset=dataset_name,
+                method=method,
+            ) / "best"
+        )
         
         if pretrained_dir.exists():
             print(f"🎯 找到默认配置预训练模型: {pretrained_dir}")
-            return str(pretrained_dir), f"large_bs_{bpe_mode}_pt_default"
+            return str(pretrained_dir), exp_name
         else:
             print(f"❌ 默认配置预训练模型不存在: {pretrained_dir}")
             print(f"请先运行: python bert_pretraining_pipeline_optimized.py --experiment_name 'large_bs_{bpe_mode}_pt_default' --experiment_group 'large_bs_hyperopt_{bpe_mode}'")
@@ -92,13 +119,21 @@ def find_pretrained_model_for_option(option_key, method, bpe_mode, original_loss
                 
                 # 构建预训练模型路径
                 config = ProjectConfig()
-                config.experiment_name = f"large_bs_{bpe_mode}_pt_{trial.number:03d}"
-                config.experiment_group = f"large_bs_hyperopt_{bpe_mode}"
-                pretrained_dir = config.get_model_dir() / config.experiment_name / "best"
+                exp_name = f"large_bs_{bpe_mode}_pt_{trial.number:03d}"
+                group = f"large_bs_hyperopt_{bpe_mode}"
+                # 显式按规约构建: model/<group>/<exp_name>/<dataset>/<method>/best
+                pretrained_dir = (
+                    config.get_model_dir(
+                        group=group,
+                        exp_name=exp_name,
+                        dataset=dataset_name,
+                        method=method,
+                    ) / "best"
+                )
                 
                 if pretrained_dir.exists():
                     print(f"🎯 找到预训练模型: {option_key} -> Trial {trial.number}")
-                    return str(pretrained_dir), f"large_bs_{bpe_mode}_pt_{trial.number:03d}"
+                    return str(pretrained_dir), exp_name
                 else:
                     print(f"⚠️ 预训练模型路径不存在: {pretrained_dir}")
         
@@ -144,8 +179,12 @@ def finetune_objective(trial, pretrain_options, pretrain_journal, bpe_mode):
         
         # 查找对应的预训练模型
         pretrained_dir, pretrain_exp_name = find_pretrained_model_for_option(
-            option_key, selected_option['method'], bpe_mode, 
-            selected_option['original_loss'], pretrain_journal
+            option_key,
+            selected_option['method'],
+            bpe_mode,
+            selected_option['original_loss'],
+            pretrain_journal,
+            dataset_name=config.dataset.name,
         )
         
         if pretrained_dir is None:
