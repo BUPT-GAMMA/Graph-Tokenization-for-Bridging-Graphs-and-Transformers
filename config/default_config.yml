@@ -98,12 +98,12 @@ bert:
   # 预训练配置
   pretraining:
     epochs: 200
-    batch_size: 128
+    batch_size: 256
     learning_rate: 3e-4
-    mask_prob: 0.08
-    weight_decay: 0.2
-    warmup_ratio: 0.1
-    max_grad_norm: 1.5
+    mask_prob: 0.09
+    weight_decay: 0.25
+    warmup_ratio: 0.12
+    max_grad_norm: 2
     save_steps: 1000
     eval_steps: 500
     vocab_min_freq: 1

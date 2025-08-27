@@ -205,7 +205,7 @@ def main():
         
         # 🔧 配置剪枝器和采样器，优化并发性能
         pruner = optuna.pruners.MedianPruner(
-            n_startup_trials=8, 
+            n_startup_trials=45, 
             n_warmup_steps=40,
             interval_steps=1,
             n_min_trials=3
@@ -222,7 +222,7 @@ def main():
         )
         
         study = optuna.create_study(
-            study_name=f"large_batch_pretrain_{args.bpe_mode}",
+            study_name=f"methods_large_batch_pretrain_{args.bpe_mode}",
             storage=storage, direction="minimize", load_if_exists=True,
             pruner=pruner,
             sampler=sampler
