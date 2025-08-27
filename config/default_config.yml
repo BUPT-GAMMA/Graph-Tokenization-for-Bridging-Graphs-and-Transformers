@@ -99,7 +99,7 @@ bert:
   pretraining:
     epochs: 200
     batch_size: 256
-    learning_rate: 3e-4
+    learning_rate: 4e-4
     mask_prob: 0.09
     weight_decay: 0.25
     warmup_ratio: 0.12
