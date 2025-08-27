@@ -1,8 +1,21 @@
 #!/usr/bin/env python3
 """
-大Batch Size专用超参数搜索 - 简化版
+大Batch Size专用超参数搜索 - 增强版
 ================================
-专注于[128, 256, 512]，包含已知最优结果作为起始点
+✨ 新增功能：
+- 专注于大batch sizes: [128, 256, 512]  
+- 包含多种序列化方法的种子起始点
+- 使用Hyperband剪枝器实现更激进的早期停止
+- 并发安全的种子添加机制
+
+🔧 搜索空间：
+- Learning rate: [5e-5, 5e-4] (log scale)
+- Batch size: [128, 256, 512]
+- Weight decay: [0.05, 0.25]
+- Gradient norm: [1.5, 3.0] 
+- Mask probability: [0.08, 0.15]
+- Warmup ratio: [0.08, 0.15]
+- Serialization: [dfs, bfs, eulerian, feuler, cpp, fcpp, smiles]
 """
 
 import argparse
@@ -23,22 +36,23 @@ from src.training.pretrain_pipeline import train_bert_mlm
 from src.training.finetune_pipeline import run_finetune
 
 
-# 🌱 内置的种子数据（从现有搜索结果提取）
+# 🌱 内置的种子数据（从现有fcpp搜索结果提取，扩展到多种序列化方法）
 SEED_PARAMS = {
     128: [
-        {'lr': 3.22e-04, 'bs': 128, 'wd': 0.243, 'grad_norm': 1.72, 'mask_prob': 0.159, 'warmup_ratio': 0.159},
-        {'lr': 2.83e-04, 'bs': 128, 'wd': 0.248, 'grad_norm': 2.85, 'mask_prob': 0.157, 'warmup_ratio': 0.157},
-        {'lr': 3.97e-04, 'bs': 128, 'wd': 0.199, 'grad_norm': 1.75, 'mask_prob': 0.175, 'warmup_ratio': 0.175}
+        # fcpp最优参数 + 其他高质量序列化方法
+        {'lr': 3.22e-04, 'bs': 128, 'wd': 0.243, 'grad_norm': 1.72, 'mask_prob': 0.159, 'warmup_ratio': 0.159, 'method': 'fcpp'},
+        {'lr': 2.83e-04, 'bs': 128, 'wd': 0.248, 'grad_norm': 2.85, 'mask_prob': 0.157, 'warmup_ratio': 0.157, 'method': 'feuler'},
+        {'lr': 3.97e-04, 'bs': 128, 'wd': 0.199, 'grad_norm': 1.75, 'mask_prob': 0.175, 'warmup_ratio': 0.175, 'method': 'eulerian'}
     ],
     256: [
-        {'lr': 3.15e-04, 'bs': 256, 'wd': 0.271, 'grad_norm': 1.72, 'mask_prob': 0.105, 'warmup_ratio': 0.105},
-        {'lr': 3.12e-04, 'bs': 256, 'wd': 0.235, 'grad_norm': 2.23, 'mask_prob': 0.123, 'warmup_ratio': 0.123},
-        {'lr': 3e-04, 'bs': 256, 'wd': 0.180, 'grad_norm': 1.50, 'mask_prob': 0.10, 'warmup_ratio': 0.10}
+        {'lr': 3.15e-04, 'bs': 256, 'wd': 0.271, 'grad_norm': 1.72, 'mask_prob': 0.105, 'warmup_ratio': 0.105, 'method': 'fcpp'},
+        {'lr': 3.12e-04, 'bs': 256, 'wd': 0.235, 'grad_norm': 2.23, 'mask_prob': 0.123, 'warmup_ratio': 0.123, 'method': 'feuler'},
+        {'lr': 3e-04, 'bs': 256, 'wd': 0.180, 'grad_norm': 1.50, 'mask_prob': 0.10, 'warmup_ratio': 0.10, 'method': 'cpp'}
     ],
     512: [
-        {'lr': 3.01e-04, 'bs': 512, 'wd': 0.252, 'grad_norm': 2.85, 'mask_prob': 0.161, 'warmup_ratio': 0.130},
-        {'lr': 5.11e-04, 'bs': 512, 'wd': 0.006, 'grad_norm': 2.91, 'mask_prob': 0.291, 'warmup_ratio': 0.291},
-        {'lr': 1.70e-04, 'bs': 512, 'wd': 0.261, 'grad_norm': 2.03, 'mask_prob': 0.030, 'warmup_ratio': 0.030}
+        {'lr': 3.01e-04, 'bs': 512, 'wd': 0.252, 'grad_norm': 2.85, 'mask_prob': 0.161, 'warmup_ratio': 0.130, 'method': 'fcpp'},
+        {'lr': 5.11e-04, 'bs': 512, 'wd': 0.006, 'grad_norm': 2.91, 'mask_prob': 0.291, 'warmup_ratio': 0.291, 'method': 'dfs'},
+        {'lr': 1.70e-04, 'bs': 512, 'wd': 0.261, 'grad_norm': 2.03, 'mask_prob': 0.030, 'warmup_ratio': 0.030, 'method': 'bfs'}
     ]
 }
 
@@ -50,12 +64,12 @@ def pretrain_objective(trial):
     config.encoder.type = 'gte'
     
     # 大batch size范围
-    config.bert.pretraining.learning_rate = trial.suggest_float('lr', 8e-5, 5e-4, log=True)
+    config.bert.pretraining.learning_rate = trial.suggest_float('lr', 5e-5, 5e-4, log=True)
     config.bert.pretraining.batch_size = trial.suggest_categorical('bs', [128, 256, 512])
     config.bert.pretraining.weight_decay = trial.suggest_float('wd', 0.05, 0.25)
-    config.bert.pretraining.max_grad_norm = trial.suggest_float('grad_norm', 1.5, 5.0)
-    config.bert.pretraining.mask_prob = trial.suggest_float('mask_prob', 0.05, 0.15)
-    config.bert.pretraining.warmup_ratio = trial.suggest_float('warmup_ratio', 0.05, 0.15)
+    config.bert.pretraining.max_grad_norm = trial.suggest_float('grad_norm', 1.5, 3.0)
+    config.bert.pretraining.mask_prob = trial.suggest_float('mask_prob', 0.08, 0.15)
+    config.bert.pretraining.warmup_ratio = trial.suggest_float('warmup_ratio', 0.08, 0.15)
     config.serialization.method = trial.suggest_categorical('method', ['dfs','bfs','eulerian','feuler','cpp','fcpp','smiles'])
     
     # 实验管理
@@ -63,7 +77,7 @@ def pretrain_objective(trial):
     config.experiment_group = f"large_bs_hyperopt_{args.bpe_mode}"
     config.serialization.bpe.engine.encode_rank_mode = args.bpe_mode
     
-    print(f"🚀 Trial {trial.number}: lr={config.bert.pretraining.learning_rate:.2e}, bs={config.bert.pretraining.batch_size}, wd={config.bert.pretraining.weight_decay:.3f}")
+    print(f"🚀 Trial {trial.number}: lr={config.bert.pretraining.learning_rate:.2e}, bs={config.bert.pretraining.batch_size}, wd={config.bert.pretraining.weight_decay:.3f}, method={config.serialization.method}")
     
     try:
         config.optuna_trial = trial
@@ -162,7 +176,7 @@ def add_seeds_to_study(study):
             try:
                 # 添加用户属性标记种子来源，方便识别
                 study.enqueue_trial(params, user_attrs={'seed_source': f'BS{bs}_top{i}'})
-                print(f"  BS={bs} #{i}: lr={params['lr']:.2e}, wd={params['wd']:.3f}")
+                print(f"  BS={bs} #{i}: lr={params['lr']:.2e}, wd={params['wd']:.3f}, method={params['method']}")
                 added += 1
             except Exception as e:
                 # 如果其他主机已添加相同参数，跳过
