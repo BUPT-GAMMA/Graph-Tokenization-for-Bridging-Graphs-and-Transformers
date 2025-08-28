@@ -132,17 +132,15 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
     if encoders is None:
         encoders = ["bert"]
     
-    # 根据指定的编码器类型构建配置
+    # 根据指定的编码器类型构建配置（仅 bert/gte）
     encoder_configs = []
     for encoder_name in encoders:
         if encoder_name == "bert":
-            encoder_configs.append({"type": "bert", "reset": False, "suffix": ""})
+            encoder_configs.append({"type": "bert", "suffix": "_bert"})
         elif encoder_name == "gte":
-            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "reset": False, "suffix": "_gte_keep"})
-        elif encoder_name == "gte-reset":
-            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "reset": True, "suffix": "_gte_reset"})
+            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "suffix": "_gte"})
         else:
-            raise ValueError(f"不支持的编码器类型: {encoder_name}。支持: bert, gte, gte-reset")
+            raise ValueError(f"不支持的编码器类型: {encoder_name}。仅支持: bert,gte")
     
     for dataset in datasets:
         for method in methods:
@@ -164,7 +162,6 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
                                 "hyperparams": params,
                                 "bpe_config": bpe_config,
                                 "encoder_type": encoder_config["type"],
-                                "reset_weights": encoder_config["reset"],
                                 "experiment_name": experiment_name
                             })
                     else:
@@ -179,7 +176,6 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
                             "hyperparams": None,
                             "bpe_config": bpe_config,
                             "encoder_type": encoder_config["type"],
-                            "reset_weights": encoder_config["reset"],
                             "experiment_name": experiment_name
                         })
     return tasks
@@ -222,12 +218,15 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
             "--learning_rate", str(lr)
         ])
 
-    # 🆕 添加编码器相关参数
-    if task.get("encoder_type") and task["encoder_type"] != "bert":
-        cmd.extend(["--encoder_type", task["encoder_type"]])
+    # 添加编码器相关参数：使用 --encoder 设置 config 中的 encoder
+    if task.get("encoder_type"):
+        # 规范化到 bert/gte 两类
+        encoder_flag = "bert"
+        if task["encoder_type"] == "Alibaba-NLP/gte-multilingual-base":
+            encoder_flag = "gte"
+        cmd.extend(["--encoder", encoder_flag])
     
-    if task.get("reset_weights", False):
-        cmd.append("--reset_weights")
+    # 不再支持通过 flag 控制 reset，统一使用 config 默认
 
     if combined_config_json:
         cmd.extend(["--config_json", combined_config_json])
@@ -341,10 +340,10 @@ def main():
 
     parser.add_argument("--use_augmentation", type=str, choices=["true", "false"], default=None,
                         help="是否启用MLM增强（true/false，不指定则保持config默认）")
-    
-    # 🆕 编码器类型选择（灵活配置）
-    parser.add_argument("--encoders", type=str, default="bert", 
-                        help="要运行的编码器类型，逗号分隔。可选: bert,gte,gte-reset。默认bert保持向后兼容")
+
+    # 编码器类型选择（改为 --encoder，且仅支持 bert,gte）
+    parser.add_argument("--encoder", type=str, default="bert",
+                        help="要运行的编码器类型，逗号分隔。可选: bert,gte。默认bert")
 
     parser.add_argument("--config_json", type=str, default=None,
                         help="JSON覆盖（字符串或文件路径）。会与增强开关产生的覆盖合并")
@@ -416,8 +415,12 @@ def main():
         combined_json_obj = merge_dicts(combined_json_obj, {"system": {"log_style": args.log_style}})
         combined_config_json = json.dumps(combined_json_obj, ensure_ascii=False)
 
-    # 🆕 解析编码器类型
-    encoders_list = [enc.strip() for enc in args.encoders.split(',') if enc.strip()] if args.encoders else ["bert"]
+    # 解析编码器类型（--encoder）
+    encoders_list = [enc.strip() for enc in args.encoder.split(',') if enc.strip()] if args.encoder else ["bert"]
+    # 仅允许 bert 与 gte
+    for enc in encoders_list:
+        if enc not in {"bert", "gte"}:
+            raise ValueError(f"不支持的编码器类型: {enc}。仅支持: bert,gte")
     
     tasks = create_task_list(
         datasets=datasets,

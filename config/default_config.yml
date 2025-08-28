@@ -1,11 +1,6 @@
 # TokenizerGraph 默认配置
 # ===================
 
-# 全局开关：是否在编码器创建时重置权重（丢弃预训练知识）
-# true: 重置权重到初始状态（用于从头训练）；false: 使用默认初始化或后续加载的预训练权重
-# 注意：预训练权重加载会覆盖此设置
-reset_weights: false
-
 # 系统配置
 system:
   seed: 42  # 固定随机种子，确保可重现性
@@ -41,7 +36,7 @@ serialization:
   method: feuler  # feuler(原 graph_seq), topo(topological), eulerian, smiles
   # 多重采样配置（仅适用于支持随机性的序列化方法）
   multiple_sampling:
-    enabled: false          # 是否启用多重采样
+    enabled: true          # 是否启用多重采样
     num_realizations: 10     # 每个图的采样次数
     flatten_variants: true  # 是否将多个采样结果平铺为独立样本
   bpe:  # BPE压缩配置
@@ -68,7 +63,7 @@ encoding:
 # 编码器配置
 encoder:
   type: gte  # bert | gte | 其他编码器
-  reset_weights: false
+  reset_weights: true
   
 # BERT模型配置
 bert:
@@ -147,14 +142,14 @@ bert:
   # 微调配置
   finetuning:
     epochs: 200
-    batch_size: 32
-    learning_rate: 1e-4
-    weight_decay: 0.15
-    warmup_ratio: 0.1
+    batch_size: 128
+    learning_rate: 5e-5
+    weight_decay: 0.2
+    warmup_ratio: 0.05
     head_lr_multiplier: 2.0
     early_stopping_patience: 40
     use_layered_lr: false
-    max_grad_norm: 1.0
+    max_grad_norm: 0.5
     save_models: false
     regression_augmentation_methods:
       # - random_deletion

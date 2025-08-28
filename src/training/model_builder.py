@@ -97,7 +97,7 @@ def build_task_model(
         _load_and_copy_pretrained_weights(model, pretrained_path)
         logger.info("✅ 模型创建完成 (预训练权重)")
     else:
-        weight_state = "重置权重" if udi.config.reset_weights else "默认初始化"
+        weight_state = "重置权重" if config.encoder.reset_weights else "默认初始化"
         logger.info(f"✅ 模型创建完成 ({weight_state})")
     return model, task_handler
 
@@ -124,7 +124,7 @@ def _build_encoder_config(config, encoder_type: str, task_type: str = None) -> D
             'type_vocab_size': getattr(config.bert.architecture, 'type_vocab_size', 2),
             'initializer_range': getattr(config.bert.architecture, 'initializer_range', 0.02),
             # 统一传递 reset_weights
-            'reset_weights': bool(config.reset_weights),
+            'reset_weights': bool(config.encoder.reset_weights),
         }
         model_desc = f"{cfg['hidden_size']}d_{cfg['num_hidden_layers']}l_{cfg['num_attention_heads']}h"
         logger.info(f"🔧 BERT配置: {model_desc}, max_len={cfg['max_position_embeddings']}")

@@ -102,10 +102,10 @@ class BertEncoder(BaseEncoder):
         
         # 保存配置和词表管理器
         self.bert_config = bert_config
-        self._hidden_size = int(config.get('hidden_size', 512))
+        self._hidden_size = config['hidden_size']
         
         # 统一从config读取reset标志
-        reset_weights = bool(config.get('reset_weights', False))
+        reset_weights = bool(config['reset_weights'])
         if reset_weights:
             self._reinitialize_bert_weights()
     
