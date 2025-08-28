@@ -133,32 +133,24 @@ def build_hyperparams_list(hp_json: Optional[str], epochs: Optional[int],
 
 def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: List[Dict[str, Any]],
                      hyperparams_list: List[Dict[str, Any]], exp_prefix: str, tag: Optional[str],
-                     aug_label: Optional[str], finetune_modes: List[str] = None, 
+                     aug_label: Optional[str], encoders: List[str] = None, 
                      pretrain_exp_prefix: str = "") -> List[Dict[str, Any]]:
-    """创建微调任务列表，支持灵活的微调模式选择"""
+    """创建微调任务列表，使用 --encoder 指定 bert/gte，并默认从对应预训练模型加载"""
     tasks: List[Dict[str, Any]] = []
     
     # 默认只使用BERT（向后兼容）
-    if finetune_modes is None:
-        finetune_modes = ["bert"]
-    
-    # 根据指定的微调模式构建配置
+    if encoders is None:
+        encoders = ["bert"]
+
+    # 根据指定的编码器构建配置（仅支持 bert/gte）
     encoder_configs = []
-    for mode in finetune_modes:
-        if mode in {"bert", "bert-pretrain"}:  # bert 作为 bert-pretrain 的别名
-            encoder_configs.append({"type": "bert", "": False, "suffix": "", "direct": False, "pretrain_suffix": ""})
-        elif mode == "bert-direct":
-            encoder_configs.append({"type": "bert", "": False, "suffix": "_bert_direct", "direct": True, "pretrain_suffix": ""})
-        elif mode == "gte-direct":
-            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "": False, "suffix": "_gte_keep_direct", "direct": True, "pretrain_suffix": "_gte_keep"})
-        elif mode == "gte-pretrain":
-            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "": False, "suffix": "_gte_keep_pretrained", "direct": False, "pretrain_suffix": "_gte_keep"})
-        elif mode == "gte-reset-direct":
-            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "": True, "suffix": "_gte_reset_direct", "direct": True, "pretrain_suffix": "_gte_reset"})
-        elif mode == "gte-reset-pretrain":
-            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "": True, "suffix": "_gte_reset_pretrained", "direct": False, "pretrain_suffix": "_gte_reset"})
+    for enc in encoders:
+        if enc == "bert":
+            encoder_configs.append({"type": "bert", "suffix": "", "pretrain_suffix": ""})
+        elif enc == "gte":
+            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "suffix": "_gte_keep", "pretrain_suffix": "_gte_keep"})
         else:
-            raise ValueError(f"不支持的微调模式: {mode}。支持: bert, bert-pretrain, bert-direct, gte-direct, gte-pretrain, gte-reset-direct, gte-reset-pretrain")
+            raise ValueError(f"不支持的编码器类型: {enc}。仅支持: bert,gte")
     
     for dataset in datasets:
         for method in methods:
@@ -175,11 +167,9 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
                             exp_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}{encoder_suffix}"
                             experiment_name = f"{exp_prefix}{exp_core}{('_' + tag) if tag else ''}"
                             
-                            # 构建预训练实验名（如果需要）
-                            pretrain_exp_name = None
-                            if not encoder_config["direct"]:  # 需要从预训练模型加载
-                                pretrain_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}{encoder_config['pretrain_suffix']}"
-                                pretrain_exp_name = f"{pretrain_exp_prefix}{pretrain_core}{('_' + tag) if tag else ''}"
+                            # 构建预训练实验名（与预训练阶段一致，不应附加 _default）
+                            pretrain_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}{encoder_config['pretrain_suffix']}"
+                            pretrain_exp_name = f"{pretrain_exp_prefix}{pretrain_core}{('_' + tag) if tag else ''}"
                             
                             tasks.append({
                                 "dataset": dataset,
@@ -187,7 +177,6 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
                                 "hyperparams": params,
                                 "bpe_config": bpe_config,
                                 "encoder_type": encoder_config["type"],
-                                "reset_weights": encoder_config[""],
                                 "pretrain_exp_name": pretrain_exp_name,
                                 "experiment_name": experiment_name
                             })
@@ -198,11 +187,9 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
                         exp_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}{encoder_suffix}_default"
                         experiment_name = f"{exp_prefix}{exp_core}{('_' + tag) if tag else ''}"
                         
-                        # 构建预训练实验名（如果需要）
-                        pretrain_exp_name = None
-                        if not encoder_config["direct"]:  # 需要从预训练模型加载
-                            pretrain_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}{encoder_config['pretrain_suffix']}_default"
-                            pretrain_exp_name = f"{pretrain_exp_prefix}{pretrain_core}{('_' + tag) if tag else ''}"
+                        # 构建预训练实验名（与预训练阶段一致，不应附加 _default）
+                        pretrain_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}{encoder_config['pretrain_suffix']}"
+                        pretrain_exp_name = f"{pretrain_exp_prefix}{pretrain_core}{('_' + tag) if tag else ''}"
                         
                         tasks.append({
                             "dataset": dataset,
@@ -210,7 +197,6 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
                             "hyperparams": None,
                             "bpe_config": bpe_config,
                             "encoder_type": encoder_config["type"],
-                            "_weights": encoder_config[""],
                             "pretrain_exp_name": pretrain_exp_name,
                             "experiment_name": experiment_name
                         })
@@ -265,12 +251,12 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
         ])
 
     # 🆕 添加编码器相关参数
-    if task.get("encoder_type") and task["encoder_type"] != "bert":
-        cmd.extend(["--encoder_type", task["encoder_type"]])
-    
-    if task.get("_weights", False):
-        cmd.append("--_weights")
-        
+    if task.get("encoder_type"):
+        encoder_flag = "bert"
+        if task["encoder_type"] == "Alibaba-NLP/gte-multilingual-base":
+            encoder_flag = "gte"
+        cmd.extend(["--encoder", encoder_flag])
+
     if task.get("pretrain_exp_name"):
         cmd.extend(["--pretrain_exp_name", task["pretrain_exp_name"]])
     
@@ -395,9 +381,9 @@ def main():
     parser.add_argument("--use_augmentation", type=str, choices=["true", "false"], default=None,
                         help="是否启用回归任务增强（true/false，不指定则保持config默认）")
     
-    # 🆕 微调模式选择（灵活配置）
-    parser.add_argument("--finetune_modes", type=str, default="bert", 
-                        help="要运行的微调模式，逗号分隔。可选: bert,bert-pretrain,bert-direct,gte-direct,gte-pretrain,gte-reset-direct,gte-reset-pretrain。默认bert作为bert-pretrain的别名以保持向后兼容")
+    # 编码器选择（仅支持 bert,gte）
+    parser.add_argument("--encoder", type=str, default="bert", 
+                        help="要运行的编码器，逗号分隔。可选: bert,gte。默认 bert")
     parser.add_argument("--pretrain_exp_prefix", type=str, default="", 
                         help="预训练实验名前缀，用于构建依赖的预训练实验名（仅对*-pretrain模式有效）")
 
@@ -474,9 +460,12 @@ def main():
         combined_json_obj = merge_dicts(combined_json_obj, {"system": {"log_style": args.log_style}})
         combined_config_json = json.dumps(combined_json_obj, ensure_ascii=False)
 
-    # 🆕 解析微调模式
-    finetune_modes_list = [mode.strip() for mode in args.finetune_modes.split(',') if mode.strip()] if args.finetune_modes else ["bert"]
-    
+    # 解析编码器
+    encoders_list = [enc.strip() for enc in args.encoder.split(',') if enc.strip()] if args.encoder else ["bert"]
+    for enc in encoders_list:
+        if enc not in {"bert", "gte"}:
+            raise ValueError(f"不支持的编码器类型: {enc}。仅支持: bert,gte")
+
     tasks = create_task_list(
         datasets=datasets,
         methods=methods,
@@ -485,7 +474,7 @@ def main():
         exp_prefix=args.exp_prefix,
         tag=args.tag,
         aug_label=aug_label,
-        finetune_modes=finetune_modes_list,  # 🆕 传递微调模式列表
+        encoders=encoders_list,
         pretrain_exp_prefix=args.pretrain_exp_prefix,  # 🆕 传递预训练前缀
     )
     if not args.commands_stdout:
