@@ -148,9 +148,9 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
     encoder_configs = []
     for enc in encoders:
         if enc == "bert":
-            encoder_configs.append({"type": "bert", "suffix": "", "pretrain_suffix": ""})
+            encoder_configs.append({"type": "bert", "suffix": "_bert", "pretrain_suffix": "_bert"})
         elif enc == "gte":
-            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "suffix": "_gte_keep", "pretrain_suffix": "_gte_keep"})
+            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "suffix": "_gte", "pretrain_suffix": "_gte"})
         else:
             raise ValueError(f"不支持的编码器类型: {enc}。仅支持: bert,gte")
     
