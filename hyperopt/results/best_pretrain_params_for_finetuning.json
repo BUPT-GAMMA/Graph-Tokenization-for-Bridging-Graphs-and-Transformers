@@ -70,13 +70,13 @@
     "loss": 0.5699609518051147
   },
   "default_config": {
-    "lr": 0.0005,
-    "bs": 32,
-    "wd": 0.01,
-    "grad_norm": 1.0,
-    "mask_prob": 0.15,
-    "warmup_ratio": 0.1,
-    "method": "default",
+    "lr": 4e-4,
+    "bs": 256,
+    "wd": 0.25,
+    "grad_norm": 2,
+    "mask_prob": 0.09,
+    "warmup_ratio": 0.12,
+    "method": "feuler",
     "loss": null
   }
 }

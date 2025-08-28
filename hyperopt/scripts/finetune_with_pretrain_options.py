@@ -245,13 +245,26 @@ def main():
     
     # 创建存储和研究
     storage = JournalStorage(JournalFileBackend(args.journal_file))
-    
+    sampler = optuna.samplers.TPESampler(
+            seed=None,               # 🚨 并发环境下不固定种子，避免重复采样
+            n_startup_trials=10,     # 前10个trial用随机采样
+            n_ei_candidates=24,      # TPE候选数量
+            multivariate=True,       # 考虑参数间的相关性
+            constant_liar=True,      # 🆕 启用constant_liar策略，减少并发重复
+            warn_independent_sampling=False
+        )
+    pruner = optuna.pruners.MedianPruner(
+            n_startup_trials=45, 
+            n_warmup_steps=40,
+            interval_steps=1,
+            n_min_trials=3
+        )    
     # 配置优化器（简单配置，让搜索聚焦在选项选择上）
     study = optuna.create_study(
         study_name=f"finetune_with_options_{args.bpe_mode}",
         storage=storage, 
         direction="minimize", 
-        load_if_exists=True
+        load_if_exists=True,pruner=pruner,sampler=sampler
     )
     
     # 开始优化
