@@ -92,9 +92,9 @@ bert:
   
   # 预训练配置
   pretraining:
-    epochs: 200
-    batch_size: 256
-    learning_rate: 4e-4
+    epochs: 100
+    batch_size: 128
+    learning_rate: 3e-4
     mask_prob: 0.09
     weight_decay: 0.25
     warmup_ratio: 0.12
@@ -103,7 +103,7 @@ bert:
     eval_steps: 500
     vocab_min_freq: 1
     max_vocab_size: 5000
-    early_stopping_patience: 40
+    early_stopping_patience: 20
     mlm_augmentation_methods:
       # - random_deletion  # 这个和下面几种都是要么加了没用，要么加了还会略微变差一点。也不排除是我测试的问题，但是目前初步决定不再采用，只采用swap和r-drop
       - random_swap  # 这个是效果显著最好的。就是只要加了他就能提一截。再往后训练时，那个一致性正则化也只能略微提一点。
@@ -141,13 +141,13 @@ bert:
   
   # 微调配置
   finetuning:
-    epochs: 200
+    epochs: 100
     batch_size: 128
     learning_rate: 5e-5
     weight_decay: 0.2
     warmup_ratio: 0.05
     head_lr_multiplier: 2.0
-    early_stopping_patience: 40
+    early_stopping_patience: 20
     use_layered_lr: false
     max_grad_norm: 0.5
     save_models: false

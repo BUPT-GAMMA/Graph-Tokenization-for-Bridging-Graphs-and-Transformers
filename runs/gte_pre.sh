@@ -3,7 +3,7 @@ python batch_pretrain_simple.py \
     --datasets zinc --bpe_scenarios all,raw,random \
     --methods eulerian,feuler,cpp,fcpp,smiles,topo \
     --epochs 60 --experiment_group pre_formula \
-    --commands_only 
+    --commands_stdout
  
 
 python batch_finetune_simple.py \
