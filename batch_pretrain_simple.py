@@ -109,17 +109,19 @@ def build_hyperparams_list(hp_json: Optional[str], epochs: Optional[int],
             if not isinstance(item, dict) or not {"epochs", "batch_size", "learning_rate"} <= set(item.keys()):
                 raise ValueError("--hyperparams_json 中每个对象必须包含 epochs, batch_size, learning_rate 三个键")
         return loaded
-    # 🆕 支持部分参数指定，缺失的用默认值填充
+    # 未指定三者且没有JSON：不下传任何训练超参，使用config默认
     if epochs is None and batch_size is None and learning_rate is None:
-        return DEFAULT_HYPERPARAMS
-    
-    # 从默认配置中取基准值
-    default_config = DEFAULT_HYPERPARAMS[0]
-    final_epochs = epochs if epochs is not None else default_config["epochs"]
-    final_batch_size = batch_size if batch_size is not None else default_config["batch_size"]
-    final_learning_rate = learning_rate if learning_rate is not None else default_config["learning_rate"]
-    
-    return [{"epochs": int(final_epochs), "batch_size": int(final_batch_size), "learning_rate": float(final_learning_rate)}]
+        return []
+
+    # 仅传递用户显式提供的项（其余保持由config默认）
+    params: Dict[str, Any] = {}
+    if epochs is not None:
+        params["epochs"] = int(epochs)
+    if batch_size is not None:
+        params["batch_size"] = int(batch_size)
+    if learning_rate is not None:
+        params["learning_rate"] = float(learning_rate)
+    return [params]
 
 
 def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: List[Dict[str, Any]],
@@ -203,20 +205,21 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
     if "bpe_encode_rank_mode" in bpe_config and bpe_config["bpe_encode_rank_mode"]:
         cmd.extend(["--bpe_encode_rank_mode", str(bpe_config["bpe_encode_rank_mode"])])
 
-    if bpe_config["bpe_encode_rank_mode"]=='none':
-      bs=task["hyperparams"]["batch_size"]//6
-      lr=task["hyperparams"]["learning_rate"]/2
-    else:
-      bs=task["hyperparams"]["batch_size"]
-      lr=task["hyperparams"]["learning_rate"]
-
     if task["hyperparams"]:
+        # 仅当提供了相应超参时才传递该项；若提供了bs/lr，则按BPE模式进行缩放
         params = task["hyperparams"]
-        cmd.extend([
-            "--epochs", str(params["epochs"]),
-            "--batch_size", str(int(bs)),
-            "--learning_rate", str(lr)
-        ])
+        if "epochs" in params:
+            cmd.extend(["--epochs", str(params["epochs"])])
+        if "batch_size" in params:
+            bs_val = int(params["batch_size"])
+            if bpe_config["bpe_encode_rank_mode"] == 'none':
+                bs_val = max(1, bs_val // 6)
+            cmd.extend(["--batch_size", str(bs_val)])
+        if "learning_rate" in params:
+            lr_val = float(params["learning_rate"])
+            if bpe_config["bpe_encode_rank_mode"] == 'none':
+                lr_val = lr_val / 2
+            cmd.extend(["--learning_rate", str(lr_val)])
 
     # 添加编码器相关参数：使用 --encoder 设置 config 中的 encoder
     if task.get("encoder_type"):
