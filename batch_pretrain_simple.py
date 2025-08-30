@@ -28,7 +28,7 @@ DEFAULT_METHODS = ["feuler", "eulerian", "cpp", "fcpp", "topo", "smiles"]
 DEFAULT_GPUS = [0]
 # DEFAULT_BPE_SCENARIOS = ["raw", "all", "random", "gaussian"]
 DEFAULT_BPE_SCENARIOS = ["all"]
-DEFAULT_HYPERPARAMS = [{"epochs": 100, "batch_size": 512, "learning_rate": 2e-4}]
+# 删除硬编码超参，使用config默认值，只在raw模型时调整学习率
 DEFAULT_MLM_AUG_METHODS = [
     "random_deletion",
     "random_swap",
@@ -205,21 +205,22 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
     if "bpe_encode_rank_mode" in bpe_config and bpe_config["bpe_encode_rank_mode"]:
         cmd.extend(["--bpe_encode_rank_mode", str(bpe_config["bpe_encode_rank_mode"])])
 
+    # 🆕 简化超参逻辑：默认使用config值，只在raw模型时调整学习率
+    if bpe_config["bpe_encode_rank_mode"] == 'none':
+        # raw模型：将默认预训练学习率减半（3e-4 -> 1.5e-4）
+        cmd.extend(["--learning_rate", str(1e-4)])
+    
+    # 其他超参全部使用config默认值，不再通过命令行传递
     if task["hyperparams"]:
-        # 仅当提供了相应超参时才传递该项；若提供了bs/lr，则按BPE模式进行缩放
         params = task["hyperparams"]
+        # 保留显式传递的超参（如果需要覆盖config默认值）
         if "epochs" in params:
             cmd.extend(["--epochs", str(params["epochs"])])
         if "batch_size" in params:
-            bs_val = int(params["batch_size"])
-            if bpe_config["bpe_encode_rank_mode"] == 'none':
-                bs_val = max(1, bs_val // 6)
-            cmd.extend(["--batch_size", str(bs_val)])
-        if "learning_rate" in params:
-            lr_val = float(params["learning_rate"])
-            if bpe_config["bpe_encode_rank_mode"] == 'none':
-                lr_val = lr_val / 2
-            cmd.extend(["--learning_rate", str(lr_val)])
+            cmd.extend(["--batch_size", str(params["batch_size"])])
+        if "learning_rate" in params and bpe_config["bpe_encode_rank_mode"] != 'none':
+            # 非raw模型时才允许传递自定义学习率
+            cmd.extend(["--learning_rate", str(params["learning_rate"])])
 
     # 添加编码器相关参数：使用 --encoder 设置 config 中的 encoder
     if task.get("encoder_type"):

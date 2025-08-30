@@ -348,8 +348,10 @@ def train_bert_mlm(
                 logger.info(f"🎯 新最优 (epoch {epoch}): val_loss={val_loss:.4f} (↓ {improvement:.4f})")
 
                 # 直接在内存中保存最佳模型状态，避免频繁磁盘IO
+                # 对state_dict中的每个张量进行clone，避免引用问题
+                state_dict_copy = {k: v.clone() for k, v in mlm_model.state_dict().items()}
                 best_model_state = {
-                    'model_state_dict': mlm_model.state_dict(),
+                    'model_state_dict': state_dict_copy,
                     'epoch': epoch,
                     'val_loss': val_loss,
                 }
