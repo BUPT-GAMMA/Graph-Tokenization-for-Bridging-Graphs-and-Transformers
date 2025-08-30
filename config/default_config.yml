@@ -94,11 +94,11 @@ bert:
   pretraining:
     epochs: 100
     batch_size: 128
-    learning_rate: 3e-4
+    learning_rate: 1.5e-4
     mask_prob: 0.09
     weight_decay: 0.25
     warmup_ratio: 0.12
-    max_grad_norm: 2
+    max_grad_norm: 0.5
     save_steps: 1000
     eval_steps: 500
     vocab_min_freq: 1
@@ -143,7 +143,7 @@ bert:
   finetuning:
     epochs: 100
     batch_size: 128
-    learning_rate: 5e-5
+    learning_rate: 3e-5
     weight_decay: 0.001
     warmup_ratio: 0.05
     head_lr_multiplier: 2.0

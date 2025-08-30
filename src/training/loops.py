@@ -74,14 +74,54 @@ def train_epoch(
             # 标准训练
             outputs = model(input_ids, attention_mask)
             loss = task_handler.compute_loss(outputs['outputs'], labels)
+        
+        # 检测loss NaN/Inf
+        loss_value = loss.item()
+        if torch.isnan(loss) or torch.isinf(loss):
+            logger.error(f"❌ NaN/Inf loss detected at step {steps+1}: {loss_value}")
+            logger.error(f"   input_ids shape: {input_ids.shape}, attention_mask shape: {attention_mask.shape}")
+            logger.error("   跳过此步骤，继续训练...")
+            optimizer.zero_grad()
+            prev_batch = current_batch
+            continue
+            
+        if loss_value > 1000.0:
+            logger.warning(f"⚠️ Unusually large loss at step {steps+1}: {loss_value:.4f}")
             
         loss.backward()
+        
+        # 检测梯度NaN/Inf和异常大梯度
+        total_norm = 0.0
+        nan_grads = False
+        inf_grads = False
+        for p in model.parameters():
+            if p.grad is not None:
+                if torch.isnan(p.grad).any():
+                    nan_grads = True
+                if torch.isinf(p.grad).any():
+                    inf_grads = True
+                if nan_grads or inf_grads:
+                    break
+                param_norm = p.grad.data.norm(2)
+                total_norm += param_norm.item() ** 2
+        total_norm = total_norm ** 0.5
+        
+        if nan_grads or inf_grads:
+            grad_type = "NaN" if nan_grads else "Inf"
+            logger.error(f"❌ {grad_type} gradients detected at step {steps+1}，跳过此步骤，继续训练...")
+            optimizer.zero_grad()
+            prev_batch = current_batch
+            continue
+        
+        if total_norm > 100.0:
+            logger.warning(f"⚠️ Large gradient norm at step {steps+1}: {total_norm:.2f} (max_grad_norm={max_grad_norm})")
+        
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
         optimizer.step()
         if scheduler is not None:
             scheduler.step()
 
-        epoch_loss += loss.item()
+        epoch_loss += loss_value
         steps += 1
 
         # 日志输出：online 使用 tqdm；offline 每完成10%输出一次摘要
@@ -144,8 +184,19 @@ def evaluate_epoch(model, dataloader, device, task_handler, epoch_num: int = 1, 
         # 🆕 统一架构：所有模型都使用TaskHandler计算损失
         outputs = model(input_ids, attention_mask)
         loss = task_handler.compute_loss(outputs['outputs'], labels)
+        
+        # 检测validation loss NaN/Inf
+        loss_value = loss.item()
+        if torch.isnan(loss) or torch.isinf(loss):
+            logger.error(f"❌ NaN/Inf validation loss detected at step {steps+1}: {loss_value}")
+            logger.error(f"   input_ids shape: {input_ids.shape}, attention_mask shape: {attention_mask.shape}")
+            logger.error("   跳过此验证步骤...")
+            continue
             
-        total_loss += loss.item()
+        if loss_value > 1000.0:
+            logger.warning(f"⚠️ Unusually large validation loss at step {steps+1}: {loss_value:.4f}")
+            
+        total_loss += loss_value
         steps += 1
 
         if log_style == "online":
