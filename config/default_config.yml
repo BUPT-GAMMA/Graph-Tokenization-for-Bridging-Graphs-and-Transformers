@@ -199,6 +199,29 @@ task:
   target_property: null  # 留空表示从数据集元信息自动推断（QM9默认 homo）
   normalization: standard  # standard, minmax, robust
 
+  # 🆕 损失函数配置（可选，用于超参搜索覆盖）
+  loss_config: null  # 如果为null，使用数据集默认配置
+  # 示例配置：
+  # # 1. Focal Loss (推荐用于不平衡数据集)
+  # loss_config:
+  #   method: focal        # focal | weighted | standard
+  #   gamma: 2.5          # Focal Loss参数，适合严重不平衡
+  #   alpha: 1.0          # Focal Loss参数
+  #
+  # # 2. 加权交叉熵 (自动计算权重)
+  # loss_config:
+  #   method: weighted
+  #   auto_weights: true   # 基于训练集自动计算类别权重
+  #
+  # # 3. 加权交叉熵 (自定义权重)
+  # loss_config:
+  #   method: weighted
+  #   weights: [1.0, 2.0]  # 自定义权重，长度等于类别数
+  #
+  # # 4. 标准交叉熵 (基线)
+  # loss_config:
+  #   method: standard
+
 # 日志和监控配置
 logging:
   # TensorBoard配置

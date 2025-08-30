@@ -20,31 +20,37 @@ logger = get_logger(__name__)
 class TaskHandler:
     """
     处理不同任务类型的逻辑
-    
+
     核心职责：
     1. 根据任务类型选择合适的损失函数
     2. 处理模型输出的后处理（如softmax、sigmoid）
     3. 提供任务特定的预测方法
     """
-    
-    def __init__(self, task_type: str, output_dim: int, dataset_name: str = None, vocab_size: int = None):
+
+    def __init__(self, task_type: str, output_dim: int, dataset_name: str = None,
+                 vocab_size: int = None, loss_fn: Optional[nn.Module] = None):
         """
         Args:
             task_type: 任务类型（从UDI获取或手动指定）
             output_dim: 输出维度
             dataset_name: 数据集名称（用于特定数据集的指标配置）
             vocab_size: 词表大小（MLM任务需要）
+            loss_fn: 预创建的损失函数（从UDI获取）
         """
         self.task_type = task_type
         self.output_dim = output_dim
         self.dataset_name = dataset_name
         self.vocab_size = vocab_size  # 🆕 MLM任务需要
-        
+
         # 🆕 MLM任务时自动设置输出维度
         if task_type == 'mlm' and vocab_size is not None:
             self.output_dim = vocab_size
-            
-        self.loss_fn = self._get_loss_function()
+
+        # 🆕 使用传入的损失函数或创建默认的
+        if loss_fn is not None:
+            self.loss_fn = loss_fn
+        else:
+            self.loss_fn = self._get_default_loss_function()
     
     def is_mlm_task(self) -> bool:
         """判断是否为MLM预训练任务"""
@@ -66,8 +72,8 @@ class TaskHandler:
         """判断是否为多目标回归任务"""
         return self.task_type == "multi_target_regression"
     
-    def _get_loss_function(self):
-        """根据任务类型返回损失函数"""
+    def _get_default_loss_function(self):
+        """根据任务类型返回默认损失函数"""
         if self.task_type == "mlm":
             # 🆕 MLM任务：CrossEntropy with ignore_index=-100 (与原BertMLM一致)
             return nn.CrossEntropyLoss(ignore_index=-100)
@@ -464,10 +470,15 @@ def create_task_handler(udi, task_type: str , vocab_size: int = None) -> Tuple[T
             output_dim = udi.get_num_classes()
         else:
             raise ValueError(f"不支持的强制任务类型: {task_type}")
-        
-        dataset_name = udi.dataset 
+
+        dataset_name = udi.dataset
+
+        # 🆕 从UDI获取损失函数
+        loss_fn = udi.create_loss_function(task_type, output_dim)
+
         logger.info(f"📋 创建任务处理器: {task_type} (dataset={dataset_name}, output_dim={output_dim})")
-        return TaskHandler(task_type, output_dim, dataset_name), output_dim
+        logger.info(f"🎯 使用损失函数: {type(loss_fn).__name__}")
+        return TaskHandler(task_type, output_dim, dataset_name, loss_fn=loss_fn), output_dim
     
     # 模式3: 从UDI推断任务类型（标准微调使用）
     raise ValueError("流程异常：上层未指定task_type，将根据UDI推断任务类型(理论上这一步推断应该在上层完成)")
