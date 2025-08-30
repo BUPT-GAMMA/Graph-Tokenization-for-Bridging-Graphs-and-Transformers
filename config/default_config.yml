@@ -36,7 +36,7 @@ serialization:
   method: feuler  # feuler(原 graph_seq), topo(topological), eulerian, smiles
   # 多重采样配置（仅适用于支持随机性的序列化方法）
   multiple_sampling:
-    enabled: false          # 是否启用多重采样
+    enabled: true          # 是否启用多重采样
     num_realizations: 10     # 每个图的采样次数
     flatten_variants: true  # 是否将多个采样结果平铺为独立样本
   bpe:  # BPE压缩配置
@@ -103,7 +103,7 @@ bert:
     eval_steps: 500
     vocab_min_freq: 1
     max_vocab_size: 5000
-    early_stopping_patience: 20
+    early_stopping_patience: 10
     mlm_augmentation_methods:
       # - random_deletion  # 这个和下面几种都是要么加了没用，要么加了还会略微变差一点。也不排除是我测试的问题，但是目前初步决定不再采用，只采用swap和r-drop
       - random_swap  # 这个是效果显著最好的。就是只要加了他就能提一截。再往后训练时，那个一致性正则化也只能略微提一点。
@@ -147,7 +147,7 @@ bert:
     weight_decay: 0.2
     warmup_ratio: 0.05
     head_lr_multiplier: 2.0
-    early_stopping_patience: 20
+    early_stopping_patience: 10
     use_layered_lr: false
     max_grad_norm: 0.5
     save_models: false
