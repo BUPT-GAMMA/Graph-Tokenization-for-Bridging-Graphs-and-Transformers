@@ -164,7 +164,6 @@ def generate_single_task_sbatch_script(task: str, cpus_per_task: int, job_name: 
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:1
-#SBATCH --time=12:00:00 
 #SBATCH --cpus-per-task={cpus_per_task}
 {extra_directives}#SBATCH --output=logs/{log_base}_%j.out
 #SBATCH --error=logs/{log_base}_%j.err
