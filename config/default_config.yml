@@ -113,12 +113,12 @@ bert:
     augmentation_config:
       # 全局控制：是否使用各种增强方法的概率
       random_deletion_probability: 0.3
-      random_swap_probability: 0.4
+      random_swap_probability: 0.5
       random_truncation_probability: 0.2
       
       # 比例控制：对整个序列有多少比例的token需要应用增强
       random_deletion_ratio: 0.1      # 10%的token被删除
-      random_swap_ratio: 0.05          # 5%的token在窗口内交换
+      random_swap_ratio: 0.1          # 5%的token在窗口内交换
       random_truncation_min_ratio: 0.7 # 保留至少70%的长度
       
       # 交换操作的局部窗口大小
