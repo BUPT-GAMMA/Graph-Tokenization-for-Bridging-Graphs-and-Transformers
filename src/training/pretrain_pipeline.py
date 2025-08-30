@@ -172,6 +172,10 @@ def train_bert_mlm(
     # 在 DataLoader 创建完成后再初始化 CUDA 相关（迁移模型到设备）
     device = torch.device(config.device)
     mlm_model.to(device)
+
+    # 🆕 将损失函数也移动到同一设备，避免设备不匹配错误
+    if hasattr(task_handler.loss_fn, 'to'):
+        task_handler.loss_fn.to(device)
     
     # 构建优化器和调度器
     optimizer, scheduler = build_from_config(

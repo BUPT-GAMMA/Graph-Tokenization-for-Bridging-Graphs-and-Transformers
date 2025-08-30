@@ -131,9 +131,13 @@ def run_finetune(
             wandb_logger = None
 
     # 训练
-    assert torch.cuda.is_available() 
+    assert torch.cuda.is_available()
     device = config.system.device if config.system.device != "auto" else "cuda"
     model.to(device)
+
+    # 🆕 将损失函数也移动到同一设备，避免设备不匹配错误
+    if hasattr(task_handler.loss_fn, 'to'):
+        task_handler.loss_fn.to(device)
     # 早停监控基线：最小化指标用+inf，最大化指标用-inf
     best_val = float('-inf') if task_handler.should_maximize_metric else float('inf')
     patience = config.bert.finetuning.early_stopping_patience
