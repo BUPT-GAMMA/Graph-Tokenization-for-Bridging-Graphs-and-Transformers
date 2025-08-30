@@ -144,7 +144,7 @@ bert:
     epochs: 100
     batch_size: 128
     learning_rate: 5e-5
-    weight_decay: 0.2
+    weight_decay: 0.01
     warmup_ratio: 0.05
     head_lr_multiplier: 2.0
     early_stopping_patience: 10
@@ -157,9 +157,9 @@ bert:
       # - random_truncation
       - sequence_masking
     # 图级采样开关（仅微调阶段）：将多重采样的多个序列在Dataset层面按图合并，每步从该图的变体中随机选一条
-    use_graph_level_sampling: false
+    use_graph_level_sampling: true
     graph_variant_selection: random  # random | first
-    apply_graph_level_to_val: false
+    apply_graph_level_to_val: true
     apply_graph_level_to_test: false
     
     # 数据增强配置
@@ -180,7 +180,7 @@ bert:
       swap_window_size: 3
       
       # 一致性正则化配置
-      use_consistency_regularization: false
+      use_consistency_regularization: true
       consistency_alpha: 1.0  # R-Drop权重
       
       # 高斯噪声增强
