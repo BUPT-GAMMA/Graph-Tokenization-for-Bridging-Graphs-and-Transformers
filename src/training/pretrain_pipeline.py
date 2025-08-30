@@ -126,7 +126,7 @@ def train_bert_mlm(
     # 获取有效的token列表，用于数据增强
     valid_tokens = vocab_manager.get_valid_tokens()
     # 仅训练集启用数据增强；验证/测试使用NoOp
-    train_transforms = create_transforms_from_config(config, valid_tokens, "mlm", vocab_manager)
+    train_transforms = create_transforms_from_config(config, valid_tokens, "mlm", vocab_manager,logger)
     eval_transforms = NoOpTransform()
     
     # 训练集DataLoader

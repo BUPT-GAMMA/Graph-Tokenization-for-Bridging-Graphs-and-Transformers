@@ -156,6 +156,11 @@ bert:
       - random_swap
       # - random_truncation
       - sequence_masking
+    # 图级采样开关（仅微调阶段）：将多重采样的多个序列在Dataset层面按图合并，每步从该图的变体中随机选一条
+    use_graph_level_sampling: false
+    graph_variant_selection: random  # random | first
+    apply_graph_level_to_val: false
+    apply_graph_level_to_test: false
     
     # 数据增强配置
     augmentation_config:
