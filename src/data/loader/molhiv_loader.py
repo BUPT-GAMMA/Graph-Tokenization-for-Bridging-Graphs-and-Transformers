@@ -131,27 +131,29 @@ class MOLHIVLoader(BaseDataLoader):
         """
         molhiv数据集的专用损失配置
 
-        基于数据集特点（严重不平衡，HIV活性预测）推荐使用Focal Loss
-        也可以配置为加权交叉熵用于对比测试
+        基于实验结果，使用标准交叉熵作为默认配置
+        Focal Loss和Weighted CE在测试中未能提升AUC性能
         """
-        # 可以在这里根据实验需求切换不同的损失函数
-        # 选项1: Focal Loss (推荐)
+        # 测试结果：Focal Loss和Weighted CE未能提升AUC指标
+        # 因此使用标准交叉熵作为默认配置
+
+        # 标准交叉熵 (默认配置)
         return {
-            'method': 'focal',
-            'gamma': 2.5,  # 适合严重不平衡
-            'alpha': 1.0,
-            'auto_weights': False  # Focal Loss不需要额外权重
+            'method': 'standard'
         }
 
-        # 选项2: 加权交叉熵 (用于对比测试)
+        # 备选方案：Focal Loss (测试中未见AUC提升)
         # return {
-        #     'method': 'weighted',
-        #     'auto_weights': True  # 自动计算基于训练集的类别权重
+        #     'method': 'focal',
+        #     'gamma': 2.5,
+        #     'alpha': 1.0,
+        #     'auto_weights': False
         # }
 
-        # 选项3: 标准交叉熵 (基线)
+        # 备选方案：加权交叉熵 (测试中未见AUC提升)
         # return {
-        #     'method': 'standard'
+        #     'method': 'weighted',
+        #     'auto_weights': True
         # }
 
     def get_node_attribute(self, graph: dgl.DGLGraph, node_id: int) -> int:
