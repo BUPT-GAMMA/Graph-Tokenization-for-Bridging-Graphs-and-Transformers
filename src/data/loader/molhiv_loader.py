@@ -127,6 +127,33 @@ class MOLHIVLoader(BaseDataLoader):
     def get_num_classes(self) -> int:
         return 2
 
+    def get_loss_config(self) -> Optional[Dict[str, Any]]:
+        """
+        molhiv数据集的专用损失配置
+
+        基于数据集特点（严重不平衡，HIV活性预测）推荐使用Focal Loss
+        也可以配置为加权交叉熵用于对比测试
+        """
+        # 可以在这里根据实验需求切换不同的损失函数
+        # 选项1: Focal Loss (推荐)
+        return {
+            'method': 'focal',
+            'gamma': 2.5,  # 适合严重不平衡
+            'alpha': 1.0,
+            'auto_weights': False  # Focal Loss不需要额外权重
+        }
+
+        # 选项2: 加权交叉熵 (用于对比测试)
+        # return {
+        #     'method': 'weighted',
+        #     'auto_weights': True  # 自动计算基于训练集的类别权重
+        # }
+
+        # 选项3: 标准交叉熵 (基线)
+        # return {
+        #     'method': 'standard'
+        # }
+
     def get_node_attribute(self, graph: dgl.DGLGraph, node_id: int) -> int:
         if self._cache_built and id(graph) in self._node_attr_cache:
             return int(self._node_attr_cache[id(graph)][int(node_id)])
