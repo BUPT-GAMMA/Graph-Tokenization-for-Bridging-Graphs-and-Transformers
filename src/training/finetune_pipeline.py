@@ -294,8 +294,10 @@ def run_finetune(
             logger.info(f"🎯 新的最优模型! {pk}={val_metrics[pk]:.4f} (↓ {improvement:.4f})")
 
             # 在内存中缓存最佳模型状态，避免频繁磁盘IO
+            # 对state_dict中的每个张量进行clone，避免引用问题
+            state_dict_copy = {k: v.clone() for k, v in model.state_dict().items()}
             best_model_state = {
-                'model_state_dict': model.state_dict(),
+                'model_state_dict': state_dict_copy,
                 'epoch': epoch + 1,
                 pk: val_metrics[pk],
                 'label_normalizer': normalizer if task_handler.is_regression_task() else None
