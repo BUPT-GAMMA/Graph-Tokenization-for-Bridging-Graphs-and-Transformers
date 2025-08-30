@@ -177,7 +177,7 @@ class RandomTruncation(TokenTransform):
 class SequenceMasking(TokenTransform):
     """低概率序列掩码（适用于微调阶段）"""
     
-    def __init__(self, mask_ratio: float = 0.05, probability: float = 0.3, mask_token_id: int = None):
+    def __init__(self, mask_ratio: float = 0.05, probability: float = 0.3, mask_token_id: int = 2):
         super().__init__(probability)
         self.mask_ratio = mask_ratio
         self.mask_token_id = mask_token_id

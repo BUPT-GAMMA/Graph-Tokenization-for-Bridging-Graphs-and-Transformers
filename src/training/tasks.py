@@ -10,7 +10,9 @@ from src.models.bert.data import (
     LabelNormalizer,
 )
 from src.data.unified_data_interface import UnifiedDataInterface
+from src.utils.logger import get_logger
 
+logger = get_logger(__name__)
 
 
 def _effective_max_len(seqs, max_pos: int, config=None) -> int:
@@ -34,7 +36,15 @@ def build_regression_datasets(
     train_labels, val_labels, test_labels,
     train_gids, val_gids, test_gids,
 ) -> Tuple[Any, Any, Any, LabelNormalizer]:
+    # 读取图级采样配置
+    finetune_cfg = getattr(config.bert, 'finetuning')
+    use_graph_level_sampling: bool = bool(getattr(finetune_cfg, 'use_graph_level_sampling', False))
+    apply_graph_level_to_val: bool = bool(getattr(finetune_cfg, 'apply_graph_level_to_val', False))
+    apply_graph_level_to_test: bool = bool(getattr(finetune_cfg, 'apply_graph_level_to_test', False))
+    variant_selection: str = str(getattr(finetune_cfg, 'graph_variant_selection', 'random'))
+
     normalizer = LabelNormalizer(method=config.task.normalization)
+    # 简化：始终按序列级标签拟合（多重采样次数一致，无需特别处理）
     normalizer.fit(train_labels)
 
     # 🆕 直接从配置和UDI获取所需信息
@@ -46,21 +56,27 @@ def build_regression_datasets(
     test_eff = _effective_max_len(test_sequences, max_pos, config)
 
     # 仅训练集启用增强；验证/测试使用NoOp
-    train_transforms = create_transforms_from_config(config, vocab_manager.get_valid_tokens(), "regression", vocab_manager)
+    train_transforms = create_transforms_from_config(config, vocab_manager.get_valid_tokens(), "regression", vocab_manager,logger)
     from src.models.bert.data import NoOpTransform
     eval_transforms = NoOpTransform()
     
     train_ds = NormalizedRegressionDataset(
         train_sequences, train_labels, vocab_manager, train_transforms, train_eff,
-        graph_ids=train_gids
+        graph_ids=train_gids,
+        group_by_graph=use_graph_level_sampling,
+        variant_selection=variant_selection,
     )
     val_ds = NormalizedRegressionDataset(
         val_sequences, val_labels, vocab_manager, eval_transforms, val_eff,
-        graph_ids=val_gids
+        graph_ids=val_gids,
+        group_by_graph=apply_graph_level_to_val,
+        variant_selection=variant_selection,
     )
     test_ds = NormalizedRegressionDataset(
         test_sequences, test_labels, vocab_manager, eval_transforms, test_eff,
-        graph_ids=test_gids
+        graph_ids=test_gids,
+        group_by_graph=apply_graph_level_to_test,
+        variant_selection=variant_selection,
     )
 
     train_ds.normalizer = normalizer
@@ -82,6 +98,13 @@ def build_classification_datasets(
     *,
     num_classes: int,
 ):
+    # 图级采样配置
+    finetune_cfg = getattr(config.bert, 'finetuning')
+    use_graph_level_sampling: bool = bool(getattr(finetune_cfg, 'use_graph_level_sampling', False))
+    apply_graph_level_to_val: bool = bool(getattr(finetune_cfg, 'apply_graph_level_to_val', False))
+    apply_graph_level_to_test: bool = bool(getattr(finetune_cfg, 'apply_graph_level_to_test', False))
+    variant_selection: str = str(getattr(finetune_cfg, 'graph_variant_selection', 'random'))
+
     # 🆕 直接从配置和UDI获取所需信息
     max_pos = int(config.bert.architecture.max_position_embeddings)
     vocab_manager = udi.get_vocab(method=method)
@@ -91,13 +114,25 @@ def build_classification_datasets(
     test_eff = _effective_max_len(test_sequences, max_pos, config)
 
     # 仅训练集启用增强；验证/测试使用NoOp
-    train_transforms = create_transforms_from_config(config, vocab_manager.get_valid_tokens(), "classification", vocab_manager)
+    train_transforms = create_transforms_from_config(config, vocab_manager.get_valid_tokens(), "classification", vocab_manager,logger)
     from src.models.bert.data import NoOpTransform
     eval_transforms = NoOpTransform()
     
-    train_ds = ClassificationDataset(train_sequences, train_labels, vocab_manager, train_transforms, train_eff, train_gids)
-    val_ds = ClassificationDataset(val_sequences, val_labels, vocab_manager, eval_transforms, val_eff, val_gids)
-    test_ds = ClassificationDataset(test_sequences, test_labels, vocab_manager, eval_transforms, test_eff, test_gids)
+    train_ds = ClassificationDataset(
+        train_sequences, train_labels, vocab_manager, train_transforms, train_eff, train_gids,
+        group_by_graph=use_graph_level_sampling,
+        variant_selection=variant_selection,
+    )
+    val_ds = ClassificationDataset(
+        val_sequences, val_labels, vocab_manager, eval_transforms, val_eff, val_gids,
+        group_by_graph=apply_graph_level_to_val,
+        variant_selection=variant_selection,
+    )
+    test_ds = ClassificationDataset(
+        test_sequences, test_labels, vocab_manager, eval_transforms, test_eff, test_gids,
+        group_by_graph=apply_graph_level_to_test,
+        variant_selection=variant_selection,
+    )
     return train_ds, val_ds, test_ds
 
 
