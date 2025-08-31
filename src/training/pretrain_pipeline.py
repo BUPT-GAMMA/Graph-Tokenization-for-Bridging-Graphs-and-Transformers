@@ -14,7 +14,7 @@ BERT预训练Pipeline (简化重构版)
 from __future__ import annotations
 
 import time
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 # from pathlib import Path  # unused
 import json
 
@@ -67,17 +67,26 @@ def train_bert_mlm(
     method = config.serialization.method
     
     display_stage_separator(logger, "词表与最大长度", "验证输入数据")
-    # 验证输入数据
-    train, val, test = udi.get_training_data_flat(method=method)
 
+    # 读取预训练图级采样配置
+    pretrain_cfg = getattr(config.bert, 'pretraining')
+    use_graph_level_sampling = bool(getattr(pretrain_cfg, 'use_graph_level_sampling', False))
+    apply_graph_level_to_val = bool(getattr(pretrain_cfg, 'apply_graph_level_to_val', False))
+    variant_selection = str(getattr(pretrain_cfg, 'graph_variant_selection', 'random'))
 
-    
+    # 根据是否启用图级采样选择数据接口
+    if use_graph_level_sampling or apply_graph_level_to_val:
+        (train, train_gids), (val, val_gids), (test, test_gids) = udi.get_training_data_flat_with_ids(method=method)
+    else:
+        train, val, test = udi.get_training_data_flat(method=method)
+        train_gids = val_gids = test_gids = None
+
     # 使用提供的词表
     vocab_manager = udi.get_vocab(method=method)
     vocab_info = vocab_manager.get_vocab_info()
     # 同步配置中的词表大小
     config.bert.architecture.vocab_size = int(vocab_info['vocab_size'])
-    
+
     # 计算有效最大长度
     all_sequences = train + val + test
     effective_max_length = compute_effective_max_length(all_sequences, config)
@@ -131,25 +140,31 @@ def train_bert_mlm(
     eval_transforms = NoOpTransform()
     
     # 训练集DataLoader
-    train_dataset = MLMDataset(train, vocab_manager, train_transforms, effective_max_length, config.bert.pretraining.mask_prob)
+    train_dataset = MLMDataset(
+        train, vocab_manager, train_transforms, effective_max_length, config.bert.pretraining.mask_prob,
+        graph_ids=train_gids, group_by_graph=use_graph_level_sampling, variant_selection=variant_selection
+    )
     _num_workers = int(config.system.num_workers)
     _persistent_workers = bool(config.system.persistent_workers and _num_workers > 0)
     train_dataloader = DataLoader(
-        train_dataset, 
-        batch_size=config.bert.pretraining.batch_size, 
-        shuffle=True, 
+        train_dataset,
+        batch_size=config.bert.pretraining.batch_size,
+        shuffle=True,
         pin_memory=True,
         worker_init_fn=bpe_worker_init_fn,
         num_workers=_num_workers,
         persistent_workers=_persistent_workers,
     )
-    
+
     # 验证集DataLoader
-    val_dataset = MLMDataset(val, vocab_manager, eval_transforms, effective_max_length, config.bert.pretraining.mask_prob)
+    val_dataset = MLMDataset(
+        val, vocab_manager, eval_transforms, effective_max_length, config.bert.pretraining.mask_prob,
+        graph_ids=val_gids, group_by_graph=apply_graph_level_to_val, variant_selection=variant_selection
+    )
     val_dataloader = DataLoader(
-        val_dataset, 
-        batch_size=config.bert.pretraining.batch_size, 
-        shuffle=False, 
+        val_dataset,
+        batch_size=config.bert.pretraining.batch_size,
+        shuffle=False,
         pin_memory=True,
         worker_init_fn=create_bpe_worker_init_fn_from_udi(udi, config, method, split="val"),
         num_workers=_num_workers,

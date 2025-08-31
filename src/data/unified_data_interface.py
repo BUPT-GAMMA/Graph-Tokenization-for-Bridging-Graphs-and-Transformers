@@ -406,13 +406,42 @@ class UnifiedDataInterface:
             (val_seqs_with_id, _),
             (test_seqs_with_id, _),
         ) = self.get_training_data(method)
-        
+
         # 提取纯序列，丢弃graph_id
         train_sequences = [seq for _, seq in train_seqs_with_id]
         val_sequences = [seq for _, seq in val_seqs_with_id]
         test_sequences = [seq for _, seq in test_seqs_with_id]
-        
+
         return train_sequences, val_sequences, test_sequences
+
+    def get_training_data_flat_with_ids(
+        self,
+        method: str,
+    ) -> Tuple[
+        Tuple[List[List[int]], List[int]],  # train (sequences, graph_ids)
+        Tuple[List[List[int]], List[int]],  # val (sequences, graph_ids)
+        Tuple[List[List[int]], List[int]],  # test (sequences, graph_ids)
+    ]:
+        """
+        获取扁平化的训练序列数据，包含graph_ids，用于预训练图级采样。
+        """
+        (
+            (train_seqs_with_id, _),
+            (val_seqs_with_id, _),
+            (test_seqs_with_id, _),
+        ) = self.get_training_data(method)
+
+        # 提取序列和graph_id
+        train_sequences = [seq for _, seq in train_seqs_with_id]
+        train_gids = [gid for gid, _ in train_seqs_with_id]
+
+        val_sequences = [seq for _, seq in val_seqs_with_id]
+        val_gids = [gid for gid, _ in val_seqs_with_id]
+
+        test_sequences = [seq for _, seq in test_seqs_with_id]
+        test_gids = [gid for gid, _ in test_seqs_with_id]
+
+        return (train_sequences, train_gids), (val_sequences, val_gids), (test_sequences, test_gids)
 
     def _resolve_target_property(self, requested_target_property: str | None) -> str | None:
         """

@@ -170,7 +170,9 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
                             experiment_name = f"{exp_prefix}{exp_core}{('_' + tag) if tag else ''}"
                             
                             # 构建预训练实验名（与预训练阶段一致，不应附加 _default）
-                            pretrain_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}{encoder_config['pretrain_suffix']}"
+                            # 🆕 特殊处理：peptides_struct数据集使用peptides_func的预训练模型（数据相同）
+                            pretrain_dataset = "peptides_func" if dataset == "peptides_struct" else dataset
+                            pretrain_core = f"{pretrain_dataset}_{method}_{bpe_suffix}{aug_part}{encoder_config['pretrain_suffix']}"
                             pretrain_exp_name = f"{pretrain_exp_prefix}{pretrain_core}{('_' + tag) if tag else ''}"
                             
                             tasks.append({
@@ -190,7 +192,9 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
                         experiment_name = f"{exp_prefix}{exp_core}{('_' + tag) if tag else ''}"
                         
                         # 构建预训练实验名（与预训练阶段一致，不应附加 _default）
-                        pretrain_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}{encoder_config['pretrain_suffix']}"
+                        # 🆕 特殊处理：peptides_struct数据集使用peptides_func的预训练模型（数据相同）
+                        pretrain_dataset = "peptides_func" if dataset == "peptides_struct" else dataset
+                        pretrain_core = f"{pretrain_dataset}_{method}_{bpe_suffix}{aug_part}{encoder_config['pretrain_suffix']}"
                         pretrain_exp_name = f"{pretrain_exp_prefix}{pretrain_core}{('_' + tag) if tag else ''}"
                         
                         tasks.append({
@@ -212,7 +216,8 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
              commands_file: Optional[str] = None,
              commands_stdout: bool = False,
              save_name_prefix: Optional[str] = None,
-             save_name_suffix: Optional[str] = None) -> Optional[subprocess.Popen]:
+             save_name_suffix: Optional[str] = None,
+             repeat_runs: int = 1) -> Optional[subprocess.Popen]:
     cmd = [
         "python", "run_finetune.py",
         "--dataset", task["dataset"],
@@ -270,6 +275,10 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
     # 将 plain_logs 传递给下层 run_finetune.py，以启用UTF-8与去色包装
     if plain_logs:
         cmd.append("--plain_logs")
+
+    # 🆕 添加重复运行参数
+    if repeat_runs > 1:
+        cmd.extend(["--repeat_runs", str(repeat_runs)])
 
     # 目标日志文件（也用于 commands_only 记录）
     stdout_dest = subprocess.PIPE
@@ -377,6 +386,9 @@ def main():
     parser.add_argument("--batch_size", type=int, default=None, help="微调批次大小（单组超参用）")
     parser.add_argument("--learning_rate", type=float, default=None, help="微调学习率（单组超参用）")
     parser.add_argument("--hyperparams_json", type=str, default=None, help="多组超参数的JSON（字符串或文件路径），数组形式")
+
+    # 🆕 重复运行参数
+    parser.add_argument("--repeat_runs", type=int, default=1, help="重复运行次数，默认1次（不重复）")
 
     # 评估配置
     parser.add_argument("--aggregation_mode", type=str, default=DEFAULT_AGGREGATION_MODE, choices=["avg", "best", "learned"], help="测试时增强的聚合模式")
@@ -522,6 +534,7 @@ def main():
                         commands_stdout=args.commands_stdout,
                         save_name_prefix=args.save_name_prefix,
                         save_name_suffix=args.save_name_suffix,
+                        repeat_runs=args.repeat_runs,
                     )
                     if args.commands_only or args.commands_stdout:
                         continue

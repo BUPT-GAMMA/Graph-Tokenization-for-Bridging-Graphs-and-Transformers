@@ -41,7 +41,6 @@ serialization:
   multiple_sampling:
     enabled: false          # 是否启用多重采样
     num_realizations: 10     # 每个图的采样次数
-    flatten_variants: true  # 是否将多个采样结果平铺为独立样本
   bpe:  # BPE压缩配置
     enabled: true
     num_merges: 2000
@@ -95,7 +94,7 @@ bert:
   
   # 预训练配置
   pretraining:
-    epochs: 100
+    epochs: 50
     batch_size: 128
     learning_rate: 1.5e-4
     mask_prob: 0.09
@@ -107,6 +106,10 @@ bert:
     vocab_min_freq: 1
     max_vocab_size: 5000
     early_stopping_patience: 10
+    # 图级采样开关（仅预训练阶段）：将多重采样的多个序列在Dataset层面按图合并，每步从该图的变体中随机选一条
+    use_graph_level_sampling: true
+    graph_variant_selection: random  # random | first
+    apply_graph_level_to_val: true
     mlm_augmentation_methods:
       # - random_deletion  # 这个和下面几种都是要么加了没用，要么加了还会略微变差一点。也不排除是我测试的问题，但是目前初步决定不再采用，只采用swap和r-drop
       - random_swap  # 这个是效果显著最好的。就是只要加了他就能提一截。再往后训练时，那个一致性正则化也只能略微提一点。
@@ -144,7 +147,7 @@ bert:
   
   # 微调配置
   finetuning:
-    epochs: 100
+    epochs: 50
     batch_size: 128
     learning_rate: 5e-5
     weight_decay: 0.01
