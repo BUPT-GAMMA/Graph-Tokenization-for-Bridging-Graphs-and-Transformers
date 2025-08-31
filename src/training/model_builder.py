@@ -21,6 +21,7 @@ def build_task_model(
     pretrained_dir=None,
     pretrain_exp_name=None,
     force_task_type=None,
+    run_i=None,
 ):
     """
     构建统一任务模型 - 支持预训练和微调的统一入口
@@ -48,7 +49,7 @@ def build_task_model(
     logger.info(f"  编码器类型: {config.encoder.type}")
     
     # 🆕 内置路径解析逻辑
-    pretrained_path = _resolve_pretrained_path_internal(config, pretrain_exp_name, pretrained_dir)
+    pretrained_path = _resolve_pretrained_path_internal(config, pretrain_exp_name, pretrained_dir, run_i)
     task_type = force_task_type if force_task_type is not None else udi.get_dataset_task_type()
     # 规则：MLM 任务默认不加载任何预训练模型（即使存在），确保预训练严格从随机初始化开始
     if task_type == 'mlm':
@@ -257,7 +258,7 @@ def _load_and_copy_pretrained_weights(model, pretrained_path):
 
 
 
-def _resolve_pretrained_path_internal(config, pretrain_exp_name, pretrained_dir):
+def _resolve_pretrained_path_internal(config, pretrain_exp_name, pretrained_dir, run_i=None):
     """内部化的预训练路径解析，避免创建额外文件"""
     
     def _validate_model_dir(path):
@@ -275,10 +276,10 @@ def _resolve_pretrained_path_internal(config, pretrain_exp_name, pretrained_dir)
         logger.warning(f"⚠️ 指定了路径预训练目录: {pretrained_dir}, 但未找到有效模型")
         return None
     
-    # 2. 使用pretrain_exp_name（中等优先级）  
+    # 2. 使用pretrain_exp_name（中等优先级）
     if pretrain_exp_name is not None:
-        # 标准路径：model/<group>/<pretrain_exp_name>/<dataset>/<method>/best
-        pretrain_path = config.get_model_dir(exp_name=pretrain_exp_name) / 'best'
+        # 标准路径：model/<group>/<pretrain_exp_name>/run_{i}/best 或兼容旧格式
+        pretrain_path = config.get_model_dir(exp_name=pretrain_exp_name, run_i=run_i) / 'best'
         logger.info(f"使用预训练实验名搜索路径: {pretrain_path}")
         if _validate_model_dir(pretrain_path):
             logger.info(f"✅ 从指定预训练实验找到模型: {pretrain_exp_name} -> {pretrain_path}")
@@ -286,7 +287,7 @@ def _resolve_pretrained_path_internal(config, pretrain_exp_name, pretrained_dir)
         logger.warning(f"⚠️ 指定了pretrain_exp_name: {pretrain_exp_name} ，但未找到有效模型")
     
     # 3. 使用当前experiment_name（最低优先级）
-    base_dir = config.get_model_dir() / 'best'
+    base_dir = config.get_model_dir(run_i=run_i) / 'best'
     if _validate_model_dir(base_dir):
         logger.info(f"✅ 采用experiment_name: {config.experiment_name} 找到模型")
         return str(base_dir)

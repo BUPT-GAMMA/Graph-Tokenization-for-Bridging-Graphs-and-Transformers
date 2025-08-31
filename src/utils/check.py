@@ -5,6 +5,8 @@ from typing import List
 
 import torch
 
+from config import ProjectConfig
+
 def check_vocab_compatibility(logger, token_sequences: List[List[int]], vocab_manager) -> None:
   
     if not vocab_manager:
@@ -39,6 +41,38 @@ def check_vocab_compatibility(logger, token_sequences: List[List[int]], vocab_ma
     else:
         logger.info("✅ 词表完全兼容，所有token都在预训练词表中")
         
+
+def infer_task_property(config: ProjectConfig, udi) -> tuple[str, int | None]:
+    """
+    推断任务类型和目标信息
+    
+    Args:
+        config: 项目配置
+        udi: 统一数据接口
+        
+    Returns:
+        none
+    """
+    meta = udi.get_downstream_metadata()
+    
+
+    assert 'dataset_task_type' in meta, "数据集元数据中缺少必需字段 'dataset_task_type'"
+    task = meta['dataset_task_type']
+    
+    # 处理回归任务的目标属性
+    if task == 'regression' and not config.task.target_property:
+        # QM9数据集默认使用homo属性
+        if config.dataset.name.lower().startswith('qm9'):
+            config.task.target_property = 'homo'
+        else:
+            # 其他数据集使用默认属性
+            if 'default_target_property' in meta and meta['default_target_property']:
+                config.task.target_property = meta['default_target_property']
+        
+        if config.task.target_property:
+            print(f"🎯 自动设置回归目标属性: {config.task.target_property}")
+    
+    
         
 def parse_torch_dtype(dtype_val):
     if dtype_val is None:

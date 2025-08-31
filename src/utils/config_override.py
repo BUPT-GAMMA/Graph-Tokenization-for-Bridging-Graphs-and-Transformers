@@ -33,6 +33,9 @@ def add_basic_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--device", type=str, help="设备 (cuda:0, cpu, auto)")
     parser.add_argument("--log_style", type=str, choices=["online", "offline"], help="日志样式：online=使用tqdm；offline=每个epoch按10%输出摘要")
 
+    # 🆕 重复运行参数
+    parser.add_argument("--repeat_runs", type=int, default=1, help="重复运行次数，默认1次（不重复）")
+
 
 def add_common_args(parser: argparse.ArgumentParser) -> None:
     """添加常用参数（仅在没有JSON覆盖时使用）"""
@@ -134,6 +137,11 @@ def apply_args_to_config(config: ProjectConfig, args: argparse.Namespace, *, com
     if hasattr(args, 'log_style') and args.log_style:
         config.system.log_style = args.log_style
         print(f"🎯 system.log_style = {args.log_style}")
+
+    # 🆕 处理重复运行参数
+    if hasattr(args, 'repeat_runs') and args.repeat_runs is not None:
+        config.repeat_runs = args.repeat_runs
+        print(f"🎯 repeat_runs = {args.repeat_runs}")
     
     # BPE参数
     if hasattr(args, 'bpe_num_merges') and args.bpe_num_merges is not None:

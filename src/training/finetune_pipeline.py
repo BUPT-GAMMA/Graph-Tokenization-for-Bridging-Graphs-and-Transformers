@@ -24,7 +24,7 @@ from src.utils.logger import get_logger
 from src.utils.info_display import (
     display_startup_config, display_model_info, display_stage_separator
 )
-from src.utils.check import check_vocab_compatibility
+from src.utils.check import check_vocab_compatibility, infer_task_property
 from src.utils.metrics import add_metrics_to_writer, log_wandb_metrics
 
 logger = get_logger('tokenizerGraph.training.finetune_pipeline')
@@ -38,6 +38,7 @@ def run_finetune(
     save_name_suffix: Optional[str] = None,
     pretrained_dir: Optional[str] = None,
     pretrain_exp_name: Optional[str] = None,
+    run_i: Optional[int] = None,
 ) -> Dict[str, Any]:
     dataset_name = config.dataset.name
     method = config.serialization.method
@@ -48,6 +49,7 @@ def run_finetune(
     udi = UnifiedDataInterface(config=config, dataset=dataset_name)
     task = udi.get_dataset_task_type()
     config.task.type = task
+    infer_task_property(config,udi)
     
     # 🚨 关键修复：微调阶段也需要计算有效最大长度，确保与预训练一致
     from src.models.bert.data import compute_effective_max_length
@@ -73,7 +75,8 @@ def run_finetune(
         udi=udi,
         method=method,
         pretrained_dir=pretrained_dir,
-        pretrain_exp_name=pretrain_exp_name
+        pretrain_exp_name=pretrain_exp_name,
+        run_i=run_i
     )
     
     # 显示模型信息
@@ -106,7 +109,7 @@ def run_finetune(
 
     # 日志与可选的 W&B
     from torch.utils.tensorboard import SummaryWriter
-    logs_dir = config.get_logs_dir()
+    logs_dir = config.get_logs_dir(run_i=run_i)
     logs_dir.mkdir(parents=True, exist_ok=True)
     _log_name = "finetune"
     if save_name_prefix:
@@ -144,7 +147,7 @@ def run_finetune(
     patience_ctr = 0
     best_model_state = None  # 存储最佳模型状态，避免频繁磁盘IO
     # 为避免覆盖预训练权重，微调阶段保存到独立子目录，可选加前后缀
-    _base = config.get_model_dir()
+    _base = config.get_model_dir(run_i=run_i)
     _save_name = "finetune"
     if save_name_prefix:
         _save_name = f"{save_name_prefix}_{_save_name}"
