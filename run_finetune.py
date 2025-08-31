@@ -126,93 +126,6 @@ def _configure_output_mode(offline: bool):
         if not isinstance(sys.stderr, _AnsiStrippingWriter):
             sys.stderr = _AnsiStrippingWriter(sys.stderr)
 
-def infer_task_and_targets(config: ProjectConfig, udi: UnifiedDataInterface, 
-                          task_cli: str | None, num_classes_cli: int | None) -> tuple[str, int | None]:
-    """
-    推断任务类型和目标信息
-    
-    Args:
-        config: 项目配置
-        udi: 统一数据接口
-        task_cli: 命令行指定的任务类型
-        num_classes_cli: 命令行指定的类别数
-        
-    Returns:
-        (task_type, num_classes) 元组
-    """
-    meta = udi.get_downstream_metadata()
-    
-    # 推断任务类型
-    if task_cli:
-        task = task_cli
-    else:
-        assert 'dataset_task_type' in meta, "数据集元数据中缺少必需字段 'dataset_task_type'"
-        task = meta['dataset_task_type']
-    
-    # 处理回归任务的目标属性
-    if task == 'regression' and not config.task.target_property:
-        # QM9数据集默认使用homo属性
-        if config.dataset.name.lower().startswith('qm9'):
-            config.task.target_property = 'homo'
-        else:
-            # 其他数据集使用默认属性
-            if 'default_target_property' in meta and meta['default_target_property']:
-                config.task.target_property = meta['default_target_property']
-        
-        if config.task.target_property:
-            print(f"🎯 自动设置回归目标属性: {config.task.target_property}")
-    
-    # 推断分类类别数和多目标维度
-    num_classes = num_classes_cli
-    if task in ['classification', 'multi_label_classification', 'multi_target_regression'] and num_classes is None:
-        assert 'num_classes' in meta, f"{task}任务需要 num_classes，但数据集元数据中未找到此字段"
-        n = meta['num_classes']
-        assert isinstance(n, int) and n > 1, f"数据集元数据中 num_classes 应为大于1的整数，实际值: {n}"
-        num_classes = n
-        if task == 'classification':
-            print(f"🏷️ 自动设置分类类别数: {num_classes}")
-        elif task == 'multi_label_classification':
-            print(f"🏷️ 自动设置多标签分类标签数: {num_classes}")
-        elif task == 'multi_target_regression':
-            print(f"🏷️ 自动设置多目标回归目标数: {num_classes}")
-    
-    return task, num_classes
-
-
-def check_pretrained_model(config: ProjectConfig) -> bool:
-    """
-    检查预训练模型是否存在
-    
-    Args:
-        config: 项目配置
-        
-    Returns:
-        是否存在可用的预训练模型
-    """
-    print("🔍 检查预训练模型...")
-    
-    # 检查标准路径
-    model_base = config.get_model_dir()
-    best_dir = model_base / "best"
-
-    def _has_model(d: Path) -> bool:
-        return (d / 'config.bin').exists() and (d / 'pytorch_model.bin').exists()
-
-    if _has_model(best_dir):
-        print(f"✅ 找到预训练模型: {best_dir}")
-        return True
-    else:
-        # 检查兼容路径
-        compat_dir = config.get_bert_model_path("pretrained").parent
-        if Path(compat_dir, 'config.bin').exists() and Path(compat_dir, 'pytorch_model.bin').exists():
-            print(f"✅ 找到兼容预训练模型: {compat_dir}")
-            return True
-
-        print("❌ 未找到预训练模型")
-        print(f"   已检查路径: {best_dir}, {compat_dir}")
-        return False
-
-
 def run_finetuning(
     config: ProjectConfig,
     aggregation_mode: Literal["avg", "best", "learned"] = "avg",
@@ -220,6 +133,7 @@ def run_finetuning(
     save_name_suffix: str | None = None,
     pretrained_dir: str | None = None,
     pretrain_exp_name: str | None = None,
+    run_i: int | None = None,
 ) -> dict:
     """
     运行BERT微调
@@ -246,6 +160,7 @@ def run_finetuning(
             save_name_suffix=save_name_suffix,
             pretrained_dir=pretrained_dir,
             pretrain_exp_name=pretrain_exp_name,
+            run_i=run_i,
         )
         print("✅ 微调完成!")
         print(f"📊 最优验证损失: {result['best_val_loss']:.4f}")
@@ -338,47 +253,120 @@ def main():
     # 打印配置摘要
     print_config_summary(config)
     
-    # 运行微调
-    try:
-        result = run_finetuning(
-            config,
-            aggregation_mode=args.aggregation_mode,
-            save_name_prefix=args.save_name_prefix,
-            save_name_suffix=args.save_name_suffix,
-            pretrained_dir=getattr(args, 'pretrained_dir', None),
-            pretrain_exp_name=getattr(args, 'pretrain_exp_name', None),
-        )
-        
-        print("\n" + "="*60)
-        print("🎉 微调完成!")
-        print("="*60)
-        
-        print(f"📁 模型路径: {result['best_dir']}")
-        print(f"📊 最优验证损失: {result['best_val_loss']:.4f}")
-        
-        # 显示测试结果
-        test_metrics = result['test_metrics']
-        print("\n📈 test_metrics:")
-        for metric, value in test_metrics.items():
-            if isinstance(value, (int, float)):
-                print(f"  {metric}: {value:.4f}")
-        
+    # 🆕 检查是否需要重复运行
+    repeat_runs = getattr(config, 'repeat_runs', 1)
+
+    if repeat_runs > 1:
+        print(f"🔄 启用重复运行模式: {repeat_runs} 次")
+
+        all_results = []
+        for run_i in range(repeat_runs):
+            print(f"\n{'='*60}")
+            print(f"🚀 开始第 {run_i + 1}/{repeat_runs} 次运行")
+            print(f"{'='*60}")
+
+            # 设置当前运行编号
+            config.current_run_i = run_i
+            # 动态设置种子
+            actual_seed = config.system.seed + run_i
+            config.system.seed = actual_seed
+
+            try:
+                # 重新设置种子
+                from config import setup_global_seeds
+                setup_global_seeds(actual_seed)
+
+                result = run_finetuning(
+                    config,
+                    aggregation_mode=args.aggregation_mode,
+                    save_name_prefix=args.save_name_prefix,
+                    save_name_suffix=args.save_name_suffix,
+                    pretrained_dir=getattr(args, 'pretrained_dir', None),
+                    pretrain_exp_name=getattr(args, 'pretrain_exp_name', None),
+                    run_i=run_i,
+                )
+                result['run_i'] = run_i
+                result['seed'] = actual_seed
+                all_results.append(result)
+
+                print(f"✅ 第 {run_i + 1} 次运行完成")
+                print(f"📊 最优验证损失: {result['best_val_loss']:.4f}")
+
+                # 显示测试结果
+                test_metrics = result.get('test_metrics', {})
+                if test_metrics:
+                    print("📈 测试指标:")
+                    for metric, value in test_metrics.items():
+                        if isinstance(value, (int, float)):
+                            print(f"  {metric}: {value:.4f}")
+
+            except Exception as e:
+                print(f"❌ 第 {run_i + 1} 次运行失败: {e}")
+                continue
+
+        # 聚合统计结果
+        if all_results:
+            print(f"\n{'='*60}")
+            print("📊 聚合统计结果")
+            print(f"{'='*60}")
+
+            from src.utils.stats_aggregation import aggregate_experiment_results, print_aggregated_stats
+
+            aggregated = aggregate_experiment_results(
+                config, config.experiment_name, len(all_results), "finetune"
+            )
+            print_aggregated_stats(aggregated, "finetune")
+
         try:
             sys.stdout.flush()
             sys.stderr.flush()
         except Exception:
             pass
         os._exit(0)
-        print("exit后仍未结束！！！！！")
-        
-    except KeyboardInterrupt:
-        print("\n⚠️ 用户中断训练")
-        return 130
-    except Exception as e:
-        print(f"\n❌ 微调失败: {e}")
-        import traceback
-        traceback.print_exc()
-        return 1
+
+    else:
+        # 普通单次运行
+        try:
+            result = run_finetuning(
+                config,
+                aggregation_mode=args.aggregation_mode,
+                save_name_prefix=args.save_name_prefix,
+                save_name_suffix=args.save_name_suffix,
+                pretrained_dir=getattr(args, 'pretrained_dir', None),
+                pretrain_exp_name=getattr(args, 'pretrain_exp_name', None),
+                run_i=None,  # 单个脚本运行时不使用run_i
+            )
+
+            print("\n" + "="*60)
+            print("🎉 微调完成!")
+            print("="*60)
+
+            print(f"📁 模型路径: {result['best_dir']}")
+            print(f"📊 最优验证损失: {result['best_val_loss']:.4f}")
+
+            # 显示测试结果
+            test_metrics = result['test_metrics']
+            print("\n📈 test_metrics:")
+            for metric, value in test_metrics.items():
+                if isinstance(value, (int, float)):
+                    print(f"  {metric}: {value:.4f}")
+
+            try:
+                sys.stdout.flush()
+                sys.stderr.flush()
+            except Exception:
+                pass
+            os._exit(0)
+            print("exit后仍未结束！！！！！")
+
+        except KeyboardInterrupt:
+            print("\n⚠️ 用户中断训练")
+            return 130
+        except Exception as e:
+            print(f"\n❌ 微调失败: {e}")
+            import traceback
+            traceback.print_exc()
+            return 1
 
 
 if __name__ == "__main__":

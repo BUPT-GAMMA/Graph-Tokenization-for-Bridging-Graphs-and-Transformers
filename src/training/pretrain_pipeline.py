@@ -47,6 +47,7 @@ logger.propagate = False
 
 def train_bert_mlm(
     config: ProjectConfig,
+    run_i: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     BERT MLM预训练主函数
@@ -193,10 +194,10 @@ def train_bert_mlm(
     )
     
     # 准备日志和模型保存
-    model_dir = config.get_model_dir()
+    model_dir = config.get_model_dir(run_i=run_i)
     model_dir.mkdir(parents=True, exist_ok=True)
-    
-    log_dir = config.get_logs_dir()
+
+    log_dir = config.get_logs_dir(run_i=run_i)
     log_dir = log_dir / "pretrain"
     log_dir.mkdir(parents=True, exist_ok=True)
     

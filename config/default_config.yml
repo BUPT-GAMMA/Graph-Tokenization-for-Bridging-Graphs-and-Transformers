@@ -9,6 +9,9 @@ system:
   persistent_workers: true  # DataLoader常驻worker，利于后端实例常驻
   log_style: online  # online=使用tqdm进度条; offline=每个epoch按10%输出摘要
 
+# 🆕 重复运行配置
+repeat_runs: 1  # 重复运行次数，默认1次（不重复）
+
 # 路径配置
 paths:
   data_dir: data/
