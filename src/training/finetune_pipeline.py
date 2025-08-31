@@ -295,7 +295,7 @@ def run_finetune(
             improvement = best_val - val_metrics[pk]
             best_val = val_metrics[pk]
             patience_ctr = 0
-            logger.info(f"🎯 新的最优模型! {pk}={val_metrics[pk]:.4f} (↓ {improvement:.4f})")
+            logger.info(f"🎯 新的最优模型! {pk}={val_metrics[pk]:.4f} ({'↓' if improvement > 0 else '↑'} {abs(improvement):.4f})")
 
             # 在内存中缓存最佳模型状态，避免频繁磁盘IO
             # 对state_dict中的每个张量进行clone，避免引用问题
