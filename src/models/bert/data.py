@@ -95,20 +95,34 @@ def compute_effective_max_length(token_sequences: List[List[int]], project_confi
 
 class MLMDataset(Dataset):
     """Token ID序列的MLM数据集"""
-    
+
     def __init__(self, token_sequences: List[List[int]], vocab_manager: VocabManager,
-                 transforms: TokenTransform, max_length: int = 512, mlm_probability: float = 0.15):
+                 transforms: TokenTransform, max_length: int = 512, mlm_probability: float = 0.15,
+                 graph_ids: Optional[List[int]] = None, group_by_graph: bool = False,
+                 variant_selection: str = "random"):
         self.token_sequences: List[List[int]] = token_sequences
         self.vocab_manager = vocab_manager
         self.max_length = min(max_length, max(len(seq) for seq in token_sequences)+2)
         self.mlm_probability: float = mlm_probability
         self.transforms = transforms
-        # print("bert模型训练所用序列长度固定为：", self.max_length)
-        
+        self.graph_ids = graph_ids if graph_ids is not None else list(range(len(token_sequences)))
+        self.group_by_graph = bool(group_by_graph)
+        self.variant_selection = str(variant_selection).lower()
+
+        # 图级采样支持：构建gid分组
+        if self.group_by_graph:
+            from collections import OrderedDict
+            gid_to_indices = OrderedDict()
+            for idx, gid in enumerate(self.graph_ids):
+                gid_to_indices.setdefault(int(gid), []).append(idx)
+            self._gid_to_indices = gid_to_indices
+            self._unique_gids = list(gid_to_indices.keys())
+            logger.info(f"🔧 图级采样启用: {len(self._unique_gids)} 个图，变体选择策略: {self.variant_selection}")
+
         # BPE Transform将在worker_init_fn中初始化，这里先设为None
         self._bpe_transform = None
         self._bpe_checked = False  # 标记是否已检查过BPE Transform
-        
+
         # print(f"MLM数据集创建完成，共 {len(token_sequences)} 个序列")
     
     def _apply_bpe_if_enabled(self, token_sequence: List[int]) -> List[int]:
@@ -126,6 +140,8 @@ class MLMDataset(Dataset):
         return self._bpe_transform.encode(token_sequence)
 
     def __len__(self):
+        if self.group_by_graph:
+            return len(self._unique_gids)
         return len(self.token_sequences)
     
     def _create_mlm_mask(self, input_ids: torch.Tensor, 
@@ -157,25 +173,34 @@ class MLMDataset(Dataset):
         return input_ids, labels
     
     def __getitem__(self, idx) -> dict[str, torch.Tensor]:
-        token_sequence = self.token_sequences[idx]
-        
+        if self.group_by_graph:
+            gid = self._unique_gids[idx]
+            indices = self._gid_to_indices[gid]
+            if self.variant_selection == "first":
+                chosen_idx = indices[0]
+            else:
+                chosen_idx = random.choice(indices)
+            token_sequence = self.token_sequences[chosen_idx]
+        else:
+            token_sequence = self.token_sequences[idx]
+
         # 应用数据增强变换
         token_sequence = self.transforms(token_sequence)
-        
+
         # 应用BPE编码（动态检查，避免初始化时序问题）
         token_sequence = self._apply_bpe_if_enabled(token_sequence)
-        
+
         # 使用词表管理器编码序列
         encoded: torch.Dict[str, torch.Tensor] = self.vocab_manager.encode_sequence(
             token_sequence, add_special_tokens=True, max_length=self.max_length
         )
-        
+
         input_ids = encoded['input_ids']
         attention_mask = encoded['attention_mask']
-        
+
         # 创建MLM掩码
         masked_input_ids, labels = self._create_mlm_mask(input_ids, attention_mask)
-        
+
         return {
             'input_ids': masked_input_ids,
             'attention_mask': attention_mask,

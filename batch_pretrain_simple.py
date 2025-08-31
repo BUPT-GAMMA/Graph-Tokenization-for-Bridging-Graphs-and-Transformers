@@ -187,7 +187,8 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
              combined_config_json: Optional[str], log_dir: Optional[str],
              commands_only: bool = False, plain_logs: bool = False,
              commands_file: Optional[str] = None,
-             commands_stdout: bool = False) -> Optional[subprocess.Popen]:
+             commands_stdout: bool = False,
+             repeat_runs: int = 1) -> Optional[subprocess.Popen]:
     """在指定GPU上运行单个任务"""
     cmd = [
         "python", "run_pretrain.py",
@@ -238,6 +239,10 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
     # 将 plain_logs 传递给下层 run_pretrain.py，以启用UTF-8与去色包装
     if plain_logs:
         cmd.append("--plain_logs")
+
+    # 🆕 添加重复运行参数
+    if repeat_runs > 1:
+        cmd.extend(["--repeat_runs", str(repeat_runs)])
 
     # 目标日志文件（也用于 commands_only 记录）
     stdout_dest = subprocess.PIPE
@@ -341,6 +346,9 @@ def main():
     parser.add_argument("--batch_size", type=int, default=None, help="批次大小（单组超参用）")
     parser.add_argument("--learning_rate", type=float, default=None, help="学习率（单组超参用）")
     parser.add_argument("--hyperparams_json", type=str, default=None, help="多组超参数的JSON（字符串或文件路径），数组形式")
+
+    # 🆕 重复运行参数
+    parser.add_argument("--repeat_runs", type=int, default=1, help="重复运行次数，默认1次（不重复）")
 
     parser.add_argument("--use_augmentation", type=str, choices=["true", "false"], default=None,
                         help="是否启用MLM增强（true/false，不指定则保持config默认）")
@@ -463,7 +471,7 @@ def main():
             for gpu_id in gpus:
                 if gpu_id not in running_processes and task_queue:
                     task = task_queue.pop(0)
-                    process = run_task(task, gpu_id, args.experiment_group, combined_config_json, args.log_dir, args.commands_only, args.plain_logs, args.commands_file, args.commands_stdout)
+                    process = run_task(task, gpu_id, args.experiment_group, combined_config_json, args.log_dir, args.commands_only, args.plain_logs, args.commands_file, args.commands_stdout, args.repeat_runs)
                     if args.commands_only or args.commands_stdout:
                         continue
                     running_processes[gpu_id] = (process, task)
