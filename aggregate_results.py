@@ -166,7 +166,7 @@ def collect_results(log_dir, group_names, prefix_names):
                     continue
                 
                 # 构建metrics文件路径
-                metrics_file = exp_dir / dataset / method / f"{prefix_name}_finetune" / "finetune_metrics.json"
+                metrics_file = exp_dir / dataset / method / f"{prefix_name}finetune" / "finetune_metrics.json"
                 
                 if not metrics_file.exists():
                     # 对于多前缀，不打印缺失警告，因为很常见
