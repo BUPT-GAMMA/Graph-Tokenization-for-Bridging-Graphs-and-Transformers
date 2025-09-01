@@ -325,7 +325,9 @@ def run_finetune(
         test_model = copy.deepcopy(model)
         test_model.load_state_dict(best_model_state['model_state_dict'])
         test_normalizer = best_model_state.get('label_normalizer', normalizer)
-        
+        #清除原先的model，避免占用双倍显存
+        del model
+
         # 保存最佳模型
         if config.bert.finetuning.save_models:
             test_model.save_model(str(best_dir))
@@ -346,6 +348,8 @@ def run_finetune(
                 with open(best_dir / "label_normalizer.pkl", "wb") as f:
                     pickle.dump(normalizer, f)
             logger.info(f"✅ 模型保存成功: {best_dir}")
+
+
 
     # 可学习聚合：在测试前尝试训练聚合器（无论传入模式为何，都为 learned 评估做准备）
     aggregator = None

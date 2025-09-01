@@ -191,10 +191,10 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
                         exp_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}{encoder_suffix}_default"
                         experiment_name = f"{exp_prefix}{exp_core}{('_' + tag) if tag else ''}"
                         
-                        # 构建预训练实验名（与预训练阶段一致，不应附加 _default）
+                        # 构建预训练实验名（与预训练阶段一致）
                         # 🆕 特殊处理：peptides_struct数据集使用peptides_func的预训练模型（数据相同）
                         pretrain_dataset = "peptides_func" if dataset == "peptides_struct" else dataset
-                        pretrain_core = f"{pretrain_dataset}_{method}_{bpe_suffix}{aug_part}{encoder_config['pretrain_suffix']}"
+                        pretrain_core = f"{pretrain_dataset}_{method}_{bpe_suffix}{aug_part}{encoder_config['pretrain_suffix']}_default"
                         pretrain_exp_name = f"{pretrain_exp_prefix}{pretrain_core}{('_' + tag) if tag else ''}"
                         
                         tasks.append({
