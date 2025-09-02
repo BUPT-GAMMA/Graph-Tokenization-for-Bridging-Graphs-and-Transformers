@@ -32,11 +32,12 @@ import re
 import io
 from pathlib import Path
 from typing import Optional, Literal
-
+from clearml import Task
 # 设置项目路径
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+os.chdir('/home/gzy/py/tokenizerGraph')
 
 from config import ProjectConfig  # noqa: E402
 from src.data.unified_data_interface import UnifiedDataInterface  # noqa: E402
@@ -49,6 +50,7 @@ from src.utils.config_override import (  # noqa: E402
     show_full_config
 )
 
+task = Task.init()
 
 _ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
