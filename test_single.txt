@@ -1,0 +1,1 @@
+python run_pretrain.py --dataset qm9test --method feuler --epochs 1

@@ -414,7 +414,19 @@ def main():
     parser.add_argument("--save_name_prefix", type=str, default=None, help="仅用于保存目录的实验名前缀（不影响预训练加载）")
     parser.add_argument("--save_name_suffix", type=str, default=None, help="仅用于保存目录的实验名后缀（不影响预训练加载）")
 
-    args = parser.parse_args()
+    try:
+        args = parser.parse_args()
+    except SystemExit as e:
+        print("\n❌ 参数解析失败！传入的参数信息:")
+        print("=" * 60)
+        print("脚本名称:", sys.argv[0])
+        print("所有传入参数:")
+        for i, arg in enumerate(sys.argv[1:], 1):
+            print(f"  {i:2d}: {arg}")
+        print("=" * 60)
+        print("请检查参数是否正确，或使用 --help 查看帮助信息")
+        print("=" * 60)
+        raise
 
     datasets = parse_list_arg(args.datasets) or DEFAULT_DATASETS
     methods = parse_list_arg(args.methods) or DEFAULT_METHODS

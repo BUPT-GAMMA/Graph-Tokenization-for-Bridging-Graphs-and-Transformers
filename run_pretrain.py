@@ -51,6 +51,8 @@ from pathlib import Path
 from typing import Optional
 
 from src.training.pretrain_pipeline import train_bert_mlm
+from clearml import Task
+
 
 # 设置项目路径
 ROOT = Path(__file__).resolve().parent
@@ -68,6 +70,8 @@ from src.utils.config_override import (  # noqa: E402
 
 
 
+
+# task = Task.init(project_name='TokenizerGraph', task_name='task1')
 
 
 _ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
@@ -219,7 +223,19 @@ def main():
     parser.add_argument("--plain_logs", action="store_true", help="启用无颜色、无控制符的离线输出（兼容重定向/日志文件，解决乱码）")
     
     # 解析参数
-    args = parser.parse_args()
+    try:
+        args = parser.parse_args()
+    except SystemExit as e:
+        print("\n❌ 参数解析失败！传入的参数信息:")
+        print("=" * 60)
+        print("脚本名称:", sys.argv[0])
+        print("所有传入参数:")
+        for i, arg in enumerate(sys.argv[1:], 1):
+            print(f"  {i:2d}: {arg}")
+        print("=" * 60)
+        print("请检查参数是否正确，或使用 --help 查看帮助信息")
+        print("=" * 60)
+        raise
     
     print("🔧 初始化配置...")
     
@@ -309,7 +325,7 @@ def main():
             sys.stdout.flush()
             sys.stderr.flush()
         except Exception:
-            pass
+            raise
         os._exit(0)
 
     else:
@@ -340,9 +356,10 @@ def main():
             return 130
         except Exception as e:
             print(f"\n❌ 预训练失败: {e}")
+            task.mark_failed(message=str(e))
             import traceback
             traceback.print_exc()
-            return 1
+            raise
 
 
 if __name__ == "__main__":
