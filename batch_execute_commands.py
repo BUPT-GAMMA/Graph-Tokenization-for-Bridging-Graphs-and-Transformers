@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-ClearML批量任务提交脚本
+批量执行命令脚本（每个命令自动创建ClearML任务）
 
-从命令文件中读取任务，创建ClearML任务模板并加入队列，由Agent分布式执行
+直接执行命令，让每个run脚本自己处理ClearML任务创建和TensorBoard日志记录
 """
 
 import sys
@@ -22,8 +22,8 @@ if str(ROOT) not in sys.path:
 from clearml import Task
 
 
-class ClearMLBatchSubmitter:
-    """ClearML批量任务提交器（创建任务模板，交由Agent执行）"""
+class CommandBatchExecutor:
+    """批量命令执行器（每个命令自动创建ClearML任务）"""
 
     def __init__(self):
         self.working_directory = str(ROOT)
@@ -48,45 +48,31 @@ class ClearMLBatchSubmitter:
                 i += 1
         return parsed_args
 
-    def create_task_from_command(self, command_line: str) -> str:
-        """从命令行创建ClearML任务，让Agent去执行"""
-        parts = shlex.split(command_line.strip())
+    def execute_command(self, command_line: str) -> str:
+        """直接执行命令，让run脚本自己处理ClearML任务"""
+        print(f"🔄 执行命令: {command_line}")
 
-        # 处理 python 命令的情况
-        if parts[0] == 'python' and len(parts) > 1:
-            script_path = parts[1]
-            args = parts[2:]
-        else:
-            script_path = parts[0]
-            args = parts[1:]
-
-        # 生成任务名称
-        script_name = Path(script_path).stem
-        task_name = f"{script_name}_{int(time.time())}"
-
-        # 解析参数
-        parsed_args = self.parse_args(args)
-
-        # 创建任务模板（不执行代码）
-        task = Task.create(
-            project_name="TokenizerGraph",
-            task_name=task_name,
-            repo=self.working_directory,
-            script=script_path,
-            working_directory=self.working_directory,
-            argparse_args=parsed_args
+        # 直接执行命令，run脚本会自己调用Task.init()
+        result = subprocess.run(
+            command_line,
+            shell=True,
+            cwd=self.working_directory,
+            capture_output=True,
+            text=True
         )
 
-        # 加入队列，让Agent执行
-        Task.enqueue(task, queue_name="default")
-
-        print(f"✅ 任务已加入队列: {task_name}")
-        print(f"   脚本: {script_path}")
-        print(f"   参数数量: {len(parsed_args)}")
-        return task.id
+        if result.returncode == 0:
+            print(f"✅ 命令执行成功")
+            # 从输出中提取任务ID（如果有的话）
+            # 这里可以根据实际输出格式来解析
+            task_id = f"executed_{int(time.time())}"
+            return task_id
+        else:
+            print(f"❌ 命令执行失败: {result.stderr}")
+            raise Exception(f"Command failed: {result.stderr}")
 
     def submit_from_file(self, task_file: str) -> List[str]:
-        """从文件提交任务到ClearML队列"""
+        """从文件提交任务"""
         submitted_tasks = []
 
         with open(task_file, 'r') as f:
@@ -95,8 +81,7 @@ class ClearMLBatchSubmitter:
                 if not line or line.startswith('#'):
                     continue
 
-                print(f"🔄 处理命令: {line}")
-                task_id = self.create_task_from_command(line)
+                task_id = self.execute_command(line)
                 submitted_tasks.append(task_id)
 
         return submitted_tasks
@@ -104,7 +89,7 @@ class ClearMLBatchSubmitter:
 
 def main():
     """主函数"""
-    parser = argparse.ArgumentParser(description="ClearML批量任务提交器")
+    parser = argparse.ArgumentParser(description="批量执行命令，每个命令会自动创建ClearML任务")
     parser.add_argument("--file", type=str, default="test_single.txt", help="命令文件路径")
 
     args = parser.parse_args()
@@ -112,12 +97,11 @@ def main():
     if not args.file:
         parser.error("必须指定 --file")
 
-    print("🚀 ClearML批量任务提交器")
+    print("🚀 批量命令执行器（自动创建ClearML任务）")
     print(f"   文件: {args.file}")
-    print("   任务将加入队列，由Agent分布式执行")
 
-    # 创建提交器
-    submitter = ClearMLBatchSubmitter()
+    # 创建执行器
+    submitter = CommandBatchExecutor()
 
     try:
         submitted_tasks = submitter.submit_from_file(args.file)

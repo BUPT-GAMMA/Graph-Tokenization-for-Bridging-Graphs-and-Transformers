@@ -71,7 +71,25 @@ from src.utils.config_override import (  # noqa: E402
 
 
 
-task = Task.init()
+# ClearML 任务初始化（支持直接运行和Agent执行）
+# 检测是否已经在任务上下文中（通过Agent执行的情况）
+current_task = Task.current_task()
+if current_task is not None:
+    # 已经在任务上下文中，使用现有的任务
+    task = current_task
+    print(f"✅ 使用现有ClearML任务: {task.name} (ID: {task.id})")
+else:
+    # 直接运行的情况，创建新任务
+    try:
+        task = Task.init(
+            project_name="TokenizerGraph",
+            task_name=f"pretrain_{int(time.time())}",
+            auto_connect_frameworks=True  # 确保自动捕获TensorBoard
+        )
+        print(f"✅ ClearML任务初始化成功: {task.name} (ID: {task.id})")
+    except Exception as e:
+        print(f"⚠️ ClearML初始化失败，将继续运行: {e}")
+        task = None
 
 
 _ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")

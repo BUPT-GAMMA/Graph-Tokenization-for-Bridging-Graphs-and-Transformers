@@ -1,1 +1,1 @@
-python run_pretrain.py --dataset qm9test --method feuler --epochs 1
+python run_pretrain.py --dataset qm9test --method feuler --epochs 1 --experiment_group test --experiment_name test_clearml_1
