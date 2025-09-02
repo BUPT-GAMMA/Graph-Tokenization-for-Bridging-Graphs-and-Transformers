@@ -444,6 +444,7 @@ def run_finetune(
             },
             'aggregation_mode_used': str(aggregation_mode),
             'aggregator_trained': aggregator is not None,
+            'config': config.to_dict(),  # 保存完整配置
         }
         out_json_path = logs_dir / _log_name / 'finetune_metrics.json'
         try:
