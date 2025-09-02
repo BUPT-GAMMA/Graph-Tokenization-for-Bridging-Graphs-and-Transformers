@@ -58,7 +58,7 @@ from clearml import Task
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-
+os.chdir('/home/gzy/py/tokenizerGraph')
 from config import ProjectConfig  # noqa: E402
 from src.utils.config_override import (  # noqa: E402
     add_all_args,
@@ -71,7 +71,7 @@ from src.utils.config_override import (  # noqa: E402
 
 
 
-# task = Task.init(project_name='TokenizerGraph', task_name='task1')
+task = Task.init()
 
 
 _ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
