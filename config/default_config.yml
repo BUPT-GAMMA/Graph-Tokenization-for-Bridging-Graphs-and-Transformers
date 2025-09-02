@@ -14,6 +14,7 @@ repeat_runs: 1  # 重复运行次数，默认1次（不重复）
 
 # 路径配置
 paths:
+  project_root: /home/gzy/py/tokenizerGraph  # 项目根目录（绝对路径）
   data_dir: data/
   cache_dir: cache/
   processed_dir: data/processed

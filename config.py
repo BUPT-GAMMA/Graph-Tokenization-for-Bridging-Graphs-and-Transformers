@@ -172,7 +172,7 @@ class ProjectConfig:
             self.device = self.system.device
         
         # 基础路径配置（统一解析为以项目根为基准的绝对路径，避免依赖当前工作目录）
-        project_root = Path(__file__).resolve().parent
+        project_root = Path(self.paths.project_root)
 
         def _as_abs(p: str | Path) -> Path:
             p = Path(p)
