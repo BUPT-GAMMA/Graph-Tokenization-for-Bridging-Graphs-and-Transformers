@@ -71,12 +71,12 @@ class ClearMLBatchSubmitter:
 
         # 确保脚本路径是相对于repo的
         script_relative_path = os.path.relpath(script_path, self.working_directory)
-
+        
         # 创建任务
         task = Task.create(
             project_name=self.project_name,
             task_name=task_name,
-            repo=self.working_directory,  # 使用绝对路径作为repo
+            repo=self.working_directory, 
             script=script_relative_path,  # 相对于repo的脚本路径
             working_directory=self.working_directory,  # 工作目录
             argparse_args=parsed_args,  # 参数列表
