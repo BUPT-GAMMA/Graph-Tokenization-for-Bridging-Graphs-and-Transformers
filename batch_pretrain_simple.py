@@ -366,7 +366,19 @@ def main():
     parser.add_argument("--commands_stdout", action="store_true", help="仅将将要运行的命令打印到标准输出，不执行也不写文件")
     parser.add_argument("--plain_logs", action="store_true", help="将子任务输出写入无ANSI/emoji的纯文本日志，解决乱码问题")
 
-    args = parser.parse_args()
+    try:
+        args = parser.parse_args()
+    except SystemExit as e:
+        print("\n❌ 参数解析失败！传入的参数信息:")
+        print("=" * 60)
+        print("脚本名称:", sys.argv[0])
+        print("所有传入参数:")
+        for i, arg in enumerate(sys.argv[1:], 1):
+            print(f"  {i:2d}: {arg}")
+        print("=" * 60)
+        print("请检查参数是否正确，或使用 --help 查看帮助信息")
+        print("=" * 60)
+        raise
 
     datasets = parse_list_arg(args.datasets) or DEFAULT_DATASETS
     methods = parse_list_arg(args.methods) or DEFAULT_METHODS
