@@ -33,7 +33,7 @@ import io
 from pathlib import Path
 import time
 from typing import Optional, Literal
-from clearml import Task
+from clearml import Logger, Task
 # 设置项目路径
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
@@ -63,7 +63,7 @@ else:
     try:
         task = Task.init(
             project_name="TokenizerGraph",
-            task_name=f"finetune_{int(time.time())}",
+            task_name=f"finetune_manual_{int(time.time())}",
             auto_connect_frameworks=True  # 确保自动捕获TensorBoard
         )
         print(f"✅ ClearML任务初始化成功: {task.name} (ID: {task.id})")
@@ -383,6 +383,8 @@ def main():
             for metric, value in test_metrics.items():
                 if isinstance(value, (int, float)):
                     print(f"  {metric}: {value:.4f}")
+            
+            Logger.get_logger().current_logger().report_single_value(name="ft_metric", value=result['finetune_metrics'])
 
             try:
                 sys.stdout.flush()
@@ -394,9 +396,11 @@ def main():
 
         except KeyboardInterrupt:
             print("\n⚠️ 用户中断训练")
+            task.mark_failed()
             return 130
         except Exception as e:
             print(f"\n❌ 微调失败: {e}")
+            task.mark_failed()
             import traceback
             traceback.print_exc()
             return 1

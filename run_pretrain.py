@@ -84,7 +84,7 @@ else:
     try:
         task = Task.init(
             project_name="TokenizerGraph",
-            task_name=f"pretrain_{int(time.time())}",
+            task_name=f"pretrain_manual_{int(time.time())}",
             auto_connect_frameworks=True  # 确保自动捕获TensorBoard
         )
         print(f"✅ ClearML任务初始化成功: {task.name} (ID: {task.id})")

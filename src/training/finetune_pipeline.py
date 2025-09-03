@@ -483,6 +483,7 @@ def run_finetune(
         'test_metrics': test_metrics,
         'best_dir': str(best_dir),
         'aggregator_dir': str(best_dir / "aggregator") if aggregator is not None else None,
+        'finetune_metrics': test_metrics_by_mode.get('learned', test_metrics_by_mode["avg"])[pk],
     }
 
 
