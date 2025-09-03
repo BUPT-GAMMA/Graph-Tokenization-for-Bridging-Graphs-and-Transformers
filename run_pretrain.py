@@ -48,6 +48,7 @@ import os
 import re
 import io
 from pathlib import Path
+from time import time
 from typing import Optional
 
 from src.training.pretrain_pipeline import train_bert_mlm
