@@ -17,6 +17,7 @@
 /logs/
 /backup_log/
 /backup/
+/archive/
 # /foreign_dataset_files_to_convert/
 
 __pycache__/
@@ -54,3 +55,5 @@ key_findings_summary.png
 hyperopt/journal/large_batch.db
 hyperopt/journal/test_large_batch.db
 hyperopt/journal/finetune_with_options.db
+comparison_results/
+analysis_results
