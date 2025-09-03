@@ -273,7 +273,7 @@ def _resolve_pretrained_path_internal(config, pretrain_exp_name, pretrained_dir,
         if _validate_model_dir(p):
             logger.info(f"✅ 从指定预训练目录找到模型: {pretrained_dir}")
             return str(p)
-        logger.warning(f"⚠️ 指定了路径预训练目录: {pretrained_dir}, 但未找到有效模型")
+        logger.warning(f"⚠️ 指定了路径预训练目录: {pretrained_dir}, 但未找到有效模型: {p}")
         return None
     
     # 2. 使用pretrain_exp_name（中等优先级）
@@ -284,14 +284,14 @@ def _resolve_pretrained_path_internal(config, pretrain_exp_name, pretrained_dir,
         if _validate_model_dir(pretrain_path):
             logger.info(f"✅ 从指定预训练实验找到模型: {pretrain_exp_name} -> {pretrain_path}")
             return str(pretrain_path)
-        logger.warning(f"⚠️ 指定了pretrain_exp_name: {pretrain_exp_name} ，但未找到有效模型")
+        logger.warning(f"⚠️ 指定了pretrain_exp_name: {pretrain_exp_name} ，但未找到有效模型: {pretrain_path}")
     
     # 3. 使用当前experiment_name（最低优先级）
     base_dir = config.get_model_dir(run_i=run_i) / 'best'
     if _validate_model_dir(base_dir):
         logger.info(f"✅ 采用experiment_name: {config.experiment_name} 找到模型")
         return str(base_dir)
-    
+    logger.error(f"⚠️ 从experiment_name: {config.experiment_name} 依然未找到模型: {base_dir}")
     return None
 
 

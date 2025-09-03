@@ -459,7 +459,7 @@ def train_bert_mlm(
         config.optuna_trial = temp_optuna_trial
         
         # 保存metrics文件
-        metrics_file = model_dir.parent / "pretrain_metrics.json"
+        metrics_file = log_dir / "pretrain_metrics.json"
         with open(metrics_file, 'w', encoding='utf-8') as f:
             json.dump(pretrain_metrics, f, indent=2, ensure_ascii=False)
         logger.info(f"📊 预训练结果已保存: {metrics_file}")

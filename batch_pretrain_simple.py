@@ -256,7 +256,7 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
 
     if commands_only or commands_stdout:
         # 只输出命令（包含 CUDA_VISIBLE_DEVICES 环境）
-        record_line = f"CUDA_VISIBLE_DEVICES={gpu_id} {safe_cmd_str}"
+        record_line = f"{safe_cmd_str}"
         if commands_stdout:
             print(record_line)
         else:

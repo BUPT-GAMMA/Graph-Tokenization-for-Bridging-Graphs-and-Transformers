@@ -293,7 +293,7 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
     safe_cmd_str = ' '.join(shlex.quote(part) for part in final_cmd)
 
     if commands_only or commands_stdout:
-        record_line = f"CUDA_VISIBLE_DEVICES={gpu_id} {safe_cmd_str}"
+        record_line = f"{safe_cmd_str}"
         if commands_stdout:
             print(record_line)
         else:
