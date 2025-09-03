@@ -275,7 +275,7 @@ def run_finetune(
             _v = _m.get(pk)
             if _v is not None:
                 writer.add_scalar(f'{base}/{pk}', float(_v), epoch + 1)
-                writer.add_scalar({f'val_pk': float(_v)}, step=epoch + 1)
+                writer.add_scalar({f'val_pk': float(_v)}, epoch + 1)
                 
         # W&B：epoch级（train_epoch/* 与 val/*，epoch 轴）
         if wandb_logger is not None:
