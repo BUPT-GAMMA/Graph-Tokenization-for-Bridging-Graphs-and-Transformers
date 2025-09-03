@@ -23,7 +23,7 @@ cd "$PROJECT_ROOT" || {
     echo "❌ 错误：无法切换到项目目录 $PROJECT_ROOT"
     exit 1
 }
-
+cd "$PROJECT_ROOT"
 echo "📂 当前工作目录: $(pwd)"
 echo "🎯 项目根目录: $PROJECT_ROOT"
 echo "🚀 启动预训练脚本..."

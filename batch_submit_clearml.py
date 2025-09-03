@@ -75,14 +75,14 @@ class ClearMLBatchSubmitter:
 
         # 创建任务模板（不执行代码）
         if script_path.endswith('.sh'):
-            # 对于bash脚本，直接使用bash脚本作为script，并传递完整命令作为参数
+            # 对于bash脚本，直接使用bash脚本作为script，并传递参数
             task = Task.create(
                 project_name="TokenizerGraph",
                 task_name=task_name,
                 script=script_path,
                 working_directory=self.working_directory,
-                # 对于bash脚本，我们将整个命令作为单个参数传递
-                argparse_args=[("command", command_line)]
+                # 对于bash脚本，我们将参数传递给bash脚本
+                argparse_args=parsed_args
             )
         else:
             # 对于Python脚本，使用标准模式
