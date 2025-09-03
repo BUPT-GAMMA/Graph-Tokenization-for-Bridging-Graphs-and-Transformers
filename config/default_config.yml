@@ -148,7 +148,7 @@ bert:
   
   # 微调配置
   finetuning:
-    epochs: 50
+    epochs: 200
     batch_size: 32
     learning_rate: 2e-5
     weight_decay: 0.01
