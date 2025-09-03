@@ -71,9 +71,9 @@ class ClearMLBatchSubmitter:
         task = Task.create(
             project_name="TokenizerGraph",
             task_name=task_name,
-            repo=self.working_directory,
+            # repo=self.working_directory,
             script=script_path,
-            working_directory=self.working_directory,
+            # working_directory=self.working_directory,
             argparse_args=parsed_args
         )
 
