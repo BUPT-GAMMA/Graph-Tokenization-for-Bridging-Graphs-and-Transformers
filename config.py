@@ -441,6 +441,7 @@ class ProjectConfig:
 
         示例：
           - 重复运行：group=g1, exp_name=testX, run_i=1 → log/g1/testX/run_1
+          - 聚合日志目录：group=g1, exp_name=testX, run_i=-1 → log/g1/testX
           - 兼容旧格式：group=g1, exp_name=testX, run_i=None → log/g1/testX/qm9/feuler-BPE
         """
         # 严格要求必要字段存在，不做静默回退
@@ -453,6 +454,8 @@ class ProjectConfig:
 
         # 🆕 支持重复运行的简化路径结构
         if run_i is not None:
+            if run_i == -1: #聚合日志目录
+                return self.log_dir / group / exp_name
             return self.log_dir / group / exp_name / f"run_{run_i}"
         else:
             # 🔄 兼容旧格式（带dataset/method层级）
