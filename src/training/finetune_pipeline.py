@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tkinter import W
 from typing import Dict, Any, Literal, Optional
 import time
 import pickle
@@ -176,7 +177,7 @@ def run_finetune(
         def _on_step(step_idx: int, batch_loss: float, current_lr: float | None):
             global_step = epoch * steps_per_epoch + step_idx
             try:
-                writer.add_scalar('Train/Batch_Loss', float(batch_loss), global_step)
+                writer.add_scalar('Batch_Loss', float(batch_loss), global_step)
                 if current_lr is not None:
                     writer.add_scalar('Train/Learning_Rate_Step', float(current_lr), global_step)
             except Exception:
@@ -257,7 +258,7 @@ def run_finetune(
                 # 其他异常不影响训练继续
         
         # 通用指标
-        writer.add_scalar('Loss/Train', float(train_loss), epoch + 1)
+        writer.add_scalar('Loss/Training', float(train_loss), epoch + 1)
         writer.add_scalar('Loss/Validation', float(val_metrics['val_loss']), epoch + 1)
         writer.add_scalar('Train/Epoch_Time', float(epoch_time), epoch + 1)
         current_lr = scheduler.get_last_lr()[0] if scheduler else optimizer.param_groups[0]['lr']
@@ -274,6 +275,7 @@ def run_finetune(
             _v = _m.get(pk)
             if _v is not None:
                 writer.add_scalar(f'{base}/{pk}', float(_v), epoch + 1)
+                writer.add_scalar({f'val_pk': float(_v)}, step=epoch + 1)
                 
         # W&B：epoch级（train_epoch/* 与 val/*，epoch 轴）
         if wandb_logger is not None:

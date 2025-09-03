@@ -1,8 +1,8 @@
 python batch_finetune_simple.py \
     --encoder gte \
-    --datasets molhiv --bpe_scenarios all,random --learning_rate 5e-6\
+    --datasets molhiv --bpe_scenarios all,random --learning_rate 3e-6\
     --methods eulerian,feuler,cpp,fcpp,smiles,topo,dfs,bfs \
-    --experiment_group pre_comp/mult/1 --repeat_runs 1\
+    --experiment_group pre_comp/mult/1 --repeat_runs 2\
     --commands_only
 python batch_finetune_simple.py \
     --encoder gte \

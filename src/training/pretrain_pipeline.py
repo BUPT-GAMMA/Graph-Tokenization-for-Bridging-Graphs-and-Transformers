@@ -275,7 +275,7 @@ def train_bert_mlm(
                 #   return
                 # TensorBoard: 记录更细粒度的batch级loss
                 try:
-                    writer.add_scalar('Train/Batch_Loss', float(batch_loss), global_step)
+                    writer.add_scalar('Batch_Loss', float(batch_loss), global_step)
                 except Exception:
                     pass
                 # W&B: 仅记录 train/*（step轴）
@@ -343,7 +343,7 @@ def train_bert_mlm(
                     # 其他异常不影响训练继续
             
             # TensorBoard记录
-            writer.add_scalar('Loss/Train', train_loss, epoch)
+            writer.add_scalar('Loss/Training', train_loss, epoch)
             writer.add_scalar('Loss/Validation', val_loss, epoch)
             writer.add_scalar('Train/Learning_Rate', current_lr, epoch)
             writer.add_scalar('Train/Epoch_Time', epoch_time, epoch)
