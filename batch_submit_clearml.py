@@ -52,11 +52,17 @@ class ClearMLBatchSubmitter:
         """从命令行创建ClearML任务，让Agent去执行"""
         parts = shlex.split(command_line.strip())
 
-        # 处理 python 命令的情况
-        if parts[0] == 'python' and len(parts) > 1:
+        # 处理不同类型的脚本调用
+        if parts[0] in ['python', 'python3'] and len(parts) > 1:
+            # Python脚本调用
             script_path = parts[1]
             args = parts[2:]
+        elif parts[0].endswith('.sh') and len(parts) > 0:
+            # Bash脚本调用
+            script_path = parts[0]
+            args = parts[1:]
         else:
+            # 其他类型的脚本或命令
             script_path = parts[0]
             args = parts[1:]
 
@@ -68,14 +74,25 @@ class ClearMLBatchSubmitter:
         parsed_args = self.parse_args(args)
 
         # 创建任务模板（不执行代码）
-        task = Task.create(
-            project_name="TokenizerGraph",
-            task_name=task_name,
-            # repo=self.working_directory,
-            script=script_path,
-            # working_directory=self.working_directory,
-            argparse_args=parsed_args
-        )
+        if script_path.endswith('.sh'):
+            # 对于bash脚本，直接使用bash脚本作为script，并传递完整命令作为参数
+            task = Task.create(
+                project_name="TokenizerGraph",
+                task_name=task_name,
+                script=script_path,
+                working_directory=self.working_directory,
+                # 对于bash脚本，我们将整个命令作为单个参数传递
+                argparse_args=[("command", command_line)]
+            )
+        else:
+            # 对于Python脚本，使用标准模式
+            task = Task.create(
+                project_name="TokenizerGraph",
+                task_name=task_name,
+                script=script_path,
+                working_directory=self.working_directory,
+                argparse_args=parsed_args
+            )
 
         # 加入队列，让Agent执行
         Task.enqueue(task, queue_name="default")

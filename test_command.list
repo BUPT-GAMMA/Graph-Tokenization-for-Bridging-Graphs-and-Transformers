@@ -1,0 +1,1 @@
+./finetune_wrapper.sh --dataset molhiv --method eulerian --experiment_group test --experiment_name test_eulerian --device auto

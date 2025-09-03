@@ -191,7 +191,7 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
              repeat_runs: int = 1) -> Optional[subprocess.Popen]:
     """在指定GPU上运行单个任务"""
     cmd = [
-        "python", "run_pretrain.py",
+        "./pretrain_wrapper.sh",
         "--dataset", task["dataset"],
         "--method", task["method"],
         "--experiment_group", experiment_group,

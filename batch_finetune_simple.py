@@ -219,7 +219,7 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
              save_name_suffix: Optional[str] = None,
              repeat_runs: int = 1) -> Optional[subprocess.Popen]:
     cmd = [
-        "python", "run_finetune.py",
+        "./finetune_wrapper.sh",
         "--dataset", task["dataset"],
         "--method", task["method"],
         "--experiment_group", experiment_group,
