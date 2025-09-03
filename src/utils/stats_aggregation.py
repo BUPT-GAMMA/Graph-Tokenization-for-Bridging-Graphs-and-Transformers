@@ -79,7 +79,7 @@ def aggregate_experiment_results(
 
     # 保存聚合结果
     if output_file is None:
-        output_file = config.get_logs_dir(exp_name=experiment_name) / f"{task_type}_aggregated_stats.json"
+        output_file = config.get_logs_dir(exp_name=experiment_name, run_i=-1) / f"{task_type}_aggregated_stats.json"
 
     # 确保输出目录存在
     Path(output_file).parent.mkdir(parents=True, exist_ok=True)
@@ -114,31 +114,53 @@ def _aggregate_results(results: List[Dict[str, Any]], task_type: str) -> Dict[st
         "statistics": {},
         "individual_runs": []  # 保存每个运行的详细信息
     }
+    
+    def get_fair_best(result, metric):
+      """获取公平的最佳测试指标（在avg和learned之间选择最优）"""
+      test_data = result['test']
+      by_agg = test_data['by_aggregation']
+      avg_data = by_agg['avg']
+      learned_data = by_agg['learned']
+
+      # 使用正确的任务类型路径
+      task_type = result['config']['task']['type']
+
+      # 对于分类任务（包括多标签分类等），选择较高的指标；对于回归任务，选择较低的指标
+      if 'classification' in task_type:
+        return max(avg_data[metric], learned_data[metric])
+      else:  # regression
+        return min(avg_data[metric], learned_data[metric])
 
     # 保存每个运行的基本信息
     for i, result in enumerate(results):
         run_info = {
             "run_id": i,
-            "seed": result.get("seed", "unknown"),
-            "experiment_name": result.get("experiment_name", "unknown"),
-            "start_time": result.get("start_time"),
-            "end_time": result.get("end_time")
+            "seed": result["config"]["system"]["seed"],  # 存在于 config.system.seed
+            "experiment_name": result["config"]["experiment_name"],  # 存在于 config.experiment_name
+            "start_time": result.get("start_time"),  # 这个可能不存在
+            "end_time": result.get("end_time")  # 这个可能不存在
         }
 
         # 添加关键指标
+        add={}
         if task_type == "finetune":
-            run_info.update({
-                "best_val_loss": result.get("best_val_loss"),
-                "test_mae": result.get("test", {}).get("mae"),
-                "test_rmse": result.get("test", {}).get("rmse"),
-                "test_r2": result.get("test", {}).get("r2"),
-                "total_train_time_sec": result.get("time", {}).get("total_train_time_sec")
-            })
+          # 根据任务类型选择合适的指标
+          task_type_config = result['config']['task']['type']
+          if task_type_config == "classification":
+            key_metrics = ["accuracy", "roc_auc", "ap", "precision", "recall", "f1"]
+          else:  # regression or other
+            key_metrics = ["mae", "rmse", "r2", "loss"]
+
+          for metric in key_metrics:
+            # 使用公平最佳值（avg和learned之间的最优选择）
+            fair_value = get_fair_best(result, metric)
+            add[f"test_{metric}"] = fair_value
+          run_info.update(add)
         elif task_type == "pretrain":
             run_info.update({
-                "best_val_loss": result.get("best_val_loss"),
-                "total_train_time_sec": result.get("total_train_time_sec"),
-                "effective_max_length": result.get("effective_max_length")
+                "best_val_loss": result["best_val_loss"],
+                "total_train_time_sec": result["total_train_time_sec"],
+                "effective_max_length": result["effective_max_length"]
             })
 
         aggregated["individual_runs"].append(run_info)
@@ -155,80 +177,47 @@ def _aggregate_finetune_results(results: List[Dict[str, Any]]) -> Dict[str, Any]
     """聚合微调结果"""
     stats = {}
 
-    # 1. 处理验证集指标
-    val_keys = ['best_val_mae', 'best_val_rmse', 'best_val_r2', 'best_val_loss']
+    # 1. 处理验证集指标 - 直接提取已知格式的数据
+    val_keys = ['val_loss', 'accuracy', 'precision', 'recall', 'f1', 'roc_auc', 'ap', 'best_val_roc_auc']
     for key in val_keys:
-        values = [r.get(key) for r in results if r.get(key) is not None]
-        if values:
-            stats[key] = _calculate_stats(values)
+        values = [r['val'][key] for r in results]
+        stats[f'val_{key}'] = _calculate_stats(values)
 
-    # 2. 处理测试集指标（所有聚合模式的主指标）
+    # 2. 处理测试集指标（所有聚合模式）- 直接提取已知格式的数据
     test_modes = ['avg', 'best', 'learned']
-    primary_metrics = ['mae', 'rmse', 'r2', 'loss']
+
+    # 根据任务类型确定指标集合
+    first_result = results[0]
+    task_type = first_result['config']['task']['type']
+
+    if 'classification' in task_type:
+        test_metrics = ['val_loss', 'accuracy', 'precision', 'recall', 'f1', 'roc_auc', 'ap']
+    else:
+        test_metrics = ['val_loss', 'mae', 'rmse', 'r2']
 
     for mode in test_modes:
-        for metric in primary_metrics:
+        for metric in test_metrics:
             key = f"test_{mode}_{metric}"
-            values = []
-            for result in results:
-                test_data = result.get('test', {})
-                by_agg = test_data.get('by_aggregation', {})
-                mode_data = by_agg.get(mode, {})
-                value = mode_data.get(metric)
-                if value is not None:
-                    values.append(value)
-
-            if values:
-                stats[key] = _calculate_stats(values)
-
-    # 3. 处理经典测试集指标（向后兼容）
-    classic_test_keys = ['mae', 'rmse', 'r2', 'loss']
-    for key in classic_test_keys:
-        classic_key = f"test_{key}"
-        values = []
-        for result in results:
-            test_data = result.get('test', {})
-            value = test_data.get(key)
-            if value is not None:
-                values.append(value)
-
-        if values:
-            stats[classic_key] = _calculate_stats(values)
-
-    # 4. 处理时间指标
-    time_keys = ['total_train_time_sec', 'avg_epoch_time_sec']
-    for key in time_keys:
-        values = [r.get('time', {}).get(key) for r in results if r.get('time', {}).get(key) is not None]
-        if values:
+            values = [r['test']['by_aggregation'][mode][metric] for r in results]
             stats[key] = _calculate_stats(values)
 
-    # 5. 处理分类指标（如果存在）
-    classification_metrics = ['accuracy', 'precision', 'recall', 'f1', 'auc', 'f1_macro', 'f1_micro']
+    # 3. 处理直接测试集指标（向后兼容）
+    for metric in test_metrics:
+        direct_key = f"test_{metric}"
+        values = [r['test'][metric] for r in results]
+        stats[direct_key] = _calculate_stats(values)
 
-    for result in results:
-        test_data = result.get('test', {})
-        for mode in test_modes:
-            mode_data = test_data.get('by_aggregation', {}).get(mode, {})
-            for metric in classification_metrics:
-                if metric in mode_data:
-                    key = f"test_{mode}_{metric}"
-                    if key not in stats:
-                        stats[key] = {'runs': []}
-                    stats[key]['runs'].append(mode_data[metric])
+    # 4. 处理时间指标 - 直接提取
+    time_keys = ['total_train_time_sec', 'avg_epoch_time_sec']
+    for key in time_keys:
+        values = [r['time'][key] for r in results]
+        stats[key] = _calculate_stats(values)
 
-    # 计算分类指标的统计
-    for key, data in stats.items():
-        if 'runs' in data and len(data['runs']) > 0:
-            values = [v for v in data['runs'] if v is not None]
-            if values:
-                stats[key] = _calculate_stats(values)
-
-    # 6. 处理训练指标
+    # 5. 处理训练指标 - 直接提取
     train_keys = ['last_loss', 'learning_rate_last']
     for key in train_keys:
-        values = [r.get('train', {}).get(key) for r in results if r.get('train', {}).get(key) is not None]
-        if values:
-            stats[f'train_{key}'] = _calculate_stats(values)
+        values = [r['train'][key] for r in results]
+        stats[f'train_{key}'] = _calculate_stats(values)
 
     return stats
 
@@ -246,9 +235,8 @@ def _aggregate_pretrain_results(results: List[Dict[str, Any]]) -> Dict[str, Any]
     ]
 
     for key in keys:
-        values = [r.get(key) for r in results if r.get(key) is not None]
-        if values:
-            stats[key] = _calculate_stats(values)
+        values = [r[key] for r in results]
+        stats[key] = _calculate_stats(values)
 
     return stats
 
@@ -278,12 +266,12 @@ def _calculate_stats(values: List[float]) -> Dict[str, float]:
     }
 
     # 计算95%置信区间（假设正态分布）
-    if len(values) > 1:
-        sem = stats['std'] / np.sqrt(len(values))  # 标准误差
-        confidence_interval = 1.96 * sem  # 95% CI
-        stats['ci_95'] = float(confidence_interval)
-        stats['ci_95_lower'] = stats['mean'] - confidence_interval
-        stats['ci_95_upper'] = stats['mean'] + confidence_interval
+    # if len(values) > 1:
+    #     sem = stats['std'] / np.sqrt(len(values))  # 标准误差
+    #     confidence_interval = 1.96 * sem  # 95% CI
+    #     stats['ci_95'] = float(confidence_interval)
+    #     stats['ci_95_lower'] = stats['mean'] - confidence_interval
+    #     stats['ci_95_upper'] = stats['mean'] + confidence_interval
 
     return stats
 
@@ -322,35 +310,37 @@ def _print_finetune_stats(stats: Dict[str, Any]):
     """打印微调统计结果"""
     print("\n🎯 关键性能指标:")
 
-    # 验证集指标
-    val_metrics = ['best_val_mae', 'best_val_rmse', 'best_val_r2']
-    for metric in val_metrics:
-        if metric in stats:
-            data = stats[metric]
-            print(f"  {metric}: {data['mean']:.4f} ± {data['std']:.4f} "
+    # 验证集指标 - 直接打印已知格式
+    val_keys = ['val_loss', 'accuracy', 'precision', 'recall', 'f1', 'roc_auc', 'ap', 'best_val_roc_auc']
+    print("\n📊 验证集指标:")
+    for key in val_keys:
+        stat_key = f'val_{key}'
+        if stat_key in stats:
+            data = stats[stat_key]
+            print(f"  {key}: {data['mean']:.4f} ± {data['std']:.4f} "
                   f"(范围: [{data['min']:.4f}, {data['max']:.4f}], n={data['count']})")
 
-    # 测试集指标（显示所有聚合模式的主指标）
+    # 测试集指标（显示所有聚合模式）
     test_modes = ['avg', 'best', 'learned']
-    primary_metrics = ['mae', 'rmse', 'r2', 'loss']
+    classification_metrics = ['val_loss', 'accuracy', 'precision', 'recall', 'f1', 'roc_auc', 'ap']
 
+    print("\n🔍 分类任务指标:")
     for mode in test_modes:
-        print(f"\n📊 {mode.upper()}聚合模式:")
-        for metric in primary_metrics:
+        print(f"\n  📊 {mode.upper()}模式:")
+        for metric in classification_metrics:
             key = f"test_{mode}_{metric}"
             if key in stats:
                 data = stats[key]
-                print(f"  {metric}: {data['mean']:.4f} ± {data['std']:.4f} "
+                print(f"    {metric}: {data['mean']:.4f} ± {data['std']:.4f} "
                       f"(范围: [{data['min']:.4f}, {data['max']:.4f}], n={data['count']})")
 
-    # 显示经典测试集指标（如果有差异）
-    print("\n📋 经典测试指标:")
-    classic_keys = ['test_mae', 'test_rmse', 'test_r2', 'test_loss']
-    for key in classic_keys:
-        if key in stats:
-            data = stats[key]
-            metric_name = key.replace('test_', '')
-            print(f"  {metric_name}: {data['mean']:.4f} ± {data['std']:.4f} "
+    # 显示直接测试集指标
+    print("\n📋 直接测试指标:")
+    for metric in classification_metrics:
+        direct_key = f"test_{metric}"
+        if direct_key in stats:
+            data = stats[direct_key]
+            print(f"  {metric}: {data['mean']:.4f} ± {data['std']:.4f} "
                   f"(范围: [{data['min']:.4f}, {data['max']:.4f}], n={data['count']})")
 
     # 时间统计
