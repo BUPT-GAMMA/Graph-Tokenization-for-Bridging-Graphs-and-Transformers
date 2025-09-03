@@ -384,7 +384,7 @@ def main():
                 if isinstance(value, (int, float)):
                     print(f"  {metric}: {value:.4f}")
             
-            Logger.get_logger().current_logger().report_single_value(name="ft_metric", value=result['finetune_metrics'])
+            task.get_logger().report_single_value(name="ft_metric", value=result['finetune_metrics'])
 
             try:
                 sys.stdout.flush()
