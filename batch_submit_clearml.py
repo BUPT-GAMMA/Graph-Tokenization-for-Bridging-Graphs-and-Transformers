@@ -48,6 +48,42 @@ class ClearMLBatchSubmitter:
                 i += 1
         return parsed_args
 
+    def determine_queue(self, parsed_args: List[Tuple[str, str]]) -> str:
+        """根据参数确定应该提交到的队列"""
+        # 将参数转换为字典以便查询
+        args_dict = {key: value for key, value in parsed_args}
+
+        # 获取相关参数的值
+        bpe_encode_rank_mode = args_dict.get('bpe_encode_rank_mode', '').lower()
+        dataset = args_dict.get('datasets', args_dict.get('dataset', '')).lower()
+        method = args_dict.get('methods', args_dict.get('method', '')).lower()
+
+        # 条件判断
+        is_raw_bpe = bpe_encode_rank_mode == 'raw'
+        has_peptides = 'peptides' in dataset
+        is_synthetic_or_dd = any(d in dataset for d in ['synthetic', 'dd'])
+        is_eulerian_method = any(m in method for m in ['eulerian', 'feuler'])
+
+        # 根据规则确定队列
+        if is_raw_bpe and has_peptides:
+            # 同时满足两个条件：raw BPE + peptides dataset
+            return "high"
+        elif is_raw_bpe:
+            # BPE模式是raw
+            return "mid"
+        elif has_peptides:
+            # dataset含有peptides
+            return "mid"
+        elif is_synthetic_or_dd:
+            # dataset是synthetic或dd
+            return "mid"
+        elif is_eulerian_method:
+            # method是eulerian或feuler
+            return "mid"
+        else:
+            # 默认情况
+            return "default"
+
     def create_task_from_command(self, command_line: str) -> str:
         """从命令行创建ClearML任务，让Agent去执行"""
         parts = shlex.split(command_line.strip())
@@ -68,10 +104,16 @@ class ClearMLBatchSubmitter:
 
         # 生成任务名称
         script_name = Path(script_path).stem
-        task_name = f"{script_name}_{int(time.time())}"
+        # task_name = f"{script_name}_{int(time.time())}"
 
         # 解析参数
         parsed_args = self.parse_args(args)
+        parsed_args_dict = {key: value for key, value in parsed_args}
+        
+        task_name =f'{parsed_args_dict["experiment_group"]}/{parsed_args_dict["experiment_name"]}'
+
+        # 根据参数确定队列
+        queue_name = self.determine_queue(parsed_args)
 
         # 创建任务模板（不执行代码）
         if script_path.endswith('.sh'):
@@ -95,10 +137,11 @@ class ClearMLBatchSubmitter:
             )
 
         # 加入队列，让Agent执行
-        Task.enqueue(task, queue_name="default")
+        Task.enqueue(task, queue_name=queue_name)
 
         print(f"✅ 任务已加入队列: {task_name}")
         print(f"   脚本: {script_path}")
+        print(f"   队列: {queue_name}")
         print(f"   参数数量: {len(parsed_args)}")
         return task.id
 
@@ -131,7 +174,14 @@ def main():
 
     print("🚀 ClearML批量任务提交器")
     print(f"   文件: {args.file}")
-    print("   任务将加入队列，由Agent分布式执行")
+    print("   任务将根据参数智能分配到合适的队列:")
+    print("   - raw BPE + peptides dataset → high队列")
+    print("   - raw BPE模式 → mid队列")
+    print("   - 包含peptides的dataset → mid队列")
+    print("   - synthetic/dd dataset → mid队列")
+    print("   - eulerian/feuler方法 → mid队列")
+    print("   - 其他情况 → default队列")
+    print("   由Agent分布式执行")
 
     # 创建提交器
     submitter = ClearMLBatchSubmitter()
