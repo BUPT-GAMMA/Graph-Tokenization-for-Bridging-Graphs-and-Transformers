@@ -484,7 +484,7 @@ class NormalizedRegressionDataset:
                 'input_ids': encoded['input_ids'],
                 'attention_mask': encoded['attention_mask'],
                 'labels': torch.tensor(normalized_label, dtype=torch.float),
-                'original_label': torch.tensor(self.original_labels[chosen_idx], dtype=torch.float),
+                'original_label': torch.tensor(float(self.original_labels[chosen_idx]), dtype=torch.float),
                 'graph_id': torch.tensor(gid, dtype=torch.long)
             }
         else:
@@ -511,7 +511,7 @@ class NormalizedRegressionDataset:
                 'input_ids': encoded['input_ids'],
                 'attention_mask': encoded['attention_mask'],
                 'labels': torch.tensor(normalized_label, dtype=torch.float),
-                'original_label': torch.tensor(self.original_labels[idx], dtype=torch.float),
+                'original_label': torch.tensor(float(self.original_labels[idx]), dtype=torch.float),
                 'graph_id': torch.tensor(self.graph_ids[idx], dtype=torch.long)
             }
 

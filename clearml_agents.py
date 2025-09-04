@@ -17,6 +17,21 @@ def get_hostname():
     return socket.gethostname()
 
 
+def get_queues_by_hostname(hostname):
+    """根据主机名确定应该监听的队列列表"""
+    hostname_lower = hostname.lower()
+
+    if "2080" in hostname_lower:
+        # 显存较低的机器，只监听default队列
+        return ["default"]
+    elif "a800" in hostname_lower:
+        # 显存最高的机器，监听所有三个队列（按优先级顺序）
+        return ["high"]
+    else:
+        # 其他机器，监听mid和default队列（按优先级顺序）
+        return ["mid", "default"]
+
+
 def get_cache_dir(hostname, gpu_id):
     """根据主机名和GPU ID生成缓存目录"""
     base_cache_dir = "/tmp/clearml_cache"
@@ -49,7 +64,9 @@ def start_agents():
     """为每张GPU启动一个agent"""
     gpu_count = get_gpu_count()
     hostname = get_hostname()
+    queues = get_queues_by_hostname(hostname)
     print(f"检测到 {gpu_count} 张GPU，主机名: {hostname}")
+    print(f"根据主机名 '{hostname}' 确定监听队列: {queues}")
 
     for i in range(gpu_count):
         # 为每个agent设置独立的缓存和虚拟环境目录
@@ -65,12 +82,14 @@ def start_agents():
         if not configure_clearml_agent(cache_dir, venv_dir):
             print(f"⚠️  GPU {i} 的配置失败，但继续启动agent")
 
-        # 构建启动命令
-        cmd = f'CLEARML_AGENT_SKIP_PIP_VENV_INSTALL=/home/gzy/miniconda3/envs/pthgnn/bin/python clearml-agent daemon --queue default --gpus {i} --detached'
+        # 构建启动命令，根据队列列表生成多个--queue参数
+        queue_args = " ".join(queues)
+        cmd = f'CLEARML_AGENT_SKIP_PIP_VENV_INSTALL=/home/gzy/miniconda3/envs/pthgnn/bin/python clearml-agent daemon  --queue {queue_args} --gpus {i} --detached'
 
         print(f"🚀 启动GPU {i} 的agent")
         print(f"   缓存目录: {cache_dir}")
         print(f"   虚拟环境目录: {venv_dir}")
+        print(f"   监听队列: {queues}")
         print(f"   执行命令: {cmd}")
 
         result = os.system(cmd)
@@ -109,6 +128,10 @@ def main():
         print("  - 每个agent使用独立的虚拟环境目录: /tmp/clearml_venv/{hostname}_gpu_{id}")
         print("  - 通过环境变量 CLEARML_CACHE_DIR 和 CLEARML_VENV_DIR 配置")
         print("  - 避免NFS文件句柄冲突和并发访问问题")
+        print("  - 智能队列分配:")
+        print("    * 主机名包含 '2080' 的机器: 只监听 'default' 队列")
+        print("    * 主机名包含 'A800' 的机器: 监听 'high', 'mid', 'default' 队列")
+        print("    * 其他机器: 监听 'mid', 'default' 队列")
         print()
         print("示例:")
         print("  python start_clearml_agents.py start")

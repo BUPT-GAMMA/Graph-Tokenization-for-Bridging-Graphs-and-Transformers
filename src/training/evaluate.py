@@ -65,6 +65,9 @@ def _learned_aggregation_core(
         weights = torch.softmax(weights, dim=-1)
         
         # 转换预测到tensor并聚合
+        # 确保preds_or_probs是numpy数组，如果是列表则转换
+        if isinstance(preds_or_probs, list):
+            preds_or_probs = np.array(preds_or_probs)
         preds_t = torch.from_numpy(preds_or_probs.astype(np.float32)).unsqueeze(0).to(agg_dev)
         
         if preds_or_probs.ndim == 1:

@@ -105,10 +105,13 @@ def _collate_variant_sets(batch: List[Tuple[np.ndarray, np.ndarray, Any]],
     feats_t = torch.from_numpy(np.stack(feats_padded, axis=0))  # [B, K, D]
     aux_t = torch.from_numpy(np.stack(aux_padded, axis=0))
     mask_t = torch.from_numpy(np.stack(mask, axis=0))  # [B, K]
+
+    # 修复：确保labels转换为numpy数组后再创建tensor，避免类型错误
+    labels_np = np.array(labels, dtype=np.float32 if task == 'regression' else np.int64)
     if task == 'regression':
-        labels_t = torch.tensor(labels, dtype=torch.float32)
+        labels_t = torch.from_numpy(labels_np).float()
     else:
-        labels_t = torch.tensor(labels, dtype=torch.long)
+        labels_t = torch.from_numpy(labels_np).long()
 
     return {
         'features': feats_t,
