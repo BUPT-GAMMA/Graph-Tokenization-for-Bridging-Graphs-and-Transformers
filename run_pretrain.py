@@ -307,21 +307,20 @@ def main():
             print(f"\n{'='*60}")
             print(f"🚀 开始第 {run_i + 1}/{repeat_runs} 次运行")
             print(f"{'='*60}")
+            
+            seed=config.system.seed+run_i
+            config.system.seed = seed
 
             # 设置当前运行编号
-            config.current_run_i = run_i
-            # 动态设置种子
-            actual_seed = config.system.seed + run_i
-            config.system.seed = actual_seed
+            config.current_run_i = run_i  
 
             try:
                 # 重新设置种子
                 from config import setup_global_seeds
-                setup_global_seeds(actual_seed)
+                setup_global_seeds(seed)
 
-                result = run_pretraining(config, run_i=run_i)
-                result['run_i'] = run_i
-                result['seed'] = actual_seed
+                result = run_pretraining(config, run_i=seed)
+                result['seed'] = seed
                 all_results.append(result)
 
                 print(f"✅ 第 {run_i + 1} 次运行完成")

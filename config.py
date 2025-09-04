@@ -452,16 +452,12 @@ class ProjectConfig:
             # 始终根据用户提供的名称派生 exp_name（user_name-suffix 或纯 suffix）
             exp_name = self.build_exp_name(self.experiment_name)
 
-        # 🆕 支持重复运行的简化路径结构
-        if run_i is not None:
-            if run_i == -1: #聚合日志目录
-                return self.log_dir / group / exp_name
-            return self.log_dir / group / exp_name / f"run_{run_i}"
+        if run_i is None:
+          return self.log_dir / group / exp_name / f"run_1" #默认返回第一个重复运行日志目录无论有没有设置重复运行次数
+        elif run_i == -1: #聚合日志目录
+            return self.log_dir / group / exp_name
         else:
-            # 🔄 兼容旧格式（带dataset/method层级）
-            dataset = dataset if dataset is not None else self.dataset.name
-            method = method if method is not None else self._compute_method_dir()
-            return self.log_dir / group / exp_name / dataset / method
+          return self.log_dir / group / exp_name / f"run_{run_i}"
 
     def get_model_dir(self,
                       group: Optional[str] = None,
@@ -496,14 +492,12 @@ class ProjectConfig:
         if exp_name is None:
             exp_name = self.build_exp_name(self.experiment_name)
 
-        # 🆕 支持重复运行的简化路径结构
-        if run_i is not None:
-            return self.model_dir / group / exp_name / f"run_{run_i}"
+        if run_i is None:
+          return self.model_dir / group / exp_name / f"run_1" #默认返回第一个重复运行模型目录无论有没有设置重复运行次数
+        elif run_i == -1: #聚合模型目录
+          assert False, "聚合模型目录不支持"
         else:
-            # 🔄 兼容旧格式（带dataset/method层级）
-            dataset = dataset if dataset is not None else self.dataset.name
-            method = method if method is not None else self._compute_method_dir()
-            return self.model_dir / group / exp_name / dataset / method
+          return self.model_dir / group / exp_name / f"run_{run_i}"
 
     # ================= BPE 码本保存路径 =================
     def get_bpe_model_path(self, dataset_name: str, method: str) -> Path:

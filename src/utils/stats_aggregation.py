@@ -21,7 +21,6 @@ def aggregate_experiment_results(
     experiment_name: str,
     repeat_runs: int,
     task_type: str = "finetune",
-    save_detailed: bool = True,
     output_file: Optional[str] = None
 ) -> Dict[str, Any]:
     """
