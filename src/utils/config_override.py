@@ -42,25 +42,25 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
     
     # BPE压缩参数
     bpe_group = parser.add_argument_group('BPE压缩配置')
-    bpe_group.add_argument("--bpe_num_merges", type=int, help="BPE合并次数，0表示不使用BPE")
-    bpe_group.add_argument("--bpe_encode_backend", type=str, choices=["python", "cpp"], 
-                          default="cpp", help="BPE编码后端")
+    # bpe_group.add_argument("--bpe_num_merges", type=int, help="BPE合并次数，0表示不使用BPE")
+    # bpe_group.add_argument("--bpe_encode_backend", type=str, choices=["python", "cpp"], 
+    #                       default="cpp", help="BPE编码后端")
     bpe_group.add_argument("--bpe_encode_rank_mode", type=str, 
                           choices=["none", "all", "topk", "random", "gaussian"], default="none",
                           help="BPE编码排序模式")
-    bpe_group.add_argument("--bpe_encode_rank_k", type=int, help="BPE编码Top-K参数")
-    bpe_group.add_argument("--bpe_encode_rank_min", type=int, help="BPE编码随机范围最小值")
-    bpe_group.add_argument("--bpe_encode_rank_max", type=int, help="BPE编码随机范围最大值")
+    # bpe_group.add_argument("--bpe_encode_rank_k", type=int, help="BPE编码Top-K参数")
+    # bpe_group.add_argument("--bpe_encode_rank_min", type=int, help="BPE编码随机范围最小值")
+    # bpe_group.add_argument("--bpe_encode_rank_max", type=int, help="BPE编码随机范围最大值")
     bpe_group.add_argument("--bpe_encode_rank_dist", type=str, help="BPE编码随机分布类型")
     bpe_group.add_argument("--bpe_eval_mode", type=str, 
                           choices=["all", "topk"], help="BPE评估模式")
     bpe_group.add_argument("--bpe_eval_topk", type=int, help="BPE评估Top-K参数")
     
     # BERT架构
-    arch_group = parser.add_argument_group('BERT架构')
-    arch_group.add_argument("--hidden_size", type=int, help="隐藏层大小")
-    arch_group.add_argument("--num_layers", type=int, help="层数")
-    arch_group.add_argument("--num_heads", type=int, help="注意力头数")
+    # arch_group = parser.add_argument_group('BERT架构')
+    # arch_group.add_argument("--hidden_size", type=int, help="隐藏层大小")
+    # arch_group.add_argument("--num_layers", type=int, help="层数")
+    # arch_group.add_argument("--num_heads", type=int, help="注意力头数")
     
     # 训练参数 (根据脚本自动映射到预训练或微调)
     train_group = parser.add_argument_group('训练参数')
