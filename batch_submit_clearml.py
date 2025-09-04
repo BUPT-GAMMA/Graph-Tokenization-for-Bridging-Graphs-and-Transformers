@@ -174,7 +174,7 @@ def main():
 
     print("🚀 ClearML批量任务提交器")
     print(f"   文件: {args.file}")
-    print("   任务将根据参数智能分配到合适的队列:")
+    print("   任务将根据参数确定可能消耗显存大小（level），分配到合适的队列:")
     print("   - raw BPE + peptides dataset → high队列")
     print("   - raw BPE模式 → mid队列")
     print("   - 包含peptides的dataset → mid队列")
