@@ -67,7 +67,7 @@ class ClearMLBatchSubmitter:
         # 根据规则确定队列
         if is_raw_bpe and has_peptides:
             # 同时满足两个条件：raw BPE + peptides dataset
-            return "high"
+            return "mid"
         elif is_raw_bpe:
             # BPE模式是raw
             return "mid"

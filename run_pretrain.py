@@ -271,6 +271,10 @@ def main():
     
     # 自动生成实验名称（如果未指定）
     create_experiment_name(config)
+    if config.serialization.bpe.engine.encode_rank_mode == 'none' and config.encoder.type == 'gte':
+        print(f"Warn: bpe编码模式为Raw，且encoder为GTE,降低bs为一半（由于此encoder是动态显存大小，随序列长度正比）")
+        config.batch_size = config.batch_size // 2
+    
     
     # 验证配置
     try:
@@ -375,7 +379,7 @@ def main():
             return 130
         except Exception as e:
             print(f"\n❌ 预训练失败: {e}")
-            task.mark_failed(message=str(e))
+            task.mark_failed()
             import traceback
             traceback.print_exc()
             raise
