@@ -170,7 +170,7 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
                         bpe_suffix = bpe_config["config_name"]
                         aug_part = f"_{aug_label}" if aug_label else ""
                         encoder_suffix = encoder_config["suffix"]
-                        exp_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}{encoder_suffix}_default"
+                        exp_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}{encoder_suffix}"
                         experiment_name = f"{exp_prefix}{exp_core}{('_' + tag) if tag else ''}"
                         tasks.append({
                             "dataset": dataset,
