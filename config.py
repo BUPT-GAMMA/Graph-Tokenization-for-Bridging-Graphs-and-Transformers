@@ -222,7 +222,6 @@ class ProjectConfig:
 
         # 🆕 重复运行配置
         self.repeat_runs = 1  # 重复运行次数，默认1次（不重复）
-        self.current_run_i = None  # 当前运行编号（运行时设置）
 
         # 运行时间戳（在配置创建时固定下来，全局统一使用）
         self._run_simple_ts = datetime.now().strftime("%m%d_%H%M")  # 用于exp_name后缀（月日_时分）
@@ -541,7 +540,6 @@ class ProjectConfig:
         dataset = self.dataset.name
         method = self._compute_method_dir()
         seed = self.system.seed
-        run_i = getattr(self, 'current_run_i', None)
         # 可选：由调用方在运行期设置实验阶段（如 "pretrain"、"finetune"）
         phase = getattr(self, "experiment_phase", None)
 

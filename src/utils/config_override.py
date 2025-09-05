@@ -212,6 +212,11 @@ def apply_args_to_config(config: ProjectConfig, args: argparse.Namespace, *, com
             config.bert.pretraining.learning_rate = args.learning_rate
             print(f"🎯 bert.pretraining.learning_rate = {args.learning_rate}")
     
+    if hasattr(args, 'mult') and args.mult:
+        config.serialization.multiple_sampling.num_realizations = args.mult
+        config.serialization.multiple_sampling.enabled = args.mult > 1
+        print(f"🎯 serialization.multiple_sampling.num_realizations = {args.mult}")
+    
     # 任务参数
     if hasattr(args, 'task') and args.task:
         config.task.type = args.task
@@ -309,31 +314,32 @@ def add_all_args(parser: argparse.ArgumentParser, include_finetune: bool = True)
     
     # BPE参数在预训练和微调中都需要
     bpe_group = parser.add_argument_group('BPE压缩配置')
-    bpe_group.add_argument("--bpe_num_merges", type=int, help="BPE合并次数，0表示不使用BPE")
-    bpe_group.add_argument("--bpe_encode_backend", type=str, choices=["python", "cpp"], 
-                          default="cpp", help="BPE编码后端")
+    # bpe_group.add_argument("--bpe_num_merges", type=int, help="BPE合并次数，0表示不使用BPE")
+    # bpe_group.add_argument("--bpe_encode_backend", type=str, choices=["python", "cpp"], 
+    #                       default="cpp", help="BPE编码后端")
     bpe_group.add_argument("--bpe_encode_rank_mode", type=str, 
                           choices=["none", "all", "topk", "random", "gaussian"], default="all",
                           help="BPE编码排序模式")
-    bpe_group.add_argument("--bpe_encode_rank_k", type=int, help="BPE编码Top-K参数")
-    bpe_group.add_argument("--bpe_encode_rank_min", type=int, help="BPE编码随机范围最小值")
-    bpe_group.add_argument("--bpe_encode_rank_max", type=int, help="BPE编码随机范围最大值")
-    bpe_group.add_argument("--bpe_encode_rank_dist", type=str, help="BPE编码随机分布类型")
-    bpe_group.add_argument("--bpe_eval_mode", type=str, 
-                          choices=["all", "topk"], help="BPE评估模式")
-    bpe_group.add_argument("--bpe_eval_topk", type=int, help="BPE评估Top-K参数")
+    # bpe_group.add_argument("--bpe_encode_rank_k", type=int, help="BPE编码Top-K参数")
+    # bpe_group.add_argument("--bpe_encode_rank_min", type=int, help="BPE编码随机范围最小值")
+    # bpe_group.add_argument("--bpe_encode_rank_max", type=int, help="BPE编码随机范围最大值")
+    # bpe_group.add_argument("--bpe_encode_rank_dist", type=str, help="BPE编码随机分布类型")
+    # bpe_group.add_argument("--bpe_eval_mode", type=str, 
+    #                       choices=["all", "topk"], help="BPE评估模式")
+    # bpe_group.add_argument("--bpe_eval_topk", type=int, help="BPE评估Top-K参数")
     
     # 通用训练参数（两阶段均可使用同名参数）
     train_group = parser.add_argument_group('训练参数')
     train_group.add_argument("--epochs", type=int, help="训练轮数")
     train_group.add_argument("--batch_size", type=int, help="批次大小")
     train_group.add_argument("--learning_rate", "--lr", type=float, help="学习率")
+    train_group.add_argument("--mult", type=int, help="多重采样次数")
 
     # 预训练特有架构参数（仅在预训练脚本中会实际使用）
-    arch_group = parser.add_argument_group('BERT架构')
-    arch_group.add_argument("--hidden_size", type=int, help="隐藏层大小")
-    arch_group.add_argument("--num_layers", type=int, help="层数")
-    arch_group.add_argument("--num_heads", type=int, help="注意力头数")
+    # arch_group = parser.add_argument_group('BERT架构')
+    # arch_group.add_argument("--hidden_size", type=int, help="隐藏层大小")
+    # arch_group.add_argument("--num_layers", type=int, help="层数")
+    # arch_group.add_argument("--num_heads", type=int, help="注意力头数")
 
     # 编码器参数 (预训练和微调都需要)
     encoder_group = parser.add_argument_group('编码器配置')

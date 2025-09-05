@@ -295,7 +295,7 @@ def main():
 
     # 打印配置摘要
     print_config_summary(config)
-    
+    raw_seed=config.system.seed
     # 🆕 检查是否需要重复运行
     repeat_runs = getattr(config, 'repeat_runs', 1)
 
@@ -308,18 +308,14 @@ def main():
             print(f"🚀 开始第 {run_i + 1}/{repeat_runs} 次运行")
             print(f"{'='*60}")
             
-            seed=config.system.seed+run_i
-            config.system.seed = seed
-
-            # 设置当前运行编号
-            config.current_run_i = run_i  
+            seed=raw_seed+run_i
 
             try:
                 # 重新设置种子
                 from config import setup_global_seeds
                 setup_global_seeds(seed)
 
-                result = run_pretraining(config, run_i=seed)
+                result = run_pretraining(config, run_i=run_i)
                 result['seed'] = seed
                 all_results.append(result)
 
