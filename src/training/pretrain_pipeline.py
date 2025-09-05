@@ -307,7 +307,7 @@ def train_bert_mlm(
                 log_style=getattr(config.system, 'log_style', 'online'),
                 config=config  # 🆕 传入config用于一致性正则化
             )
-            torch.cuda.empty_cache()
+            # torch.cuda.empty_cache()
 
             # 验证
             val_metrics = evaluate_epoch(
@@ -384,7 +384,7 @@ def train_bert_mlm(
                 break
             patience_counter += 1
             # logger.info(f"清理显存")
-            torch.cuda.empty_cache()
+            # torch.cuda.empty_cache()
     except KeyboardInterrupt:
         logger.info("⏹️ 训练被用户中断")
     
