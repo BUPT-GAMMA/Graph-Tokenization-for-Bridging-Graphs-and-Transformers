@@ -217,7 +217,7 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
              commands_stdout: bool = False,
              save_name_prefix: Optional[str] = None,
              save_name_suffix: Optional[str] = None,
-             repeat_runs: int = 1) -> Optional[subprocess.Popen]:
+             repeat_runs: int = 1, mult: int = 1) -> Optional[subprocess.Popen]:
     cmd = [
         "/home/gzy/py/tokenizerGraph/finetune_wrapper.sh",
         "--dataset", task["dataset"],
@@ -227,6 +227,10 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
         "--device", "auto",
         # "--aggregation_mode", aggregation_mode,
     ]
+
+    # 添加mult参数传递给run脚本
+    if mult > 1:
+        cmd.extend(["--mult", str(mult)])
     if os.environ.get("TG_LOG_STYLE", "").lower() in {"online", "offline"}:
         cmd.extend(["--log_style", os.environ["TG_LOG_STYLE"].lower()])
 
@@ -385,6 +389,7 @@ def main():
     parser.add_argument("--epochs", type=int, default=None, help="微调轮数（单组超参用）")
     parser.add_argument("--batch_size", type=int, default=None, help="微调批次大小（单组超参用）")
     parser.add_argument("--learning_rate", type=float, default=None, help="微调学习率（单组超参用）")
+    parser.add_argument("--mult", type=int, default=1, help="多重采样次数（单组超参用）")
     parser.add_argument("--hyperparams_json", type=str, default=None, help="多组超参数的JSON（字符串或文件路径），数组形式")
 
     # 🆕 重复运行参数
@@ -547,6 +552,7 @@ def main():
                         save_name_prefix=args.save_name_prefix,
                         save_name_suffix=args.save_name_suffix,
                         repeat_runs=args.repeat_runs,
+                        mult=args.mult,
                     )
                     if args.commands_only or args.commands_stdout:
                         continue

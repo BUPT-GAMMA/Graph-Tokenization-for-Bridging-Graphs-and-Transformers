@@ -593,13 +593,11 @@ class UnifiedDataInterface:
 
     def get_split_indices(
         self,
-        seed: Optional[int] = None,
     ) -> Dict[str, List[int]]:
         """
         获取数据集划分索引。
         
         Args:
-            seed: 随机种子参数（当前忽略，保留接口兼容性）
             
         Returns:
             包含 'train', 'val', 'test' 索引列表的字典

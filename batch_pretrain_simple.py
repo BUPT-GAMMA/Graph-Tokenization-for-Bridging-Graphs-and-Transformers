@@ -188,7 +188,7 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
              commands_only: bool = False, plain_logs: bool = False,
              commands_file: Optional[str] = None,
              commands_stdout: bool = False,
-             repeat_runs: int = 1) -> Optional[subprocess.Popen]:
+             repeat_runs: int = 1, mult: int = 1) -> Optional[subprocess.Popen]:
     """在指定GPU上运行单个任务"""
     cmd = [
         "/home/gzy/py/tokenizerGraph/pretrain_wrapper.sh",
@@ -198,6 +198,10 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
         "--experiment_name", task["experiment_name"],
         "--device", "auto"
     ]
+
+    # 添加mult参数传递给run脚本
+    if mult > 1:
+        cmd.extend(["--mult", str(mult)])
     # 透传离线日志样式：批量脚本通常倾向 offline 以减少tqdm
     if os.environ.get("TG_LOG_STYLE", "").lower() in {"online", "offline"}:
         cmd.extend(["--log_style", os.environ["TG_LOG_STYLE"].lower()])
@@ -345,6 +349,7 @@ def main():
     parser.add_argument("--epochs", type=int, default=None, help="训练轮数（单组超参用）")
     parser.add_argument("--batch_size", type=int, default=None, help="批次大小（单组超参用）")
     parser.add_argument("--learning_rate", type=float, default=None, help="学习率（单组超参用）")
+    parser.add_argument("--mult", type=int, default=1, help="多重采样次数（单组超参用）")
     parser.add_argument("--hyperparams_json", type=str, default=None, help="多组超参数的JSON（字符串或文件路径），数组形式")
 
     # 🆕 重复运行参数
@@ -483,7 +488,7 @@ def main():
             for gpu_id in gpus:
                 if gpu_id not in running_processes and task_queue:
                     task = task_queue.pop(0)
-                    process = run_task(task, gpu_id, args.experiment_group, combined_config_json, args.log_dir, args.commands_only, args.plain_logs, args.commands_file, args.commands_stdout, args.repeat_runs)
+                    process = run_task(task, gpu_id, args.experiment_group, combined_config_json, args.log_dir, args.commands_only, args.plain_logs, args.commands_file, args.commands_stdout, args.repeat_runs, args.mult)
                     if args.commands_only or args.commands_stdout:
                         continue
                     running_processes[gpu_id] = (process, task)

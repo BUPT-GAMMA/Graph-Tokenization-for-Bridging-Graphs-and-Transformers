@@ -61,20 +61,20 @@ class ClearMLBatchSubmitter:
         # 条件判断
         is_raw_bpe = bpe_encode_rank_mode == 'none'
         has_peptides = 'peptides' in dataset
-        is_synthetic_or_dd = any(d in dataset for d in ['synthetic', 'dd'])
+        is_synthetic_or_dd_or_coildel_or_dblp = any(d in dataset for d in ['synthetic', 'dd', 'coildel', 'dblp'])
         is_eulerian_method = any(m in method for m in ['eulerian', 'feuler'])
 
         # 根据规则确定队列
         if is_raw_bpe and has_peptides:
             # 同时满足两个条件：raw BPE + peptides dataset
             return "mid"
-        elif is_raw_bpe:
-            # BPE模式是raw
-            return "mid"
+        # elif is_raw_bpe:
+        #     # BPE模式是raw
+        #     return "mid"
         elif has_peptides:
             # dataset含有peptides
             return "mid"
-        elif is_synthetic_or_dd:
+        elif is_synthetic_or_dd_or_coildel_or_dblp and not is_raw_bpe:
             # dataset是synthetic或dd
             return "mid"
         elif is_eulerian_method:

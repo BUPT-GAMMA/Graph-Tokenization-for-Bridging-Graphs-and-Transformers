@@ -49,11 +49,12 @@ def build_task_model(
     logger.info(f"  编码器类型: {config.encoder.type}")
     
     # 🆕 内置路径解析逻辑
-    pretrained_path = _resolve_pretrained_path_internal(config, pretrain_exp_name, pretrained_dir, run_i)
     task_type = force_task_type if force_task_type is not None else udi.get_dataset_task_type()
+    pretrained_path = _resolve_pretrained_path_internal(config, pretrain_exp_name, pretrained_dir, run_i, task_type)
     # 规则：MLM 任务默认不加载任何预训练模型（即使存在），确保预训练严格从随机初始化开始
     if task_type == 'mlm':
         pretrained_path = None
+
 
     if pretrained_path:
         logger.info(f"📦 将使用预训练模型: {pretrained_path}")
@@ -258,14 +259,22 @@ def _load_and_copy_pretrained_weights(model, pretrained_path):
 
 
 
-def _resolve_pretrained_path_internal(config, pretrain_exp_name, pretrained_dir, run_i=None):
-    """内部化的预训练路径解析，避免创建额外文件"""
-    
+def _resolve_pretrained_path_internal(config, pretrain_exp_name, pretrained_dir, run_i=None, task_type=None):
+    """内部化的预训练路径解析，避免创建额外文件
+
+    对于预训练任务，不做处理
+    对于微调任务，必须要找到预训练的模型，否则报错
+    """
+
     def _validate_model_dir(path):
         """验证模型目录是否包含必需文件"""
         required_files = ['config.bin', 'pytorch_model.bin']
         return path.exists() and all((path / f).exists() for f in required_files)
-    
+
+    # 对于预训练任务，直接返回None，不进行任何检查
+    if task_type == 'mlm':
+        return None
+
     # 1. 显式预训练目录优先（最高优先级）
     if pretrained_dir is not None:
         logger.debug(f"检查显式预训练目录: {pretrained_dir}")
@@ -273,25 +282,52 @@ def _resolve_pretrained_path_internal(config, pretrain_exp_name, pretrained_dir,
         if _validate_model_dir(p):
             logger.info(f"✅ 从指定预训练目录找到模型: {pretrained_dir}")
             return str(p)
-        logger.warning(f"⚠️ 指定了路径预训练目录: {pretrained_dir}, 但未找到有效模型: {p}")
+        logger.warning(f"⚠️ 指定了预训练目录: {pretrained_dir}, 但未找到有效模型: {p}")
         return None
-    
+
     # 2. 使用pretrain_exp_name（中等优先级）
     if pretrain_exp_name is not None:
-        # 标准路径：model/<group>/<pretrain_exp_name>/run_{i}/best 或兼容旧格式
+        # 检查run_i指定的预训练模型（get_model_dir会将None转为run_1）
         pretrain_path = config.get_model_dir(exp_name=pretrain_exp_name, run_i=run_i) / 'best'
-        logger.info(f"使用预训练实验名搜索路径: {pretrain_path}")
+        logger.info(f"检查预训练模型路径: {pretrain_path}")
         if _validate_model_dir(pretrain_path):
-            logger.info(f"✅ 从指定预训练实验找到模型: {pretrain_exp_name} -> {pretrain_path}")
+            logger.info(f"✅ 从预训练实验找到模型: {pretrain_path}")
             return str(pretrain_path)
-        logger.warning(f"⚠️ 指定了pretrain_exp_name: {pretrain_exp_name} ，但未找到有效模型: {pretrain_path}")
-    
+
+        # 如果run_i指定的模型不存在，且run_i不是1，则尝试run_1
+        if run_i != 1:
+            run_1_path = config.get_model_dir(exp_name=pretrain_exp_name, run_i=1) / 'best'
+            logger.info(f"run_{run_i}不存在，尝试run_1: {run_1_path}")
+            if _validate_model_dir(run_1_path):
+                logger.info(f"✅ 从预训练实验run_1找到模型: {run_1_path}")
+                return str(run_1_path)
+
+        logger.error(f"⚠️ 预训练实验 {pretrain_exp_name} 未找到有效模型")
+
     # 3. 使用当前experiment_name（最低优先级）
-    base_dir = config.get_model_dir(run_i=run_i) / 'best'
-    if _validate_model_dir(base_dir):
-        logger.info(f"✅ 采用experiment_name: {config.experiment_name} 找到模型")
-        return str(base_dir)
-    logger.error(f"⚠️ 从experiment_name: {config.experiment_name} 依然未找到模型: {base_dir}")
+    # 首先尝试指定的run_i（get_model_dir已经处理run_i=None的情况）
+    current_path = config.get_model_dir(run_i=run_i) / 'best'
+    logger.info(f"检查当前实验模型路径: {current_path}")
+    if _validate_model_dir(current_path):
+        logger.info(f"✅ 从当前实验找到模型: {current_path}")
+        return str(current_path)
+
+    # 如果指定的run不存在且不是run_1，尝试run_1
+    if run_i != 1:
+        current_run1_path = config.get_model_dir(run_i=1) / 'best'
+        logger.info(f"尝试当前实验run_1: {current_run1_path}")
+        if _validate_model_dir(current_run1_path):
+            logger.info(f"✅ 从当前实验run_1找到模型: {current_run1_path}")
+            return str(current_run1_path)
+
+    # 对于微调任务，如果都没有找到预训练模型，则报错
+    logger.error("❌ 微调任务必须找到预训练模型，但未找到任何有效的预训练模型")
+    logger.error("请检查以下路径:")
+    if pretrain_exp_name:
+        logger.error(f"  - 预训练实验: {pretrain_exp_name} (检查了run_{run_i or 1})")
+    logger.error(f"  - 当前实验: {config.experiment_name} (检查了run_{run_i or 1})")
+    raise ValueError("微调任务必须找到预训练模型")
+
     return None
 
 
