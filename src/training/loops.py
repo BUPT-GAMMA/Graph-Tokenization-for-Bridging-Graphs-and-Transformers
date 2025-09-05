@@ -123,11 +123,12 @@ def train_epoch(
 
         epoch_loss += loss_value
         steps += 1
-
+        torch.cuda.empty_cache()
         # 日志输出：online 使用 tqdm；offline 每完成10%输出一次摘要
         if log_style == "online":
             if steps % 20 == 0 or steps == 1:
                 avg_loss = epoch_loss / steps
+                # torch.cuda.empty_cache()
                 if pbar is not None:
                     pbar.set_postfix({'loss': f'{avg_loss:.4f}'})
                     pbar.update(20 if steps != 1 else 1)
@@ -136,6 +137,7 @@ def train_epoch(
                 progress_pct = int(steps * 100 / max(1, steps_per_epoch))
                 if next_percent_checkpoint is not None and progress_pct >= next_percent_checkpoint:
                     avg_loss = epoch_loss / steps
+                    torch.cuda.empty_cache()
                     elapsed = time.time() - start
                     est_total = (elapsed / max(1, steps)) * steps_per_epoch
                     eta = max(0.0, est_total - elapsed)

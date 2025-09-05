@@ -59,7 +59,7 @@ class ClearMLBatchSubmitter:
         method = args_dict.get('methods', args_dict.get('method', '')).lower()
 
         # 条件判断
-        is_raw_bpe = bpe_encode_rank_mode == 'raw'
+        is_raw_bpe = bpe_encode_rank_mode == 'none'
         has_peptides = 'peptides' in dataset
         is_synthetic_or_dd = any(d in dataset for d in ['synthetic', 'dd'])
         is_eulerian_method = any(m in method for m in ['eulerian', 'feuler'])

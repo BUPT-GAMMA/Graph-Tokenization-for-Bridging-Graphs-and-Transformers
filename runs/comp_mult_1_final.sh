@@ -1,16 +1,21 @@
+# molhiv
 python batch_pretrain_simple.py \
     --encoder bert,gte \
-    --datasets molhiv,coildel --bpe_scenarios all,random,raw \
-    --methods eulerian,feuler,cpp,fcpp,smiles,topo,dfs,bfs \
-    --experiment_group pre_comp1/mult/1 --repeat_runs 1\
-    --commands_only
-    python batch_pretrain_simple.py \
-    --encoder bert,gte \
-    --datasets peptides_func --bpe_scenarios all,random,raw --batch_size 32 \
+    --datasets molhiv --bpe_scenarios all,random,raw \
     --methods eulerian,feuler,cpp,fcpp,smiles,topo,dfs,bfs \
     --experiment_group pre_comp1/mult/1 --repeat_runs 1\
     --commands_only
 
+# peptides_func
+python batch_pretrain_simple.py \
+    --encoder bert,gte \
+    --batch_size 32 \
+    --datasets peptides_func --bpe_scenarios all,random,raw \
+    --methods eulerian,feuler,cpp,fcpp,smiles,topo,dfs,bfs \
+    --experiment_group pre_comp1/mult/1 --repeat_runs 1\
+    --commands_only
+
+# qm9,zinc,aqsol
 python batch_pretrain_simple.py \
     --encoder bert,gte \
     --datasets qm9,zinc,aqsol --bpe_scenarios all,random,raw \
@@ -18,9 +23,19 @@ python batch_pretrain_simple.py \
     --experiment_group pre_comp1/mult/1 --repeat_runs 1\
     --commands_only
 
+# colors3,proteins,mutagenicity,twitter
 python batch_pretrain_simple.py \
     --encoder bert,gte \
-    --datasets colors3,proteins,mutagenicity,coildel,dblp,twitter --bpe_scenarios all,random,raw \
+    --datasets colors3,proteins,mutagenicity,twitter --bpe_scenarios all,random,raw \
+    --methods eulerian,feuler,cpp,fcpp,smiles,topo,dfs,bfs \
+    --experiment_group pre_comp1/mult/1 --repeat_runs 1\
+    --commands_only  
+
+# coildel,dblp
+python batch_pretrain_simple.py \
+    --encoder gte \
+    --batch_size 50 \
+    --datasets coildel,dblp --bpe_scenarios all,random,raw \
     --methods eulerian,feuler,cpp,fcpp,smiles,topo,dfs,bfs \
     --experiment_group pre_comp1/mult/1 --repeat_runs 1\
     --commands_only  
