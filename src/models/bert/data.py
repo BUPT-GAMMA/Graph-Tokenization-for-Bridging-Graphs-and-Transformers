@@ -68,6 +68,9 @@ def compute_effective_max_length(token_sequences: List[List[int]], project_confi
     data_candidate = _candidate_len_from_policy(lengths, project_config)
     data_max_plus_2 = int(data_candidate) + 2
     upper_bound = int(project_config.bert.architecture.max_seq_length)
+    if project_config.encoder.type == 'bert':
+      upper_bound = 768
+    
     max_pos = int(project_config.bert.architecture.max_position_embeddings)
 
     effective = data_max_plus_2 if data_max_plus_2 <= upper_bound else upper_bound

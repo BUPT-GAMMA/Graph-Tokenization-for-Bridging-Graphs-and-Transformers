@@ -307,7 +307,8 @@ def train_bert_mlm(
                 log_style=getattr(config.system, 'log_style', 'online'),
                 config=config  # 🆕 传入config用于一致性正则化
             )
-            
+            torch.cuda.empty_cache()
+
             # 验证
             val_metrics = evaluate_epoch(
                 model=mlm_model,
@@ -362,18 +363,19 @@ def train_bert_mlm(
             # 早停检查和最佳模型保存
             if val_loss < best_val_loss:
                 improvement = best_val_loss - val_loss
-                best_val_loss = val_loss
+                best_val_loss = float(val_loss)
                 best_epoch = epoch
                 patience_counter = 0
-                logger.info(f"🎯 新最优 (epoch {epoch}): val_loss={val_loss:.4f} (↓ {improvement:.4f})")
+                logger.info(f"🎯 新最优 (epoch {epoch}): val_loss={best_val_loss:.4f} (↓ {improvement:.4f})")
 
                 # 直接在内存中保存最佳模型状态，避免频繁磁盘IO
                 # 对state_dict中的每个张量进行clone，避免引用问题
-                state_dict_copy = {k: v.clone() for k, v in mlm_model.state_dict().items()}
+                del best_model_state
+                state_dict_copy = {k: v.clone().detach().cpu() for k, v in mlm_model.state_dict().items()}
                 best_model_state = {
                     'model_state_dict': state_dict_copy,
                     'epoch': epoch,
-                    'val_loss': val_loss,
+                    'val_loss': best_val_loss,
                 }
                 logger.info("💾 最佳模型状态已缓存到内存")
             if patience_counter >= config.bert.pretraining.early_stopping_patience:
@@ -381,6 +383,8 @@ def train_bert_mlm(
                 logger.info(f"  - 最佳epoch: {best_epoch}, 最佳验证损失: {best_val_loss:.4f}")
                 break
             patience_counter += 1
+            # logger.info(f"清理显存")
+            torch.cuda.empty_cache()
     except KeyboardInterrupt:
         logger.info("⏹️ 训练被用户中断")
     
@@ -406,6 +410,11 @@ def train_bert_mlm(
         writer.close()
         if wandb_logger is not None:
             wandb_logger.finish()
+        
+        #当前显存占用成分分析：
+        # import torch.cuda.memory
+        # logger.info(f"💾 当前显存占用成分分析: {torch.cuda.memory.summary()}")
+        # logger.info(f"💾 model占用显存: {mlm_model.get_memory_footprint()/1024/1024:.2f}MB")
         
         # 保存最佳模型
         logger.info("💾 保存最佳模型...")
