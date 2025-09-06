@@ -324,7 +324,8 @@ def main():
 
             except Exception as e:
                 print(f"❌ 第 {run_i + 1} 次运行失败: {e}")
-                continue
+                task.mark_failed()
+                raise
 
         # 聚合统计结果
         if all_results:

@@ -75,14 +75,14 @@ python batch_pretrain_simple.py \
 python batch_finetune_simple.py \
     --encoder gte \
     --learning_rate 5e-6 \
-    --datasets mutagenicity --bpe_scenarios all,random,raw \
+    --datasets mutagenicity,molhiv,qm9,twitter --bpe_scenarios all,random,raw \
     --methods smiles,topo,dfs,bfs \
     --experiment_group pre_comp1/mult/1 --repeat_runs 2\
     --commands_only
 #normal
 python batch_finetune_simple.py \
     --encoder gte \
-    --datasets mutagenicity --bpe_scenarios all,random,raw \
+    --datasets mutagenicity,molhiv,qm9,twitter --bpe_scenarios all,random,raw \
     --methods eulerian,feuler,cpp,fcpp \
     --experiment_group pre_comp1/mult/1 --repeat_runs 2\
     --commands_only
