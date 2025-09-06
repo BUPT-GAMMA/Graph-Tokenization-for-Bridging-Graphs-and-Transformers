@@ -179,7 +179,8 @@ def _aggregate_finetune_results(results: List[Dict[str, Any]]) -> Dict[str, Any]
     # 1. 处理验证集指标 - 直接提取已知格式的数据
     val_keys = ['val_loss', 'accuracy', 'precision', 'recall', 'f1', 'roc_auc', 'ap', 'best_val_roc_auc']
     for key in val_keys:
-        values = [r['val'][key] for r in results]
+        values = [r['val'].get(key, None) for r in results]
+        values = [value for value in values if value is not None]
         stats[f'val_{key}'] = _calculate_stats(values)
 
     # 2. 处理测试集指标（所有聚合模式）- 直接提取已知格式的数据
@@ -197,14 +198,16 @@ def _aggregate_finetune_results(results: List[Dict[str, Any]]) -> Dict[str, Any]
     for mode in test_modes:
         for metric in test_metrics:
             key = f"test_{mode}_{metric}"
-            values = [r['test']['by_aggregation'][mode][metric] for r in results]
+            values = [r['test']['by_aggregation'][mode].get(metric, None) for r in results]
+            values = [value for value in values if value is not None]
             stats[key] = _calculate_stats(values)
 
     # 3. 处理直接测试集指标（向后兼容）
-    for metric in test_metrics:
-        direct_key = f"test_{metric}"
-        values = [r['test'][metric] for r in results]
-        stats[direct_key] = _calculate_stats(values)
+    # for metric in test_metrics:
+    #     direct_key = f"test_{metric}"
+    #     values = [r['test'].get(metric, None) for r in results]
+    #     values = [value for value in values if value is not None]
+    #     stats[direct_key] = _calculate_stats(values)
 
     # 4. 处理时间指标 - 直接提取
     time_keys = ['total_train_time_sec', 'avg_epoch_time_sec']
@@ -250,7 +253,7 @@ def _calculate_stats(values: List[float]) -> Dict[str, float]:
     Returns:
         统计结果字典
     """
-    if not values:
+    if not values or len(values) == 0:
         return {}
 
     values = np.array(values)

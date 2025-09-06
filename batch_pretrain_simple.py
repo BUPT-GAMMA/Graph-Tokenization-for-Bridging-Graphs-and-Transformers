@@ -211,9 +211,9 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
         cmd.extend(["--bpe_encode_rank_mode", str(bpe_config["bpe_encode_rank_mode"])])
 
     # 🆕 简化超参逻辑：默认使用config值，只在raw模型时调整学习率
-    if bpe_config["bpe_encode_rank_mode"] == 'none':
-        # raw模型：将默认预训练学习率减半（3e-4 -> 1.5e-4）
-        cmd.extend(["--learning_rate", str(1e-4)])
+    # if bpe_config["bpe_encode_rank_mode"] == 'none':
+    #     # raw模型：将默认预训练学习率减半（3e-4 -> 1.5e-4）
+    #     cmd.extend(["--learning_rate", str(1e-4)])
     
     # 其他超参全部使用config默认值，不再通过命令行传递
     if task["hyperparams"]:
@@ -223,7 +223,7 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
             cmd.extend(["--epochs", str(params["epochs"])])
         if "batch_size" in params:
             cmd.extend(["--batch_size", str(params["batch_size"])])
-        if "learning_rate" in params and bpe_config["bpe_encode_rank_mode"] != 'none':
+        if "learning_rate" in params :
             # 非raw模型时才允许传递自定义学习率
             cmd.extend(["--learning_rate", str(params["learning_rate"])])
 
