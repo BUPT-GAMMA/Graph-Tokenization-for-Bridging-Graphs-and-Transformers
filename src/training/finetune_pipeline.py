@@ -386,6 +386,7 @@ def run_finetune(
                 log_style=getattr(config.system, 'log_style', 'online'),
                 aggregator=aggregator if _mode == "learned" else None,
             )
+        _metrics['pk'] = _metrics[pk]  # 存储 pk 指标的实际数值，而不是指标名称
 
         test_metrics_by_mode[_mode] = _metrics
 
@@ -479,8 +480,6 @@ def run_finetune(
         display_performance_summary(logger, total_train_time, total_samples, best_val, best_epoch_index or 0, "微调")
     except Exception:
         pass
-    model.to("cpu")
-    del model
     del test_model
 
     return {

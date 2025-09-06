@@ -194,7 +194,7 @@ def _aggregate_finetune_results(results: List[Dict[str, Any]]) -> Dict[str, Any]
         test_metrics = ['val_loss', 'accuracy', 'precision', 'recall', 'f1', 'roc_auc', 'ap']
     else:
         test_metrics = ['val_loss', 'mae', 'rmse', 'r2']
-
+    test_metrics.append('pk')
     for mode in test_modes:
         for metric in test_metrics:
             key = f"test_{mode}_{metric}"
@@ -209,6 +209,8 @@ def _aggregate_finetune_results(results: List[Dict[str, Any]]) -> Dict[str, Any]
     #     values = [value for value in values if value is not None]
     #     stats[direct_key] = _calculate_stats(values)
 
+    
+    
     # 4. 处理时间指标 - 直接提取
     time_keys = ['total_train_time_sec', 'avg_epoch_time_sec']
     for key in time_keys:
