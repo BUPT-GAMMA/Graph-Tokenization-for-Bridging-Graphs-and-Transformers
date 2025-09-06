@@ -479,6 +479,9 @@ def run_finetune(
         display_performance_summary(logger, total_train_time, total_samples, best_val, best_epoch_index or 0, "微调")
     except Exception:
         pass
+    model.to("cpu")
+    del model
+    del test_model
 
     return {
         'best_val_loss': best_val,
