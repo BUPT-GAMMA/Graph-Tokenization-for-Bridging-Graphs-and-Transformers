@@ -48,7 +48,7 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
     bpe_group.add_argument("--bpe_encode_rank_mode", type=str, 
                           choices=["none", "all", "topk", "random", "gaussian"], default="none",
                           help="BPE编码排序模式")
-    # bpe_group.add_argument("--bpe_encode_rank_k", type=int, help="BPE编码Top-K参数")
+    bpe_group.add_argument("--bpe_encode_rank_k", type=int, help="BPE编码Top-K参数")
     # bpe_group.add_argument("--bpe_encode_rank_min", type=int, help="BPE编码随机范围最小值")
     # bpe_group.add_argument("--bpe_encode_rank_max", type=int, help="BPE编码随机范围最大值")
     bpe_group.add_argument("--bpe_encode_rank_dist", type=str, help="BPE编码随机分布类型")
@@ -320,7 +320,7 @@ def add_all_args(parser: argparse.ArgumentParser, include_finetune: bool = True)
     bpe_group.add_argument("--bpe_encode_rank_mode", type=str, 
                           choices=["none", "all", "topk", "random", "gaussian"], default="all",
                           help="BPE编码排序模式")
-    # bpe_group.add_argument("--bpe_encode_rank_k", type=int, help="BPE编码Top-K参数")
+    bpe_group.add_argument("--bpe_encode_rank_k", type=int, help="BPE编码Top-K参数")
     # bpe_group.add_argument("--bpe_encode_rank_min", type=int, help="BPE编码随机范围最小值")
     # bpe_group.add_argument("--bpe_encode_rank_max", type=int, help="BPE编码随机范围最大值")
     # bpe_group.add_argument("--bpe_encode_rank_dist", type=str, help="BPE编码随机分布类型")

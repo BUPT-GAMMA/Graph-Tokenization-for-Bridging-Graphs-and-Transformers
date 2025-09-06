@@ -111,14 +111,18 @@ class ClearMLBatchSubmitter:
         parsed_args_dict = {key: value for key, value in parsed_args}
         
         task_name =f'{parsed_args_dict["experiment_group"]}/{parsed_args_dict["experiment_name"]}'
-
+        if "finetune" in script_path:
+            task_name = f'{task_name}_ft'
+        elif "pretrain" in script_path:
+            task_name = f'{task_name}_pt'
+            
         # 根据参数确定队列
         queue_name = self.determine_queue(parsed_args)
 
         # 创建任务模板（不执行代码）
         if script_path.endswith('.sh'):
             # 对于bash脚本，直接使用bash脚本作为script，并传递参数
-            task = Task.create(
+            task: Task = Task.create(
                 project_name="TokenizerGraph",
                 task_name=task_name,
                 script=script_path,
@@ -128,14 +132,15 @@ class ClearMLBatchSubmitter:
             )
         else:
             # 对于Python脚本，使用标准模式
-            task = Task.create(
+            task: Task = Task.create(
                 project_name="TokenizerGraph",
                 task_name=task_name,
                 script=script_path,
                 working_directory=self.working_directory,
                 argparse_args=parsed_args
             )
-
+            
+        task.add_tags("ft" if "finetune" in script_path else "pt" if "pretrain" in script_path else "")
         # 加入队列，让Agent执行
         Task.enqueue(task, queue_name=queue_name)
 

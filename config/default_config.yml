@@ -24,16 +24,13 @@ paths:
 # 数据集配置
 dataset:
   name: qm9  # 数据集名称 (使用DGL格式)
-  limit: null  # null=全量, 13083=10%, 26166=20%, 65415=50%
+  limit: null  # legacy null=全量, 13083=10%, 26166=20%, 65415=50%
   use_cache: true
   splits:  # 数据分割比例
     train: 0.8
     val: 0.1
     test: 0.1
-  transforms:
-    # 运行时数据变换配置（在数据加载时应用）
-    normalize: false
-    augment: false
+
 
 # 序列化配置
 serialization:
@@ -58,7 +55,7 @@ serialization:
 
 # 编码后端配置（用于在线encode）
 encoding:
-  backend: cpp  # 可选: py-standard | numba | cpp （无隐式回退，缺失即报错）
+  backend: cpp  # 可选: py-standard | numba | cpp 
   threads:
     omp_num_threads: 1
     mkl_num_threads: 1
@@ -132,7 +129,7 @@ bert:
       swap_window_size: 3
       
       # 一致性正则化配置
-      use_consistency_regularization: false
+      use_consistency_regularization: true
       consistency_alpha: 1.0  # R-Drop权重
       
       # 高斯噪声增强
@@ -154,7 +151,7 @@ bert:
     weight_decay: 0.01
     warmup_ratio: 0.025
     head_lr_multiplier: 2.0
-    early_stopping_patience: 10
+    early_stopping_patience: 5
     use_layered_lr: false
     max_grad_norm: 0.5
     save_models: false
