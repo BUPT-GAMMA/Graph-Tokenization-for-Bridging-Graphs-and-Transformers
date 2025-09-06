@@ -473,6 +473,8 @@ def train_bert_mlm(
             json.dump(pretrain_metrics, f, indent=2, ensure_ascii=False)
         logger.info(f"📊 预训练结果已保存: {metrics_file}")
     
+    mlm_model.to("cpu")
+    del mlm_model
     return {
         "mlm_model": mlm_model,
         "vocab_manager": vocab_manager,
