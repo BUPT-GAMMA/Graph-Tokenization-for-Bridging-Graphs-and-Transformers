@@ -56,12 +56,12 @@ from src.utils.config_override import (  # noqa: E402
 current_task = Task.current_task()
 if current_task is not None:
     # 已经在任务上下文中，使用现有的任务
-    task = current_task
+    task: Task = current_task
     print(f"✅ 使用现有ClearML任务: {task.name} (ID: {task.id})")
 else:
     # 直接运行的情况，创建新任务
     try:
-        task = Task.init(
+        task: Task = Task.init(
             project_name="TokenizerGraph",
             task_name=f"finetune_manual_{int(time.time())}",
             auto_connect_frameworks=True  # 确保自动捕获TensorBoard
@@ -69,7 +69,7 @@ else:
         print(f"✅ ClearML任务初始化成功: {task.name} (ID: {task.id})")
     except Exception as e:
         print(f"⚠️ ClearML初始化失败，将继续运行: {e}")
-        task = None
+        task: Task = None
 
 _ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
@@ -349,7 +349,8 @@ def main():
                 config, config.experiment_name, len(all_results), "finetune"
             )
             print_aggregated_stats(aggregated, "finetune")
-
+            task.get_logger().report_single_value(name="ft_metric", value=aggregated['statistics']['pk'])
+            
         try:
             sys.stdout.flush()
             sys.stderr.flush()

@@ -74,18 +74,25 @@ python batch_pretrain_simple.py \
 # mutagenicity,molhiv,qm9,twitter
 python batch_finetune_simple.py \
     --encoder gte \
-    --learning_rate 5e-6 \
-    --datasets mutagenicity,molhiv,qm9,twitter --bpe_scenarios all,random,raw \
+    --datasets mutagenicity,qm9,twitter --bpe_scenarios all,random,raw \
     --methods smiles,topo,dfs,bfs \
+    --experiment_group pre_comp1/mult/1 --repeat_runs 2\
+    --commands_only
+python batch_finetune_simple.py \
+    --encoder gte \
+    --learning_rate 5e-6 \
+    --datasets molhiv --bpe_scenarios all,random,raw \
+    --methods eulerian,feuler,cpp,fcpp,smiles,topo,dfs,bfs \
     --experiment_group pre_comp1/mult/1 --repeat_runs 2\
     --commands_only
 #normal
 python batch_finetune_simple.py \
     --encoder gte \
-    --datasets mutagenicity,molhiv,qm9,twitter --bpe_scenarios all,random,raw \
+    --datasets mutagenicity,qm9,twitter --bpe_scenarios all,random,raw \
     --methods eulerian,feuler,cpp,fcpp \
     --experiment_group pre_comp1/mult/1 --repeat_runs 2\
     --commands_only
+
 python batch_finetune_simple.py \
     --encoder bert \
     --datasets mutagenicity,molhiv,qm9,twitter --bpe_scenarios all,random,raw \
@@ -97,7 +104,7 @@ python batch_finetune_simple.py \
 # dblp
 python batch_finetune_simple.py \
     --encoder gte \
-    --batch_size 32 --learning_rate 5e-6 \
+    --batch_size 32 \
     --datasets dblp --bpe_scenarios all,random,raw \
     --methods smiles,topo,dfs,bfs \
     --experiment_group pre_comp1/mult/1 --repeat_runs 2\
