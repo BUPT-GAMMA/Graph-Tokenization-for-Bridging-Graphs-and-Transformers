@@ -476,7 +476,6 @@ def train_bert_mlm(
     mlm_model.to("cpu")
     del mlm_model
     return {
-        "mlm_model": mlm_model,
         "vocab_manager": vocab_manager,
         "best_val_loss": best_val_loss,
         "best_epoch": best_epoch,
