@@ -141,6 +141,7 @@ class ClearMLBatchSubmitter:
             )
             
         task.add_tags("ft" if "finetune" in script_path else "pt" if "pretrain" in script_path else "")
+        # task.add_tags("lower 100mult")
         # 加入队列，让Agent执行
         Task.enqueue(task, queue_name=queue_name)
 

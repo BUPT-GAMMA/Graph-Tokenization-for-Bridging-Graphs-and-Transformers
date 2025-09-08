@@ -31,7 +31,7 @@ class WandbLogger:
 
     def init(self, config) -> None:
         try:
-            meta = config.compose_wandb_metadata()
+            # meta = config.compose_wandb_metadata()
             
             # 构建详细的配置字典，重点突出BPE参数
             wandb_config = config.to_dict()
@@ -54,9 +54,9 @@ class WandbLogger:
             init_kwargs = {
                 "project": self._project,
                 "entity": self._entity,
-                "group": meta.get("group"),
-                "name": meta.get("name"),
-                "tags": meta.get("tags"),
+                # "group": meta.get("group"),
+                # "name": meta.get("name"),
+                # "tags": meta.get("tags"),
                 "config": wandb_config,
                 "settings": self._wandb.Settings(start_method="fork")  # 避免多进程问题
             }

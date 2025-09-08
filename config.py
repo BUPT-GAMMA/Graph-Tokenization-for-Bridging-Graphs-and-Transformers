@@ -492,7 +492,7 @@ class ProjectConfig:
             exp_name = self.build_exp_name(self.experiment_name)
 
         if run_i is None:
-          return self.model_dir / group / exp_name / f"run_1" #默认返回第一个重复运行模型目录无论有没有设置重复运行次数
+          return self.model_dir / group / exp_name / f"run_0" #默认返回第一个重复运行模型目录无论有没有设置重复运行次数
         elif run_i == -1: #聚合模型目录
           assert False, "聚合模型目录不支持"
         else:
@@ -526,59 +526,6 @@ class ProjectConfig:
         model_dir.mkdir(parents=True, exist_ok=True)
         return logs_dir, model_dir
 
-    def compose_wandb_metadata(self) -> Dict[str, Any]:
-        """组合WandB元数据（不直接导入/依赖wandb）。
-
-        返回：
-          Dict[str, Any]: 包含 project(需外部指定)、group、name、tags 的字典。
-            - group: "{group}/{exp_name}/run_{i}" 或兼容旧格式
-            - name : experiment_id（当前时间戳）
-            - tags : [dataset, method, bpe_config, seed, run_i]（包含BPE配置信息和run_i）
-        """
-        group = self.experiment_group or "default"  # 提供默认组名
-        exp_name = self.build_exp_name(self.experiment_name)
-        dataset = self.dataset.name
-        method = self._compute_method_dir()
-        seed = self.system.seed
-        # 可选：由调用方在运行期设置实验阶段（如 "pretrain"、"finetune"）
-        phase = getattr(self, "experiment_phase", None)
-
-        # 添加BPE配置信息
-        bpe_tag = self._get_bpe_identifier()
-
-        # 🆕 支持重复运行的简化路径结构
-        if run_i is not None:
-            # 简化路径：group/exp_name/run_i
-            detailed_name = f"{group}/{exp_name}/run_{run_i}_{bpe_tag}"
-            if phase is not None:
-                detailed_name = f"{detailed_name}__{phase}"
-
-            group_path = f"{group}/{exp_name}/run_{run_i}_{bpe_tag}"
-            if phase is not None:
-                group_path = f"{group_path}/{phase}"
-
-            tags = [bpe_tag, f"seed{seed}", f"run{run_i}"]
-            if phase is not None:
-                tags.append(str(phase))
-        else:
-            # 🔄 兼容旧格式
-            detailed_name = f"{group}/{exp_name}__{dataset}/{method}_{bpe_tag}"
-            if phase is not None:
-                detailed_name = f"{detailed_name}__{phase}"
-
-            group_path = f"{group}/{exp_name}/{dataset}/{method}_{bpe_tag}"
-            if phase is not None:
-                group_path = f"{group_path}/{phase}"
-
-            tags = [dataset, method, bpe_tag, f"seed{seed}"]
-            if phase is not None:
-                tags.append(str(phase))
-
-        return {
-            "group": group_path,
-            "name": detailed_name,
-            "tags": tags,
-        }
     
     def _get_bpe_identifier(self) -> str:
         """生成BPE配置标识符"""

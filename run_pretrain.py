@@ -299,86 +299,79 @@ def main():
     # 🆕 检查是否需要重复运行
     repeat_runs = getattr(config, 'repeat_runs', 1)
 
-    if repeat_runs > 1:
-        print(f"🔄 启用重复运行模式: {repeat_runs} 次")
-
-        all_results = []
-        for run_i in range(repeat_runs):
-            print(f"\n{'='*60}")
-            print(f"🚀 开始第 {run_i + 1}/{repeat_runs} 次运行")
-            print(f"{'='*60}")
-            
-            seed=raw_seed+run_i
-
-            try:
-                # 重新设置种子
-                from config import setup_global_seeds
-                setup_global_seeds(seed)
-
-                result = run_pretraining(config, run_i=run_i)
-                result['seed'] = seed
-                all_results.append(result)
-
-                print(f"✅ 第 {run_i + 1} 次运行完成")
-                print(f"📊 最优验证损失: {result['best_val_loss']:.4f}")
-
-            except Exception as e:
-                print(f"❌ 第 {run_i + 1} 次运行失败: {e}")
-                task.mark_failed()
-                raise
-
-        # 聚合统计结果
-        if all_results:
-            print(f"\n{'='*60}")
-            print("📊 聚合统计结果")
-            print(f"{'='*60}")
-
-            from src.utils.stats_aggregation import aggregate_experiment_results, print_aggregated_stats
-
-            aggregated = aggregate_experiment_results(
-                config, config.experiment_name, len(all_results), "pretrain"
-            )
-            print_aggregated_stats(aggregated, "pretrain")
-
+    # if repeat_runs > 1:
+    print(f"🔄 启用重复运行模式: {repeat_runs} 次")
+    all_results = []
+    for run_i in range(repeat_runs):
+        print(f"\n{'='*60}")
+        print(f"🚀 开始第 {run_i + 1}/{repeat_runs} 次运行")
+        print(f"{'='*60}")
+        
+        seed=raw_seed+run_i
         try:
-            sys.stdout.flush()
-            sys.stderr.flush()
-        except Exception:
-            raise
-        os._exit(0)
-
-    else:
-        # 普通单次运行
-        try:
-            result = run_pretraining(config)
-
-            print("\n" + "="*60)
-            print("🎉 预训练完成!")
-            print("="*60)
-
-            print(f"📁 模型保存路径: {result['model_dir']}")
-            print(f"🏷️ 实验名称: {config.experiment_name}")
+            # 重新设置种子
+            from config import setup_global_seeds
+            setup_global_seeds(seed)
+            result = run_pretraining(config, run_i=run_i)
+            result['seed'] = seed
+            all_results.append(result)
+            print(f"✅ 第 {run_i + 1} 次运行完成")
             print(f"📊 最优验证损失: {result['best_val_loss']:.4f}")
-
-            print("\n💡 可以使用以下命令进行微调:")
-            print(f"python run_finetune.py --dataset {config.dataset.name} --method {config.serialization.method}")
-            try:
-                sys.stdout.flush()
-                sys.stderr.flush()
-            except Exception:
-                pass
-            os._exit(0)
-            print("exit后仍未结束！！！！！")
-
-        except KeyboardInterrupt:
-            print("\n⚠️ 用户中断训练")
-            return 130
         except Exception as e:
-            print(f"\n❌ 预训练失败: {e}")
+            print(f"❌ 第 {run_i + 1} 次运行失败: {e}")
             task.mark_failed()
-            import traceback
-            traceback.print_exc()
             raise
+          
+    # 聚合统计结果
+    if all_results:
+        print(f"\n{'='*60}")
+        print("📊 聚合统计结果")
+        print(f"{'='*60}")
+        from src.utils.stats_aggregation import aggregate_experiment_results, print_aggregated_stats
+        aggregated = aggregate_experiment_results(
+            config, config.experiment_name, len(all_results), "pretrain"
+        )
+        print_aggregated_stats(aggregated, "pretrain")
+  
+    try:
+        sys.stdout.flush()
+        sys.stderr.flush()
+    except Exception:
+        raise
+    os._exit(0)
+
+    # else:
+    #     # 普通单次运行
+    #     try:
+    #         result = run_pretraining(config)
+
+    #         print("\n" + "="*60)
+    #         print("🎉 预训练完成!")
+    #         print("="*60)
+
+    #         print(f"📁 模型保存路径: {result['model_dir']}")
+    #         print(f"🏷️ 实验名称: {config.experiment_name}")
+    #         print(f"📊 最优验证损失: {result['best_val_loss']:.4f}")
+
+    #         print("\n💡 可以使用以下命令进行微调:")
+    #         print(f"python run_finetune.py --dataset {config.dataset.name} --method {config.serialization.method}")
+    #         try:
+    #             sys.stdout.flush()
+    #             sys.stderr.flush()
+    #         except Exception:
+    #             pass
+    #         os._exit(0)
+    #         print("exit后仍未结束！！！！！")
+
+    #     except KeyboardInterrupt:
+    #         print("\n⚠️ 用户中断训练")
+    #         return 130
+    #     except Exception as e:
+    #         print(f"\n❌ 预训练失败: {e}")
+    #         task.mark_failed()
+    #         import traceback
+    #         traceback.print_exc()
+    #         raise
 
 
 if __name__ == "__main__":

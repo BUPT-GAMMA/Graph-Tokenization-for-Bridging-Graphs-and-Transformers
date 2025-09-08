@@ -295,8 +295,8 @@ def _resolve_pretrained_path_internal(config, pretrain_exp_name, pretrained_dir,
             return str(pretrain_path)
 
         # 如果run_i指定的模型不存在，且run_i不是1，则尝试run_1
-        if run_i != 1:
-            run_1_path = config.get_model_dir(exp_name=pretrain_exp_name, run_i=1) / 'best'
+        if run_i != 0:
+            run_1_path = config.get_model_dir(exp_name=pretrain_exp_name, run_i=0) / 'best'
             logger.info(f"run_{run_i}不存在，尝试run_1: {run_1_path}")
             if _validate_model_dir(run_1_path):
                 logger.info(f"✅ 从预训练实验run_1找到模型: {run_1_path}")
@@ -313,8 +313,8 @@ def _resolve_pretrained_path_internal(config, pretrain_exp_name, pretrained_dir,
         return str(current_path)
 
     # 如果指定的run不存在且不是run_1，尝试run_1
-    if run_i != 1:
-        current_run1_path = config.get_model_dir(run_i=1) / 'best'
+    if run_i != 0:
+        current_run1_path = config.get_model_dir(run_i=0) / 'best'
         logger.info(f"尝试当前实验run_1: {current_run1_path}")
         if _validate_model_dir(current_run1_path):
             logger.info(f"✅ 从当前实验run_1找到模型: {current_run1_path}")
