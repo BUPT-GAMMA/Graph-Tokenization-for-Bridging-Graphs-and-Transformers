@@ -126,7 +126,7 @@ def build_hyperparams_list(hp_json: Optional[str], epochs: Optional[int],
 
 def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: List[Dict[str, Any]],
                      hyperparams_list: List[Dict[str, Any]], exp_prefix: str, tag: Optional[str],
-                     aug_label: Optional[str], encoders: List[str] = None) -> List[Dict[str, Any]]:
+                     aug_label: Optional[str], encoders: List[str] = None, mult: int = 1) -> List[Dict[str, Any]]:
     """创建任务列表，支持灵活的编码器选择"""
     tasks: List[Dict[str, Any]] = []
     
@@ -150,14 +150,15 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
                 continue
             for bpe_config in bpe_test_configs:
                 for encoder_config in encoder_configs:
+                    aug_part = f"_{aug_label}" if aug_label else ""
+                    bpe_suffix = bpe_config["config_name"]
+                    encoder_suffix = encoder_config["suffix"]
+                    mult_suffix = f"_{mult}" if mult > 1 else ""
+                    experiment_name = f"{exp_prefix}{dataset}_{method}_{bpe_suffix}{aug_part}{encoder_suffix}{mult_suffix}{('_' + tag) if tag else ''}"
+                    
                     if hyperparams_list:
                         for params in hyperparams_list:
-                            bpe_suffix = bpe_config["config_name"]
-                            aug_part = f"_{aug_label}" if aug_label else ""
-                            encoder_suffix = encoder_config["suffix"]
                             # 删除 epoch 标记，确保与微调阶段的实验名一致
-                            exp_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}{encoder_suffix}"
-                            experiment_name = f"{exp_prefix}{exp_core}{('_' + tag) if tag else ''}"
                             tasks.append({
                                 "dataset": dataset,
                                 "method": method,
@@ -167,11 +168,6 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
                                 "experiment_name": experiment_name
                             })
                     else:
-                        bpe_suffix = bpe_config["config_name"]
-                        aug_part = f"_{aug_label}" if aug_label else ""
-                        encoder_suffix = encoder_config["suffix"]
-                        exp_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}{encoder_suffix}"
-                        experiment_name = f"{exp_prefix}{exp_core}{('_' + tag) if tag else ''}"
                         tasks.append({
                             "dataset": dataset,
                             "method": method,
@@ -454,6 +450,7 @@ def main():
     tasks = create_task_list(
         datasets=datasets,
         methods=methods,
+        mult=args.mult,
         bpe_test_configs=bpe_test_configs,
         hyperparams_list=hyperparams_list,
         exp_prefix=args.exp_prefix,

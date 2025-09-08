@@ -293,118 +293,111 @@ def main():
     # 🆕 检查是否需要重复运行
     repeat_runs = getattr(config, 'repeat_runs', 1)
 
-    if repeat_runs > 1:
-        print(f"🔄 启用重复运行模式: {repeat_runs} 次")
+    # if repeat_runs > 1:
+    print(f"🔄 启用重复运行模式: {repeat_runs} 次")
+    all_results = []
+    for run_i in range(repeat_runs):
+          print(f"\n{'='*60}")
+          print(f"🚀 开始第 {run_i + 1}/{repeat_runs} 次运行")
+          print(f"{'='*60}")
+          
+          seed=raw_seed+run_i
+          try:
+              # 重新设置种子
+              from config import setup_global_seeds
+              setup_global_seeds(seed)
+              result = run_finetuning(
+                  config,
+                  aggregation_mode=args.aggregation_mode,
+                  save_name_prefix=args.save_name_prefix,
+                  save_name_suffix=args.save_name_suffix,
+                  pretrained_dir=getattr(args, 'pretrained_dir', None),
+                  pretrain_exp_name=getattr(args, 'pretrain_exp_name', None),
+                  run_i=run_i,
+              )
+              
+              result['seed'] = seed
+              all_results.append(result)
+              print(f"✅ 第 {run_i + 1} 次运行完成")
+              print(f"📊 最优验证损失: {result['best_val_loss']:.4f}")
+              
+              # 显示测试结果
+              test_metrics = result.get('test_metrics', {})
+              if test_metrics:
+                  print("📈 测试指标:")
+                  for metric, value in test_metrics.items():
+                      if isinstance(value, (int, float)):
+                          print(f"  {metric}: {value:.4f}")
+          except Exception as e:
+              print(f"❌ 第 {run_i + 1} 次运行失败: {e}")
+              task.mark_failed()
+              raise
+    # 聚合统计结果
+    if all_results:
+        print(f"\n{'='*60}")
+        print("📊 聚合统计结果")
+        print(f"{'='*60}")
+        from src.utils.stats_aggregation import aggregate_experiment_results, print_aggregated_stats
+        aggregated = aggregate_experiment_results(
+            config, config.experiment_name, len(all_results), "finetune"
+        )
+        print_aggregated_stats(aggregated, "finetune")
+        task.get_logger().report_single_value(name="ft_metric", value=aggregated['statistics']['test']['avg']['pk']['mean'])
+        
+    try:
+        sys.stdout.flush()
+        sys.stderr.flush()
+    except Exception:
+        pass
+    os._exit(0)
 
-        all_results = []
-        for run_i in range(repeat_runs):
-            print(f"\n{'='*60}")
-            print(f"🚀 开始第 {run_i + 1}/{repeat_runs} 次运行")
-            print(f"{'='*60}")
+    # else:
+    #     # 普通单次运行
+    #     try:
+    #         result = run_finetuning(
+    #             config,
+    #             aggregation_mode=args.aggregation_mode,
+    #             save_name_prefix=args.save_name_prefix,
+    #             save_name_suffix=args.save_name_suffix,
+    #             pretrained_dir=getattr(args, 'pretrained_dir', None),
+    #             pretrain_exp_name=getattr(args, 'pretrain_exp_name', None),
+    #             run_i=None,  # 单个脚本运行时不使用run_i
+    #         )
+
+    #         print("\n" + "="*60)
+    #         print("🎉 微调完成!")
+    #         print("="*60)
+
+    #         print(f"📁 模型路径: {result['best_dir']}")
+    #         print(f"📊 最优验证损失: {result['best_val_loss']:.4f}")
+
+    #         # 显示测试结果
+    #         test_metrics = result['test_metrics']
+    #         print("\n📈 test_metrics:")
+    #         for metric, value in test_metrics.items():
+    #             if isinstance(value, (int, float)):
+    #                 print(f"  {metric}: {value:.4f}")
             
-            seed=raw_seed+run_i
+    #         task.get_logger().report_single_value(name="ft_metric", value=result['finetune_metrics'])
 
-            try:
-                # 重新设置种子
-                from config import setup_global_seeds
-                setup_global_seeds(seed)
+    #         try:
+    #             sys.stdout.flush()
+    #             sys.stderr.flush()
+    #         except Exception:
+    #             pass
+    #         os._exit(0)
+    #         print("exit后仍未结束！！！！！")
 
-                result = run_finetuning(
-                    config,
-                    aggregation_mode=args.aggregation_mode,
-                    save_name_prefix=args.save_name_prefix,
-                    save_name_suffix=args.save_name_suffix,
-                    pretrained_dir=getattr(args, 'pretrained_dir', None),
-                    pretrain_exp_name=getattr(args, 'pretrain_exp_name', None),
-                    run_i=run_i,
-                )
-                result['seed'] = seed
-                all_results.append(result)
-
-                print(f"✅ 第 {run_i + 1} 次运行完成")
-                print(f"📊 最优验证损失: {result['best_val_loss']:.4f}")
-
-                # 显示测试结果
-                test_metrics = result.get('test_metrics', {})
-                if test_metrics:
-                    print("📈 测试指标:")
-                    for metric, value in test_metrics.items():
-                        if isinstance(value, (int, float)):
-                            print(f"  {metric}: {value:.4f}")
-
-            except Exception as e:
-                print(f"❌ 第 {run_i + 1} 次运行失败: {e}")
-                task.mark_failed()
-                raise
-
-        # 聚合统计结果
-        if all_results:
-            print(f"\n{'='*60}")
-            print("📊 聚合统计结果")
-            print(f"{'='*60}")
-
-            from src.utils.stats_aggregation import aggregate_experiment_results, print_aggregated_stats
-
-            aggregated = aggregate_experiment_results(
-                config, config.experiment_name, len(all_results), "finetune"
-            )
-            print_aggregated_stats(aggregated, "finetune")
-            task.get_logger().report_single_value(name="ft_metric", value=aggregated['statistics']['pk'])
-            
-        try:
-            sys.stdout.flush()
-            sys.stderr.flush()
-        except Exception:
-            pass
-        os._exit(0)
-
-    else:
-        # 普通单次运行
-        try:
-            result = run_finetuning(
-                config,
-                aggregation_mode=args.aggregation_mode,
-                save_name_prefix=args.save_name_prefix,
-                save_name_suffix=args.save_name_suffix,
-                pretrained_dir=getattr(args, 'pretrained_dir', None),
-                pretrain_exp_name=getattr(args, 'pretrain_exp_name', None),
-                run_i=None,  # 单个脚本运行时不使用run_i
-            )
-
-            print("\n" + "="*60)
-            print("🎉 微调完成!")
-            print("="*60)
-
-            print(f"📁 模型路径: {result['best_dir']}")
-            print(f"📊 最优验证损失: {result['best_val_loss']:.4f}")
-
-            # 显示测试结果
-            test_metrics = result['test_metrics']
-            print("\n📈 test_metrics:")
-            for metric, value in test_metrics.items():
-                if isinstance(value, (int, float)):
-                    print(f"  {metric}: {value:.4f}")
-            
-            task.get_logger().report_single_value(name="ft_metric", value=result['finetune_metrics'])
-
-            try:
-                sys.stdout.flush()
-                sys.stderr.flush()
-            except Exception:
-                pass
-            os._exit(0)
-            print("exit后仍未结束！！！！！")
-
-        except KeyboardInterrupt:
-            print("\n⚠️ 用户中断训练")
-            task.mark_failed()
-            return 130
-        except Exception as e:
-            print(f"\n❌ 微调失败: {e}")
-            task.mark_failed()
-            import traceback
-            traceback.print_exc()
-            return 1
+    #     except KeyboardInterrupt:
+    #         print("\n⚠️ 用户中断训练")
+    #         task.mark_failed()
+    #         return 130
+    #     except Exception as e:
+    #         print(f"\n❌ 微调失败: {e}")
+    #         task.mark_failed()
+    #         import traceback
+    #         traceback.print_exc()
+    #         return 1
 
 
 if __name__ == "__main__":

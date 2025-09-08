@@ -217,6 +217,9 @@ def apply_args_to_config(config: ProjectConfig, args: argparse.Namespace, *, com
         config.serialization.multiple_sampling.enabled = args.mult > 1
         print(f"🎯 serialization.multiple_sampling.num_realizations = {args.mult}")
     
+    if hasattr(args, 'pool') and args.pool:
+        config.bert.architecture.pooling_method = args.pool
+        print(f"🎯 bert.architecture.pooling_method = {args.pool}")
     # 任务参数
     if hasattr(args, 'task') and args.task:
         config.task.type = args.task
@@ -334,6 +337,7 @@ def add_all_args(parser: argparse.ArgumentParser, include_finetune: bool = True)
     train_group.add_argument("--batch_size", type=int, help="批次大小")
     train_group.add_argument("--learning_rate", "--lr", type=float, help="学习率")
     train_group.add_argument("--mult", type=int, help="多重采样次数")
+    train_group.add_argument("--pool", type=str, help="序列池化方法")
 
     # 预训练特有架构参数（仅在预训练脚本中会实际使用）
     # arch_group = parser.add_argument_group('BERT架构')
