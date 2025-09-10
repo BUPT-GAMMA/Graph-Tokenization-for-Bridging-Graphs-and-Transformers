@@ -215,11 +215,17 @@ def apply_args_to_config(config: ProjectConfig, args: argparse.Namespace, *, com
     if hasattr(args, 'mult') and args.mult:
         config.serialization.multiple_sampling.num_realizations = args.mult
         config.serialization.multiple_sampling.enabled = args.mult > 1
-        print(f"🎯 serialization.multiple_sampling.num_realizations = {args.mult}")
+        print(f"🎯 serialization.multiple_sampling.num_realizations = {args.mult},enable={config.serialization.multiple_sampling.enabled}")
     
     if hasattr(args, 'pool') and args.pool:
         config.bert.architecture.pooling_method = args.pool
         print(f"🎯 bert.architecture.pooling_method = {args.pool}")
+    if hasattr(args, 'max_length') and args.max_length:
+        config.bert.architecture.max_seq_length = args.max_length
+        print(f"🎯 bert.architecture.max_seq_length = {args.max_length}")
+    if hasattr(args, 'max_len_policy') and args.max_len_policy:
+        config.bert.architecture.max_len_policy = args.max_len_policy
+        print(f"🎯 bert.architecture.max_len_policy = {args.max_len_policy}")
     # 任务参数
     if hasattr(args, 'task') and args.task:
         config.task.type = args.task
@@ -338,6 +344,8 @@ def add_all_args(parser: argparse.ArgumentParser, include_finetune: bool = True)
     train_group.add_argument("--learning_rate", "--lr", type=float, help="学习率")
     train_group.add_argument("--mult", type=int, help="多重采样次数")
     train_group.add_argument("--pool", type=str, help="序列池化方法")
+    train_group.add_argument("--max_length", type=int, help="最大长度")
+    train_group.add_argument("--max_len_policy", type=str, help="最大长度策略")
 
     # 预训练特有架构参数（仅在预训练脚本中会实际使用）
     # arch_group = parser.add_argument_group('BERT架构')

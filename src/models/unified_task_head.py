@@ -11,12 +11,39 @@ from __future__ import annotations
 from typing import Dict
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 from src.utils.logger import get_logger
 
 # 创建模块级logger
 logger = get_logger(__name__)
 
+# class MLMHead(nn.Module):
+#     """
+#     BERT-MLM标准头：
+#       transform: Linear(H,H) + GELU + LayerNorm
+#       decoder  : 权重与 word_embeddings.weight 绑定 + 独立 bias
+#     输入: [B, T, H] -> 输出: [B, T, V]
+#     """
+#     def __init__(self, hidden_size, vocab_size, embedding_weight, layer_norm_eps=1e-12, dtype=torch.float32):
+#         super().__init__()
+#         self.dense = nn.Linear(hidden_size, hidden_size)
+#         self.act   = nn.GELU()
+#         self.ln    = nn.LayerNorm(hidden_size, eps=layer_norm_eps)
+#         self.decoder_bias = nn.Parameter(torch.zeros(vocab_size))
+#         # 绑定外部 embedding 的权重张量（[V, H]）
+#         self.embedding_weight = embedding_weight
+#         self.dtype = dtype
+#         # BERT 风格初始化
+#         nn.init.normal_(self.dense.weight, mean=0.0, std=0.02)
+#         nn.init.zeros_(self.dense.bias)
+#         nn.init.zeros_(self.decoder_bias)
+
+#     def forward(self, hidden_states):  # [B,T,H]
+#         x = self.ln(self.act(self.dense(hidden_states)))
+#         W = self.embedding_weight.to(x.dtype)      # [V,H]
+#         b = self.decoder_bias.to(x.dtype)          # [V]
+#         return F.linear(x, W, b)                   # [B,T,V]
 
 class UnifiedTaskHead(nn.Module):
     """统一任务头管理器 - 根据任务类型构建不同结构的预测头"""
@@ -27,6 +54,7 @@ class UnifiedTaskHead(nn.Module):
         task_type: str,     # 任务类型：'mlm', 'classification', 'regression'等
         output_dim: int,    # 输出维度：MLM=vocab_size, 分类=num_classes, 回归=1或num_targets
         config: Dict, # 任务头配置参数
+        embedding_weight: torch.Tensor=None,
         dtype: torch.dtype = torch.float32
     ):
         super().__init__()
@@ -37,10 +65,13 @@ class UnifiedTaskHead(nn.Module):
         assert input_dim is not None and input_dim > 0, "输入维度不能为空"
         assert output_dim is not None and output_dim > 0, "输出维度不能为空"
         
+        
         if task_type == 'mlm':
             # MLM任务：简单线性投影，不需要复杂结构
             # input: [batch_size, seq_len, hidden_size] → output: [batch_size, seq_len, vocab_size]
+            assert embedding_weight is not None, "embedding_weight不能为空"
             self.head = nn.Linear(input_dim, output_dim, dtype=dtype)  # hidden_size → vocab_size
+# self.head = MLMHead(input_dim, output_dim, embedding_weight, dtype=dtype)  # hidden_size → vocab_size
             logger.info(f"🔤 MLM任务头: Linear({input_dim} → {output_dim})")
         else:
             # 其他任务：多层感知机，支持更复杂的特征变换

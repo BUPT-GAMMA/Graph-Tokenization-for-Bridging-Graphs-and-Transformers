@@ -3,65 +3,73 @@
 # mutagenicity,molhiv,qm9,twitter
 python batch_finetune_simple.py \
     --encoder gte \
+    --mult 100 --learning_rate 1e-5\
+    --datasets mutagenicity,qm9 --bpe_scenarios all,raw \
+    --methods smiles,topo,dfs,bfs \
+    --experiment_group main/1/mult100 --repeat_runs 1\
+    --commands_only
+python batch_finetune_simple.py \
+    --encoder gte \
     --mult 100 \
-    --datasets mutagenicity,qm9 --bpe_scenarios all,random,raw \
-    --methods eulerian,feuler,cpp,fcpp,smiles,topo,dfs,bfs \
-    --experiment_group main/1/mult100 --repeat_runs 2\
+    --datasets mutagenicity,qm9 --bpe_scenarios all,raw \
+    --methods eulerian,feuler,cpp,fcpp \
+    --experiment_group main/1/mult100 --repeat_runs 1\
     --commands_only
 python batch_finetune_simple.py \
     --encoder gte \
     --learning_rate 1e-5 --mult 100 \
-    --datasets molhiv,twitter --bpe_scenarios all,random,raw \
+    --datasets molhiv,twitter --bpe_scenarios all,raw \
     --methods eulerian,feuler,cpp,fcpp,smiles,topo,dfs,bfs \
-    --experiment_group main/1/mult100 --repeat_runs 2\
+    --experiment_group main/1/mult100 --repeat_runs 1\
     --commands_only
 #normal
 # python batch_finetune_simple.py \
 #     --encoder gte \
-#     --datasets mutagenicity,qm9,twitter --bpe_scenarios all,random,raw \
+#     --datasets mutagenicity,qm9,twitter --bpe_scenarios all,raw \
 #     --methods eulerian,feuler,cpp,fcpp \
-#     --experiment_group main/1/mult100 --repeat_runs 2\
+#     --experiment_group main/1/mult100 --repeat_runs 1\
 #     --commands_only
 
 python batch_finetune_simple.py \
+    --mult 100 \
     --encoder bert \
-    --datasets mutagenicity,molhiv,qm9,twitter --bpe_scenarios all,random,raw \
+    --datasets mutagenicity,molhiv,qm9,twitter --bpe_scenarios all,raw \
     --methods eulerian,feuler,cpp,fcpp,smiles,topo,dfs,bfs \
-    --experiment_group main/1/mult100 --repeat_runs 2\
+    --experiment_group main/1/mult100 --repeat_runs 1\
     --commands_only
 
 
 # dblp
 python batch_finetune_simple.py \
     --encoder gte \
-    --batch_size 32 --learning_rate 1e-5\
-    --datasets dblp --bpe_scenarios all,random,raw \
+    --batch_size 16 --learning_rate 1e-5 --mult 100  \
+    --datasets dblp --bpe_scenarios all,raw \
     --methods eulerian,feuler,cpp,fcpp,smiles,topo,dfs,bfs \
-    --experiment_group main/1/mult100 --repeat_runs 2\
+    --experiment_group main/1/mult100 --repeat_runs 1\
     --commands_only  
 #normal
 python batch_finetune_simple.py \
     --encoder bert \
-    --batch_size 32 \
-    --datasets dblp --bpe_scenarios all,random,raw \
+    --batch_size 16 --mult 100 \
+    --datasets dblp --bpe_scenarios all,raw \
     --methods eulerian,feuler,cpp,fcpp,smiles,topo,dfs,bfs \
-    --experiment_group main/1/mult100 --repeat_runs 2\
+    --experiment_group main/1/mult100 --repeat_runs 1\
     --commands_only  
 
 # peptides
 # python batch_finetune_simple.py \
 #     --encoder gte \
 #     --batch_size 32 --learning_rate 1e-5\
-#     --datasets peptides_func,peptides_struct --bpe_scenarios all,random,raw \
+#     --datasets peptides_func,peptides_struct --bpe_scenarios all,raw \
 #     --methods eulerian,feuler,cpp,fcpp,smiles,topo,dfs,bfs \
 #     --experiment_group main/1/mult100 --repeat_runs 2\
 #     --commands_only
 python batch_finetune_simple.py \
     --encoder bert,gte \
-    --batch_size 32 \
-    --datasets peptides_func,peptides_struct --bpe_scenarios all,random,raw \
+    --batch_size 16 --mult 100 \
+    --datasets peptides_func,peptides_struct --bpe_scenarios all,raw \
     --methods eulerian,feuler,cpp,fcpp,smiles,topo,dfs,bfs \
-    --experiment_group main/1/mult100 --repeat_runs 2\
+    --experiment_group main/1/mult100 --repeat_runs 1\
     --commands_only
 
 
@@ -69,17 +77,23 @@ python batch_finetune_simple.py \
 ### 下面是正常运行。
 python batch_finetune_simple.py \
     --encoder bert,gte \
-    --batch_size 32 \
-    --datasets coildel --bpe_scenarios all,random,raw \
+    --batch_size 16 --mult 100 \
+    --datasets coildel --bpe_scenarios all,raw \
     --methods eulerian,feuler,cpp,fcpp,smiles,topo,dfs,bfs \
-    --experiment_group main/1/mult100 --repeat_runs 2\
+    --experiment_group main/1/mult100 --repeat_runs 1\
     --commands_only
 
 # zinc,aqsol
 python batch_finetune_simple.py \
-    --encoder bert,gte \
-    --datasets zinc,aqsol,colors3 --bpe_scenarios all,random,raw \
+    --encoder bert,gte --mult 100 \
+    --datasets aqsol,colors3 --bpe_scenarios all,raw \
     --methods eulerian,feuler,cpp,fcpp,smiles,topo,dfs,bfs \
-    --experiment_group main/1/mult100 --repeat_runs 2\
+    --experiment_group main/1/mult100 --repeat_runs 1\
     --commands_only
 
+python batch_finetune_simple.py \
+    --encoder bert,gte --mult 100 \
+    --datasets zinc --bpe_scenarios all,raw \
+    --methods eulerian,feuler,cpp,fcpp,smiles,topo,dfs,bfs \
+    --experiment_group main/1/mult100 --repeat_runs 1\
+    --commands_only

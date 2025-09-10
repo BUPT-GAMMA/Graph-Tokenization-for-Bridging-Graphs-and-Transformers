@@ -136,7 +136,7 @@ def build_hyperparams_list(hp_json: Optional[str], epochs: Optional[int],
 def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: List[Dict[str, Any]],
                      hyperparams_list: List[Dict[str, Any]], exp_prefix: str, tag: Optional[str],
                      aug_label: Optional[str], encoders: List[str] = None, 
-                     pretrain_exp_prefix: str = "") -> List[Dict[str, Any]]:
+                     pretrain_exp_prefix: str = "",mult=1) -> List[Dict[str, Any]]:
     """创建微调任务列表，使用 --encoder 指定 bert/gte，并默认从对应预训练模型加载"""
     tasks: List[Dict[str, Any]] = []
     
@@ -160,21 +160,18 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
                 continue
             for bpe_config in bpe_test_configs:
                 for encoder_config in encoder_configs:
+                    bpe_suffix = bpe_config["config_name"]
+                    aug_part = f"_{aug_label}" if aug_label else ""
+                    encoder_suffix = encoder_config["suffix"]
+                    mult_suffix = f"_{mult}" if mult > 1 else ""
+                    # 删除 _ft_ 和 epoch 标记，确保与预训练阶段的实验名一致
+                    experiment_name = f"{exp_prefix}{dataset}_{method}_{bpe_suffix}{aug_part}{encoder_suffix}{mult_suffix}{('_' + tag) if tag else ''}"
+                    # 🆕 特殊处理：peptides_struct数据集使用peptides_func的预训练模型（数据相同）
+                    pretrain_dataset = "peptides_func" if dataset == "peptides_struct" else dataset
+                    # pretrain_core = f"{pretrain_dataset}_{method}_{bpe_suffix}{aug_part}{encoder_config['pretrain_suffix']}"
+                    pretrain_exp_name = f"{exp_prefix}{pretrain_dataset}_{method}_{bpe_suffix}{aug_part}{encoder_config['pretrain_suffix']}{mult_suffix}{('_' + tag) if tag else ''}"
                     if hyperparams_list:
                         for params in hyperparams_list:
-                            bpe_suffix = bpe_config["config_name"]
-                            aug_part = f"_{aug_label}" if aug_label else ""
-                            encoder_suffix = encoder_config["suffix"]
-                            # 删除 _ft_ 和 epoch 标记，确保与预训练阶段的实验名一致
-                            exp_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}{encoder_suffix}"
-                            experiment_name = f"{exp_prefix}{exp_core}{('_' + tag) if tag else ''}"
-                            
-                            # 构建预训练实验名（与预训练阶段一致，不应附加 _default）
-                            # 🆕 特殊处理：peptides_struct数据集使用peptides_func的预训练模型（数据相同）
-                            pretrain_dataset = "peptides_func" if dataset == "peptides_struct" else dataset
-                            pretrain_core = f"{pretrain_dataset}_{method}_{bpe_suffix}{aug_part}{encoder_config['pretrain_suffix']}"
-                            pretrain_exp_name = f"{pretrain_exp_prefix}{pretrain_core}{('_' + tag) if tag else ''}"
-                            
                             tasks.append({
                                 "dataset": dataset,
                                 "method": method,
@@ -182,21 +179,10 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
                                 "bpe_config": bpe_config,
                                 "encoder_type": encoder_config["type"],
                                 "pretrain_exp_name": pretrain_exp_name,
-                                "experiment_name": experiment_name
+                                "experiment_name": experiment_name,
+                                "mult":mult
                             })
                     else:
-                        bpe_suffix = bpe_config["config_name"]
-                        aug_part = f"_{aug_label}" if aug_label else ""
-                        encoder_suffix = encoder_config["suffix"]
-                        exp_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}{encoder_suffix}"
-                        experiment_name = f"{exp_prefix}{exp_core}{('_' + tag) if tag else ''}"
-                        
-                        # 构建预训练实验名（与预训练阶段一致）
-                        # 🆕 特殊处理：peptides_struct数据集使用peptides_func的预训练模型（数据相同）
-                        pretrain_dataset = "peptides_func" if dataset == "peptides_struct" else dataset
-                        pretrain_core = f"{pretrain_dataset}_{method}_{bpe_suffix}{aug_part}{encoder_config['pretrain_suffix']}"
-                        pretrain_exp_name = f"{pretrain_exp_prefix}{pretrain_core}{('_' + tag) if tag else ''}"
-                        
                         tasks.append({
                             "dataset": dataset,
                             "method": method,
@@ -204,7 +190,8 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
                             "bpe_config": bpe_config,
                             "encoder_type": encoder_config["type"],
                             "pretrain_exp_name": pretrain_exp_name,
-                            "experiment_name": experiment_name
+                            "experiment_name": experiment_name,
+                            "mult":mult
                         })
     return tasks
 
@@ -509,6 +496,7 @@ def main():
         aug_label=aug_label,
         encoders=encoders_list,
         pretrain_exp_prefix=args.pretrain_exp_prefix,  # 🆕 传递预训练前缀
+        mult=args.mult
     )
     if not args.commands_stdout:
         print(f"总任务数: {len(tasks)}")
