@@ -139,10 +139,10 @@ class PeptidesStructLoader(BaseDataLoader):
         return 11  # 11个回归目标
 
     def get_default_target_property(self) -> Optional[str]:
-        return "targets"
+        return "labels"
 
     def get_downstream_label_keys(self) -> List[str]:
-        return ["targets"]
+        return ["labels"]
 
     def load_data(self):
         res = super().load_data()

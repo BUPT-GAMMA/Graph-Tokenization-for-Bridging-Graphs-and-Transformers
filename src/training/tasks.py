@@ -42,6 +42,12 @@ def build_regression_datasets(
     apply_graph_level_to_val: bool = bool(getattr(finetune_cfg, 'apply_graph_level_to_val', False))
     apply_graph_level_to_test: bool = bool(getattr(finetune_cfg, 'apply_graph_level_to_test', False))
     variant_selection: str = str(getattr(finetune_cfg, 'graph_variant_selection', 'random'))
+    print(
+        f"多重采样配置: 训练集图级采样={use_graph_level_sampling}，"
+        f"验证集图级采样={apply_graph_level_to_val}，"
+        f"测试集图级采样={apply_graph_level_to_test}，"
+        f"变体选择策略={variant_selection}"
+    )
 
     normalizer = LabelNormalizer(method=config.task.normalization)
     # 简化：始终按序列级标签拟合（多重采样次数一致，无需特别处理）

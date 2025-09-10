@@ -34,7 +34,7 @@ logger.propagate = False
 
 def run_finetune(
     config: ProjectConfig,
-    aggregation_mode: Literal["avg", "best", "learned"] = "avg",
+    aggregation_mode: Literal["avg", "best", "learned"] = "learned",
     save_name_prefix: Optional[str] = None,
     save_name_suffix: Optional[str] = None,
     pretrained_dir: Optional[str] = None,

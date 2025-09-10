@@ -85,7 +85,7 @@ def train_epoch(
             prev_batch = current_batch
             continue
             
-        if loss_value > 1000.0:
+        if (epoch_num > 1 and loss_value > 20.0) or (epoch_num > 1 and steps>10 and loss_value > (epoch_loss / (steps + 1)) * 10) :
             logger.warning(f"⚠️ Unusually large loss at step {steps+1}: {loss_value:.4f}")
             
         loss.backward()

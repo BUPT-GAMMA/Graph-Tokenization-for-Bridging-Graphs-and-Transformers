@@ -63,7 +63,9 @@ class BaseEncoder(nn.Module, ABC):
         # 支持HuggingFace config对象 (GTE等)
         else:
             return int(getattr(self.config, 'max_position_embeddings', getattr(self.config, 'max_seq_length', 512)))
-
+    @abstractmethod
+    def get_word_embeddings_weight(self) -> torch.nn.Parameter:
+        pass
     def save_model(self, save_path: str) -> None:
         # 默认无特殊保存逻辑，由具体实现决定
         pass
@@ -103,12 +105,15 @@ class BertEncoder(BaseEncoder):
         # 保存配置和词表管理器
         self.bert_config = bert_config
         self._hidden_size = config['hidden_size']
-        
+
         # 统一从config读取reset标志
         reset_weights = bool(config['reset_weights'])
         if reset_weights:
             self._reinitialize_bert_weights()
     
+    def get_word_embeddings_weight(self) -> torch.nn.Parameter:
+        return self.bert.embeddings.word_embeddings.weight  # [V, H]
+      
     def _reinitialize_bert_weights(self):
         """重新初始化BERT权重"""
         logger.info("🔄 重新初始化BERT权重...")
@@ -204,6 +209,9 @@ class GTEEncoder(BaseEncoder):
         assert isinstance(self._hidden_size, int), "GTE编码器hidden_size必须是整数"
         # 使用底层 config，保持单一数据源
         self.config = self.gte_model.config
+
+    def get_word_embeddings_weight(self) -> torch.nn.Parameter:
+        return self.gte_model.get_input_embeddings().weight  # [V, H]
 
     def encode(self, input_ids: torch.Tensor, attention_mask: torch.Tensor | None = None, pooling_method: str = 'mean') -> torch.Tensor:
         outputs = self.gte_model(input_ids=input_ids, attention_mask=attention_mask, return_dict=True)

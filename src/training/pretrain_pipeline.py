@@ -430,10 +430,10 @@ def train_bert_mlm(
             temp_model.save_model(str(best_model_dir))
 
             logger.info(f"✅ 最佳模型保存成功: {best_model_dir} (epoch {best_model_state['epoch']}, val_loss={best_model_state['val_loss']:.4f})")
-        else:
-            # 如果没有最佳状态，使用当前模型作为最佳模型
-            mlm_model.save_model(str(best_model_dir))
-            logger.warning("⚠️ 未找到最佳模型状态，使用当前模型作为最佳模型")
+        # else:
+        #     # 如果没有最佳状态，使用当前模型作为最佳模型
+        #     logger.warning("⚠️ 未找到最佳模型状态，使用当前模型作为最佳模型")
+        #     mlm_model.save_model(str(best_model_dir))
         
 
         # 训练总结

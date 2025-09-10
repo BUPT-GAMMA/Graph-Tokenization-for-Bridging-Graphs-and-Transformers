@@ -33,6 +33,7 @@ from src.models.unified_encoder import BaseEncoder
 from src.models.unified_task_head import UnifiedTaskHead
 
 
+
 class UniversalModel(nn.Module):
     """统一模型 - 支持所有任务类型"""
     
@@ -50,13 +51,18 @@ class UniversalModel(nn.Module):
         self.task_type = task_type
         self.pooling_method = pooling_method
         task_head_config={'hidden_ratio': 0.5, 'activation': 'relu', 'dropout': 0.1}
-
+        
+        embedding_weight = None
+        if task_type == 'mlm':
+            embedding_weight = encoder.get_word_embeddings_weight()  # <- 这里拿到 [V,H]
+            
         # 创建统一任务头
         self.task_head = UnifiedTaskHead(
             input_dim=encoder.get_hidden_size(),  # 编码器输出维度，如512或768
             task_type=task_type,
             output_dim=output_dim,                # 任务输出维度：MLM=vocab_size, 分类=num_classes
             config=task_head_config,
+            embedding_weight=embedding_weight,
             dtype=dtype
         )
         

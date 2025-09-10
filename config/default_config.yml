@@ -92,8 +92,8 @@ bert:
   
   # 预训练配置
   pretraining:
-    epochs: 10
-    batch_size: 64
+    epochs: 100
+    batch_size: 32
     learning_rate: 1.5e-4
     mask_prob: 0.09
     weight_decay: 0.01
@@ -129,7 +129,7 @@ bert:
       swap_window_size: 3
       
       # 一致性正则化配置
-      use_consistency_regularization: true
+      use_consistency_regularization: false
       consistency_alpha: 1.0  # R-Drop权重
       
       # 高斯噪声增强
@@ -145,8 +145,8 @@ bert:
   
   # 微调配置
   finetuning:
-    epochs: 20
-    batch_size: 64
+    epochs: 100
+    batch_size: 32
     learning_rate: 5e-5
     weight_decay: 0.01
     warmup_ratio: 0.025
@@ -184,7 +184,7 @@ bert:
       swap_window_size: 3
       
       # 一致性正则化配置
-      use_consistency_regularization: true
+      use_consistency_regularization: false
       consistency_alpha: 1.0  # R-Drop权重
       
       # 高斯噪声增强
