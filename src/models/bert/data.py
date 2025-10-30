@@ -402,6 +402,10 @@ class NormalizedRegressionDataset:
         self.is_multi_target = isinstance(labels[0], (list, tuple, torch.Tensor)) if len(labels) > 0 else False
 
         # 若启用图级采样，构建 gid -> indices 的映射与图级标签
+        if self.group_by_graph:
+            from collections import OrderedDict
+            gid_to_indices = OrderedDict()
+            for idx, gid in enumerate(self.graph_ids):
                 gid_to_indices.setdefault(int(gid), []).append(idx)
             self._gid_to_indices = gid_to_indices
             self._unique_gids = list(gid_to_indices.keys())
@@ -414,6 +418,7 @@ class NormalizedRegressionDataset:
             # 多目标回归：显示目标维度信息
             num_targets = len(labels[0]) if len(labels) > 0 else 1
             logger.info(f"   多目标回归，目标维度: {num_targets}")
+            # 计算每个目标的范围（转换为numpy数组便于计算）
             import numpy as np
             labels_array = np.array(labels)
             min_vals = labels_array.min(axis=0)

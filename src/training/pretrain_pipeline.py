@@ -15,8 +15,15 @@ from __future__ import annotations
 
 import time
 from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional
 # from pathlib import Path  # unused
 import json
+
+# 🆕 Optuna剪枝支持
+try:
+    import optuna
+except ImportError:
+    optuna = None  # 可选依赖，不强制要求
 
 # 🆕 Optuna剪枝支持
 try:
@@ -53,21 +60,13 @@ def train_bert_mlm(
     BERT MLM预训练主函数
     
     Args:
-        config: 项目配置对象，包含数据集、序列化方法、训练超参数等所有配置
-        run_i: 重复运行编号（用于多实验重复运行场景），默认为None
-    
+        config: 项目配置
+        token_sequences: 包含"train"/"val"/"test"键的序列字典
+        udi: 统一数据接口
+        method: 序列化方法名，用于BPE Transform（如果需要）
+        
     Returns:
-        Dict[str, Any]: 包含训练结果的字典，包括：
-            - 最佳验证损失
-            - 训练历史
-            - 模型保存路径等
-    
-    流程：
-        1. 创建UnifiedDataInterface并加载数据
-        2. 通过get_training_data_flat获取序列数据
-        3. 获取词表并构建模型
-        4. 创建数据加载器（支持BPE Transform和图级采样）
-        5. 执行MLM训练循环
+        包含训练结果的字典
     """
     # 显示启动配置
     display_startup_config(logger, config, config.dataset.name, config.serialization.method, "预训练")
