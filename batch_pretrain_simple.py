@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-简单并行预训练脚本（可CLI配置/适配Slurm）
-=====================================
+简单并行预训练脚本（批量拼接 run_pretrain.py 的权威入口）
+======================================================
 
-在多GPU上并行运行预训练任务；支持命令行配置实验名前缀、增强开关、BPE场景与超参数，便于在集群平台提交与区分实验。
+作用：在多 GPU 上批量调用 `run_pretrain.py`，统一拼接实验名与分组，便于集群/多卡提交。
+注意：本脚本不引入新的参数语义，所有训练参数都下传给 `run_pretrain.py`。
 """
 
 import subprocess
@@ -27,11 +28,13 @@ DEFAULT_METHODS = ["feuler", "eulerian", "cpp", "fcpp", "topo", "smiles"]
 DEFAULT_GPUS = [0]
 # DEFAULT_BPE_SCENARIOS = ["raw", "all", "random", "gaussian"]
 DEFAULT_BPE_SCENARIOS = ["all"]
+<<<<<<< HEAD
 DEFAULT_HYPERPARAMS = [{"epochs": 100, "batch_size": 128, "learning_rate": 5e-4}]
+=======
+# 删除硬编码超参，使用config默认值，只在raw模型时调整学习率
+>>>>>>> dev
 DEFAULT_MLM_AUG_METHODS = [
     "random_deletion",
-    "random_insertion",
-    "random_replacement",
     "random_swap",
     "random_truncation",
 ]
@@ -110,6 +113,7 @@ def build_hyperparams_list(hp_json: Optional[str], epochs: Optional[int],
             if not isinstance(item, dict) or not {"epochs", "batch_size", "learning_rate"} <= set(item.keys()):
                 raise ValueError("--hyperparams_json 中每个对象必须包含 epochs, batch_size, learning_rate 三个键")
         return loaded
+<<<<<<< HEAD
     # 🆕 支持部分参数指定，缺失的用默认值填充
     if epochs is None and batch_size is None and learning_rate is None:
         return DEFAULT_HYPERPARAMS
@@ -121,11 +125,30 @@ def build_hyperparams_list(hp_json: Optional[str], epochs: Optional[int],
     final_learning_rate = learning_rate if learning_rate is not None else default_config["learning_rate"]
     
     return [{"epochs": int(final_epochs), "batch_size": int(final_batch_size), "learning_rate": float(final_learning_rate)}]
+=======
+    # 未指定三者且没有JSON：不下传任何训练超参，使用config默认
+    if epochs is None and batch_size is None and learning_rate is None:
+        return []
+
+    # 仅传递用户显式提供的项（其余保持由config默认）
+    params: Dict[str, Any] = {}
+    if epochs is not None:
+        params["epochs"] = int(epochs)
+    if batch_size is not None:
+        params["batch_size"] = int(batch_size)
+    if learning_rate is not None:
+        params["learning_rate"] = float(learning_rate)
+    return [params]
+>>>>>>> dev
 
 
 def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: List[Dict[str, Any]],
                      hyperparams_list: List[Dict[str, Any]], exp_prefix: str, tag: Optional[str],
+<<<<<<< HEAD
                      aug_label: Optional[str], encoders: List[str] = None) -> List[Dict[str, Any]]:
+=======
+                     aug_label: Optional[str], encoders: List[str] = None, mult: int = 1) -> List[Dict[str, Any]]:
+>>>>>>> dev
     """创建任务列表，支持灵活的编码器选择"""
     tasks: List[Dict[str, Any]] = []
     
@@ -133,6 +156,7 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
     if encoders is None:
         encoders = ["bert"]
     
+<<<<<<< HEAD
     # 根据指定的编码器类型构建配置
     encoder_configs = []
     for encoder_name in encoders:
@@ -144,6 +168,17 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
             encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "reinit": True, "suffix": "_gte_reinit"})
         else:
             raise ValueError(f"不支持的编码器类型: {encoder_name}。支持: bert, gte, gte-reset")
+=======
+    # 根据指定的编码器类型构建配置（仅 bert/gte）
+    encoder_configs = []
+    for encoder_name in encoders:
+        if encoder_name == "bert":
+            encoder_configs.append({"type": "bert", "suffix": "_bert"})
+        elif encoder_name == "gte":
+            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "suffix": "_gte"})
+        else:
+            raise ValueError(f"不支持的编码器类型: {encoder_name}。仅支持: bert,gte")
+>>>>>>> dev
     
     for dataset in datasets:
         for method in methods:
@@ -151,6 +186,7 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
                 continue
             for bpe_config in bpe_test_configs:
                 for encoder_config in encoder_configs:
+<<<<<<< HEAD
                     if hyperparams_list:
                         for params in hyperparams_list:
                             bpe_suffix = bpe_config["config_name"]
@@ -159,12 +195,24 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
                             # 删除 epoch 标记，确保与微调阶段的实验名一致
                             exp_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}{encoder_suffix}"
                             experiment_name = f"{exp_prefix}{exp_core}{('_' + tag) if tag else ''}"
+=======
+                    aug_part = f"_{aug_label}" if aug_label else ""
+                    bpe_suffix = bpe_config["config_name"]
+                    encoder_suffix = encoder_config["suffix"]
+                    mult_suffix = f"_{mult}" if mult > 1 else ""
+                    experiment_name = f"{exp_prefix}{dataset}_{method}_{bpe_suffix}{aug_part}{encoder_suffix}{mult_suffix}{('_' + tag) if tag else ''}"
+                    
+                    if hyperparams_list:
+                        for params in hyperparams_list:
+                            # 删除 epoch 标记，确保与微调阶段的实验名一致
+>>>>>>> dev
                             tasks.append({
                                 "dataset": dataset,
                                 "method": method,
                                 "hyperparams": params,
                                 "bpe_config": bpe_config,
                                 "encoder_type": encoder_config["type"],
+<<<<<<< HEAD
                                 "reinit_weights": encoder_config["reinit"],
                                 "experiment_name": experiment_name
                             })
@@ -174,13 +222,21 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
                         encoder_suffix = encoder_config["suffix"]
                         exp_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}{encoder_suffix}_default"
                         experiment_name = f"{exp_prefix}{exp_core}{('_' + tag) if tag else ''}"
+=======
+                                "experiment_name": experiment_name
+                            })
+                    else:
+>>>>>>> dev
                         tasks.append({
                             "dataset": dataset,
                             "method": method,
                             "hyperparams": None,
                             "bpe_config": bpe_config,
                             "encoder_type": encoder_config["type"],
+<<<<<<< HEAD
                             "reinit_weights": encoder_config["reinit"],
+=======
+>>>>>>> dev
                             "experiment_name": experiment_name
                         })
     return tasks
@@ -189,16 +245,22 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
 def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
              combined_config_json: Optional[str], log_dir: Optional[str],
              commands_only: bool = False, plain_logs: bool = False,
-             commands_file: Optional[str] = None) -> Optional[subprocess.Popen]:
+             commands_file: Optional[str] = None,
+             commands_stdout: bool = False,
+             repeat_runs: int = 1, mult: int = 1) -> Optional[subprocess.Popen]:
     """在指定GPU上运行单个任务"""
     cmd = [
-        "python", "run_pretrain.py",
+        "/home/gzy/py/tokenizerGraph/pretrain_wrapper.sh",
         "--dataset", task["dataset"],
         "--method", task["method"],
         "--experiment_group", experiment_group,
         "--experiment_name", task["experiment_name"],
         "--device", "auto"
     ]
+
+    # 添加mult参数传递给run脚本
+    if mult > 1:
+        cmd.extend(["--mult", str(mult)])
     # 透传离线日志样式：批量脚本通常倾向 offline 以减少tqdm
     if os.environ.get("TG_LOG_STYLE", "").lower() in {"online", "offline"}:
         cmd.extend(["--log_style", os.environ["TG_LOG_STYLE"].lower()])
@@ -207,13 +269,32 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
     if "bpe_encode_rank_mode" in bpe_config and bpe_config["bpe_encode_rank_mode"]:
         cmd.extend(["--bpe_encode_rank_mode", str(bpe_config["bpe_encode_rank_mode"])])
 
+    # 🆕 简化超参逻辑：默认使用config值，只在raw模型时调整学习率
+    # if bpe_config["bpe_encode_rank_mode"] == 'none':
+    #     # raw模型：将默认预训练学习率减半（3e-4 -> 1.5e-4）
+    #     cmd.extend(["--learning_rate", str(1e-4)])
+    
+    # 其他超参全部使用config默认值，不再通过命令行传递
     if task["hyperparams"]:
         params = task["hyperparams"]
-        cmd.extend([
-            "--epochs", str(params["epochs"]),
-            "--batch_size", str(params["batch_size"]),
-            "--learning_rate", str(params["learning_rate"])
-        ])
+        # 保留显式传递的超参（如果需要覆盖config默认值）
+        if "epochs" in params:
+            cmd.extend(["--epochs", str(params["epochs"])])
+        if "batch_size" in params:
+            cmd.extend(["--batch_size", str(params["batch_size"])])
+        if "learning_rate" in params :
+            # 非raw模型时才允许传递自定义学习率
+            cmd.extend(["--learning_rate", str(params["learning_rate"])])
+
+    # 添加编码器相关参数：使用 --encoder 设置 config 中的 encoder
+    if task.get("encoder_type"):
+        # 规范化到 bert/gte 两类
+        encoder_flag = "bert"
+        if task["encoder_type"] == "Alibaba-NLP/gte-multilingual-base":
+            encoder_flag = "gte"
+        cmd.extend(["--encoder", encoder_flag])
+    
+    # 不再支持通过 flag 控制 reset，统一使用 config 默认
 
     # 🆕 添加编码器相关参数
     if task.get("encoder_type") and task["encoder_type"] != "bert":
@@ -229,6 +310,10 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
     if plain_logs:
         cmd.append("--plain_logs")
 
+    # 🆕 添加重复运行参数
+    if repeat_runs > 1:
+        cmd.extend(["--repeat_runs", str(repeat_runs)])
+
     # 目标日志文件（也用于 commands_only 记录）
     stdout_dest = subprocess.PIPE
     log_path = None
@@ -239,15 +324,17 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
 
     safe_cmd_str = ' '.join(shlex.quote(part) for part in cmd)
 
-    if commands_only:
-        # 只记录命令（包含 CUDA_VISIBLE_DEVICES 环境）到统一文件（追加）
-        record_line = f"CUDA_VISIBLE_DEVICES={gpu_id} {safe_cmd_str}\n"
-        # 默认写入当前目录 commands.list；如提供 commands_file 则使用之
-        dest_file = commands_file or 'commands.list'
-        Path(os.path.dirname(dest_file) or '.').mkdir(parents=True, exist_ok=True)
-        with open(dest_file, 'a', encoding='utf-8') as fh:
-            fh.write(record_line)
-        print(f"✍️ 记录命令到 {dest_file}: {record_line.strip()}")
+    if commands_only or commands_stdout:
+        # 只输出命令（包含 CUDA_VISIBLE_DEVICES 环境）
+        record_line = f"{safe_cmd_str}"
+        if commands_stdout:
+            print(record_line)
+        else:
+            dest_file = commands_file or 'commands.list'
+            Path(os.path.dirname(dest_file) or '.').mkdir(parents=True, exist_ok=True)
+            with open(dest_file, 'a', encoding='utf-8') as fh:
+                fh.write(record_line + "\n")
+            print(f"✍️ 记录命令到 {dest_file}: {record_line}")
         return None
 
     # 执行模式：重定向子进程输出
@@ -328,7 +415,11 @@ def main():
     parser.add_argument("--epochs", type=int, default=None, help="训练轮数（单组超参用）")
     parser.add_argument("--batch_size", type=int, default=None, help="批次大小（单组超参用）")
     parser.add_argument("--learning_rate", type=float, default=None, help="学习率（单组超参用）")
+    parser.add_argument("--mult", type=int, default=1, help="多重采样次数（单组超参用）")
     parser.add_argument("--hyperparams_json", type=str, default=None, help="多组超参数的JSON（字符串或文件路径），数组形式")
+
+    # 🆕 重复运行参数
+    parser.add_argument("--repeat_runs", type=int, default=1, help="重复运行次数，默认1次（不重复）")
 
     parser.add_argument("--use_augmentation", type=str, choices=["true", "false"], default=None,
                         help="是否启用MLM增强（true/false，不指定则保持config默认）")
@@ -337,15 +428,32 @@ def main():
     parser.add_argument("--encoders", type=str, default="bert", 
                         help="要运行的编码器类型，逗号分隔。可选: bert,gte,gte-reset。默认bert保持向后兼容")
 
+    # 编码器类型选择（改为 --encoder，且仅支持 bert,gte）
+    parser.add_argument("--encoder", type=str, default="bert",
+                        help="要运行的编码器类型，逗号分隔。可选: bert,gte。默认bert")
+
     parser.add_argument("--config_json", type=str, default=None,
                         help="JSON覆盖（字符串或文件路径）。会与增强开关产生的覆盖合并")
     parser.add_argument("--log_dir", type=str, default=DEFAULT_LOG_DIR, help="子任务日志目录（每个任务单独一个文件）")
     parser.add_argument("--log_style", type=str, choices=["online", "offline"], default=None, help="日志样式：online=使用tqdm；offline=每个epoch按10%输出摘要")
     parser.add_argument("--commands_only", action="store_true", help="仅记录将要运行的命令到统一文件（append），不实际执行")
     parser.add_argument("--commands_file", type=str, default=None, help="commands_only 模式下的统一命令文件；未指定则写入 <log_dir>/commands.list")
+    parser.add_argument("--commands_stdout", action="store_true", help="仅将将要运行的命令打印到标准输出，不执行也不写文件")
     parser.add_argument("--plain_logs", action="store_true", help="将子任务输出写入无ANSI/emoji的纯文本日志，解决乱码问题")
 
-    args = parser.parse_args()
+    try:
+        args = parser.parse_args()
+    except SystemExit as e:
+        print("\n❌ 参数解析失败！传入的参数信息:")
+        print("=" * 60)
+        print("脚本名称:", sys.argv[0])
+        print("所有传入参数:")
+        for i, arg in enumerate(sys.argv[1:], 1):
+            print(f"  {i:2d}: {arg}")
+        print("=" * 60)
+        print("请检查参数是否正确，或使用 --help 查看帮助信息")
+        print("=" * 60)
+        raise
 
     datasets = parse_list_arg(args.datasets) or DEFAULT_DATASETS
     methods = parse_list_arg(args.methods) or DEFAULT_METHODS
@@ -387,30 +495,41 @@ def main():
     if args.use_augmentation is not None:
         aug_label = "aug" if args.use_augmentation == "true" else "noaug"
 
-    print("🚀 开始并行预训练...")
-    print(f"实验组: {args.experiment_group}")
-    print(f"数据集: {datasets}")
-    print(f"方法: {methods}")
-    print(f"BPE场景: {scenarios}")
-    print(f"可用GPU: {gpus}")
-    if combined_config_json:
-        print("📝 合并后的JSON覆盖将传入子进程 --config_json")
-    if args.exp_prefix:
-        print(f"🏷️ 实验名前缀: {args.exp_prefix}")
-    if args.tag:
-        print(f"🏷️ 实验名附加标识: {args.tag}")
+    if not args.commands_stdout:
+        print("🚀 开始并行预训练...")
+        print(f"实验组: {args.experiment_group}")
+        print(f"数据集: {datasets}")
+        print(f"方法: {methods}")
+        print(f"BPE场景: {scenarios}")
+        print(f"可用GPU: {gpus}")
+        if combined_config_json:
+            print("📝 合并后的JSON覆盖将传入子进程 --config_json")
+        if args.exp_prefix:
+            print(f"🏷️ 实验名前缀: {args.exp_prefix}")
+        if args.tag:
+            print(f"🏷️ 实验名附加标识: {args.tag}")
 
     # 如果提供了 --log_style，则以 JSON 覆盖传递给子进程（与直接 --log_style 二选一都可生效）
     if args.log_style:
         combined_json_obj = merge_dicts(combined_json_obj, {"system": {"log_style": args.log_style}})
         combined_config_json = json.dumps(combined_json_obj, ensure_ascii=False)
 
+<<<<<<< HEAD
     # 🆕 解析编码器类型
     encoders_list = [enc.strip() for enc in args.encoders.split(',') if enc.strip()] if args.encoders else ["bert"]
+=======
+    # 解析编码器类型（--encoder）
+    encoders_list = [enc.strip() for enc in args.encoder.split(',') if enc.strip()] if args.encoder else ["bert"]
+    # 仅允许 bert 与 gte
+    for enc in encoders_list:
+        if enc not in {"bert", "gte"}:
+            raise ValueError(f"不支持的编码器类型: {enc}。仅支持: bert,gte")
+>>>>>>> dev
     
     tasks = create_task_list(
         datasets=datasets,
         methods=methods,
+        mult=args.mult,
         bpe_test_configs=bpe_test_configs,
         hyperparams_list=hyperparams_list,
         exp_prefix=args.exp_prefix,
@@ -418,10 +537,11 @@ def main():
         aug_label=aug_label,
         encoders=encoders_list,  # 🆕 传递编码器列表
     )
-    print(f"总任务数: {len(tasks)}")
-    if args.commands_only:
-        target_file = 'commands.list'
-        print(f"✍️ commands_only 模式：仅记录命令到 {target_file}，不执行子任务")
+    if not args.commands_stdout:
+        print(f"总任务数: {len(tasks)}")
+        if args.commands_only:
+            target_file = 'commands.list'
+            print(f"✍️ commands_only 模式：仅记录命令到 {target_file}，不执行子任务")
 
     running_processes = {}
     task_queue = tasks.copy()
@@ -444,8 +564,8 @@ def main():
             for gpu_id in gpus:
                 if gpu_id not in running_processes and task_queue:
                     task = task_queue.pop(0)
-                    process = run_task(task, gpu_id, args.experiment_group, combined_config_json, args.log_dir, args.commands_only, args.plain_logs, args.commands_file)
-                    if args.commands_only:
+                    process = run_task(task, gpu_id, args.experiment_group, combined_config_json, args.log_dir, args.commands_only, args.plain_logs, args.commands_file, args.commands_stdout, args.repeat_runs, args.mult)
+                    if args.commands_only or args.commands_stdout:
                         continue
                     running_processes[gpu_id] = (process, task)
                     if (not hasattr(process, "_tg_log_fh")) and (not args.plain_logs):
@@ -474,26 +594,27 @@ def main():
             for gpu_id in completed_gpus:
                 del running_processes[gpu_id]
 
-            if running_processes:
+            if running_processes and not args.commands_stdout:
                 time.sleep(2)
 
-        print("\n" + "="*60)
-        print("📊 任务执行总结")
-        print("="*60)
-        print(f"✅ 成功完成: {len(completed_tasks)}")
-        print(f"❌ 执行失败: {len(failed_tasks)}")
+        if not args.commands_stdout:
+            print("\n" + "="*60)
+            print("📊 任务执行总结")
+            print("="*60)
+            print(f"✅ 成功完成: {len(completed_tasks)}")
+            print(f"❌ 执行失败: {len(failed_tasks)}")
 
-        if completed_tasks:
-            print("\n✅ 成功任务:")
-            for task in completed_tasks:
-                print(f"  - {task['experiment_name']}")
+            if completed_tasks:
+                print("\n✅ 成功任务:")
+                for task in completed_tasks:
+                    print(f"  - {task['experiment_name']}")
 
-        if failed_tasks:
-            print("\n❌ 失败任务:")
-            for task, code in failed_tasks:
-                print(f"  - {task['experiment_name']} (退出码: {code})")
+            if failed_tasks:
+                print("\n❌ 失败任务:")
+                for task, code in failed_tasks:
+                    print(f"  - {task['experiment_name']} (退出码: {code})")
 
-        print("\n🎉 所有任务完成!")
+            print("\n🎉 所有任务完成!")
         return 0 if not failed_tasks else 1
 
     except Exception as e:

@@ -1,9 +1,17 @@
 from __future__ import annotations
 
+<<<<<<< HEAD
 from typing import Dict, Optional
 import numpy as np
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, accuracy_score, precision_recall_fscore_support, roc_auc_score, average_precision_score
 from sklearn.preprocessing import label_binarize
+=======
+from typing import Dict, Optional, Any
+import numpy as np
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, accuracy_score, precision_recall_fscore_support, roc_auc_score, average_precision_score
+from sklearn.preprocessing import label_binarize
+from torch.utils.tensorboard import SummaryWriter
+>>>>>>> dev
 
 
 def compute_regression_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, float]:
@@ -184,5 +192,67 @@ def compute_multi_target_regression_metrics(
 
 
 
-
-
+def add_metrics_to_writer(writer: SummaryWriter, base: str, metrics: Dict[str, float], task: str):
+    if task == "regression":
+      assert 'mae' in metrics, "回归任务需要计算MAE"
+      writer.add_scalar(f'{base}/MAE', float(metrics['mae']))
+      if 'mse' in metrics:
+        writer.add_scalar(f'{base}/MSE', float(metrics['mse']))
+      if 'r2' in metrics:
+        writer.add_scalar(f'{base}/R2', float(metrics['r2']))
+    elif task == "classification":
+      if 'accuracy' in metrics:
+        writer.add_scalar(f'{base}/Accuracy', float(metrics['accuracy']))
+      if 'f1' in metrics:
+        writer.add_scalar(f'{base}/F1', float(metrics['f1']))
+      if 'roc_auc' in metrics:
+        writer.add_scalar(f'{base}/ROC_AUC', float(metrics['roc_auc']))
+      if 'ap' in metrics:
+        writer.add_scalar(f'{base}/AP', float(metrics['ap']))
+    elif task == "multi_label_classification":
+      assert 'ap' in metrics, "多标签分类任务需要计算AP"
+      writer.add_scalar(f'{base}/AP', float(metrics['ap']))
+    elif task == "multi_target_regression":
+      assert 'mae' in metrics, "多目标回归任务需要计算MAE"
+      writer.add_scalar(f'{base}/MAE', float(metrics['mae']))
+      if 'mse' in metrics:
+        writer.add_scalar(f'{base}/MSE', float(metrics['mse']))
+      if 'r2' in metrics:
+        writer.add_scalar(f'{base}/R2', float(metrics['r2']))
+    else:
+        raise ValueError(f"不支持的任务类型: {task}")
+def log_wandb_metrics(wandb_logger: Any,base: str, metrics: Dict[str, float], task: str):
+    if wandb_logger is None:
+       return
+    
+    wb_payload = {}
+    
+    if task == "regression":
+      assert 'mae' in metrics, "回归任务需要计算MAE"
+      wb_payload[f'{base}/MAE'] = float(metrics['mae'])
+      if 'mse' in metrics:
+        wb_payload[f'{base}/MSE'] = float(metrics['mse'])
+      if 'r2' in metrics:
+        wb_payload[f'{base}/R2'] = float(metrics['r2'])
+    elif task == "classification":
+      if 'accuracy' in metrics:
+        wb_payload[f'{base}/Accuracy'] = float(metrics['accuracy'])
+      if 'f1' in metrics:
+        wb_payload[f'{base}/F1'] = float(metrics['f1'])
+      if 'roc_auc' in metrics:
+        wb_payload[f'{base}/ROC_AUC'] = float(metrics['roc_auc'])
+      if 'ap' in metrics:
+        wb_payload[f'{base}/AP'] = float(metrics['ap'])
+    elif task == "multi_label_classification":
+      assert 'ap' in metrics, "多标签分类任务需要计算AP"
+      wb_payload[f'{base}/AP'] = float(metrics['ap'])
+    elif task == "multi_target_regression":
+      assert 'mae' in metrics, "多目标回归任务需要计算MAE"
+      wb_payload[f'{base}/MAE'] = float(metrics['mae'])
+      if 'mse' in metrics:
+        wb_payload[f'{base}/MSE'] = float(metrics['mse'])
+      if 'r2' in metrics:
+        wb_payload[f'{base}/R2'] = float(metrics['r2'])
+    else:
+        raise ValueError(f"不支持的任务类型: {task}")
+    wandb_logger.log(wb_payload)

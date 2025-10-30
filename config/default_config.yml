@@ -4,13 +4,17 @@
 # 系统配置
 system:
   seed: 42  # 固定随机种子，确保可重现性
-  device: auto  # auto=自动选择GPU/CPU
-  num_workers: 4  # 数据加载器线程数
+  device: cuda  # auto=自动选择GPU/CPU
+  num_workers: 1  # 数据加载器线程数
   persistent_workers: true  # DataLoader常驻worker，利于后端实例常驻
   log_style: online  # online=使用tqdm进度条; offline=每个epoch按10%输出摘要
 
+# 🆕 重复运行配置
+repeat_runs: 1  # 重复运行次数，默认1次（不重复）
+
 # 路径配置
 paths:
+  project_root: /home/gzy/py/tokenizerGraph  # 项目根目录（绝对路径）
   data_dir: data/
   cache_dir: cache/
   processed_dir: data/processed
@@ -20,25 +24,27 @@ paths:
 # 数据集配置
 dataset:
   name: qm9  # 数据集名称 (使用DGL格式)
-  limit: null  # null=全量, 13083=10%, 26166=20%, 65415=50%
+  limit: null  # legacy null=全量, 13083=10%, 26166=20%, 65415=50%
   use_cache: true
   splits:  # 数据分割比例
     train: 0.8
     val: 0.1
     test: 0.1
-  transforms:
-    # 运行时数据变换配置（在数据加载时应用）
-    normalize: false
-    augment: false
+
 
 # 序列化配置
 serialization:
   method: feuler  # feuler(原 graph_seq), topo(topological), eulerian, smiles
   # 多重采样配置（仅适用于支持随机性的序列化方法）
   multiple_sampling:
+<<<<<<< HEAD
     enabled: true          # 是否启用多重采样
     num_realizations: 10     # 每个图的采样次数
     flatten_variants: true  # 是否将多个采样结果平铺为独立样本
+=======
+    enabled: false          # 是否启用多重采样
+    num_realizations: 100     # 每个图的采样次数
+>>>>>>> dev
   bpe:  # BPE压缩配置
     enabled: true
     num_merges: 2000
@@ -55,14 +61,23 @@ serialization:
 
 # 编码后端配置（用于在线encode）
 encoding:
+<<<<<<< HEAD
   backend: cpp  # 可选: py-standard | numba | cpp （无隐式回退，缺失即报错）
+=======
+  backend: cpp  # 可选: py-standard | numba | cpp 
+>>>>>>> dev
   threads:
     omp_num_threads: 1
     mkl_num_threads: 1
 
 # 编码器配置
 encoder:
+<<<<<<< HEAD
   type: bert  # bert | Alibaba-NLP/gte-multilingual-base | 其他编码器
+=======
+  type: gte  # bert | gte | 其他编码器
+  reset_weights: true
+>>>>>>> dev
   
 # BERT模型配置
 bert:
@@ -73,13 +88,21 @@ bert:
     num_attention_heads: 4  # n_heads
     num_hidden_layers: 4  # n_layers
     intermediate_size: 2048  # d_ff
+<<<<<<< HEAD
     max_seq_length: 1027  # 最大上限（effective_max_length 不会超过此值）
+=======
+    max_seq_length: 8096  # 最大上限（effective_max_length 不会超过此值）
+>>>>>>> dev
     max_len_policy: max # max | sigma
     max_len_sigma_k: 3
     layer_norm_eps: 1e-12
     hidden_dropout_prob: 0.1
     attention_probs_dropout_prob: 0.1
+<<<<<<< HEAD
     max_position_embeddings: 1027
+=======
+    max_position_embeddings: 8096
+>>>>>>> dev
     type_vocab_size: 2
     initializer_range: 0.02
     pooling_method: mean
@@ -91,6 +114,7 @@ bert:
   
   # 预训练配置
   pretraining:
+<<<<<<< HEAD
     epochs: 5
     batch_size: 32
     learning_rate: 2e-4
@@ -98,41 +122,149 @@ bert:
     warmup_steps: 1000
     weight_decay: 0.05
     max_grad_norm: 1.0
+=======
+    epochs: 200
+    batch_size: 32
+    learning_rate: 1e-4
+    mask_prob: 0.09
+    weight_decay: 0.1
+    warmup_ratio: 0.12
+    max_grad_norm: 2
+>>>>>>> dev
     save_steps: 1000
     eval_steps: 500
     vocab_min_freq: 1
     max_vocab_size: 5000
-    early_stopping_patience: 10
+    early_stopping_patience: 20
+    # 图级采样开关（仅预训练阶段）：将多重采样的多个序列在Dataset层面按图合并，每步从该图的变体中随机选一条
+    use_graph_level_sampling: true
+    graph_variant_selection: random  # random | first
+    apply_graph_level_to_val: true
     mlm_augmentation_methods:
-      - random_deletion
-      - random_insertion
-      - random_replacement
-      - random_swap
-      - random_truncation
+      # - random_deletion  # 这个和下面几种都是要么加了没用，要么加了还会略微变差一点。也不排除是我测试的问题，但是目前初步决定不再采用，只采用swap和r-drop
+      - random_swap  # 这个是效果显著最好的。就是只要加了他就能提一截。再往后训练时，那个一致性正则化也只能略微提一点。
+      # - random_truncation  # 这个是显著有害。排列组合效果最差的就是使用了这个。
+    
+    # 数据增强配置
+    augmentation_config:
+      # 全局控制：是否使用各种增强方法的概率
+      random_deletion_probability: 0.3
+      random_swap_probability: 0.5
+      random_truncation_probability: 0.2
+      
+      # 比例控制：对整个序列有多少比例的token需要应用增强
+      random_deletion_ratio: 0.1      # 10%的token被删除
+      random_swap_ratio: 0.1          # 5%的token在窗口内交换
+      random_truncation_min_ratio: 0.7 # 保留至少70%的长度
+      
+      # 交换操作的局部窗口大小
+      swap_window_size: 3
+      
+      # 一致性正则化配置
+      use_consistency_regularization: false
+      consistency_alpha: 1.0  # R-Drop权重
+      
+      # 高斯噪声增强
+      use_gaussian_noise: true
+      gaussian_noise_std: 0.01
+      gaussian_noise_probability: 0.3
+      
+      # 特征混合增强（仅回归任务，实验性）
+      use_feature_mixup: false
+      feature_mixup_alpha: 0.2
+      feature_mixup_probability: 0.2
 
   
   # 微调配置
   finetuning:
+<<<<<<< HEAD
     epochs: 60
     batch_size: 32
     learning_rate: 5e-5
     weight_decay: 0.15
+=======
+    epochs: 200
+    batch_size: 32
+    learning_rate: 1e-5
+    weight_decay: 0.1
+    warmup_ratio: 0.025
+>>>>>>> dev
     head_lr_multiplier: 2.0
-    early_stopping_patience: 10
+    early_stopping_patience: 20
     use_layered_lr: false
-    max_grad_norm: 1.0
+    max_grad_norm: 0.5
+    save_models: false
     regression_augmentation_methods:
       # - random_deletion
-      # - random_insertion
-      # - random_replacement
-      # - random_swap
+      - random_swap
       # - random_truncation
+      - sequence_masking
+    # 图级采样开关（仅微调阶段）：将多重采样的多个序列在Dataset层面按图合并，每步从该图的变体中随机选一条
+    use_graph_level_sampling: true
+    graph_variant_selection: random  # random | first
+    apply_graph_level_to_val: true
+    apply_graph_level_to_test: false
+    
+    # 数据增强配置
+    augmentation_config:
+      # 全局控制：是否使用各种增强方法的概率
+      random_deletion_probability: 0.3
+      random_swap_probability: 0.4
+      random_truncation_probability: 0.3
+      sequence_masking_probability: 0.3
+      
+      # 比例控制：对整个序列有多少比例的token需要应用增强
+      random_deletion_ratio: 0.1      # 10%的token被删除
+      random_swap_ratio: 0.05          # 5%的token在窗口内交换
+      random_truncation_min_ratio: 0.7 # 保留至少70%的长度
+      sequence_masking_ratio: 0.05     # 5%的token被掩码
+      
+      # 交换操作的局部窗口大小
+      swap_window_size: 3
+      
+      # 一致性正则化配置
+      use_consistency_regularization: false
+      consistency_alpha: 1.0  # R-Drop权重
+      
+      # 高斯噪声增强
+      use_gaussian_noise: true
+      gaussian_noise_std: 0.01
+      gaussian_noise_probability: 0.3
+      
+      # 特征混合增强（仅回归任务，实验性）
+      use_feature_mixup: false
+      feature_mixup_alpha: 0.2
+      feature_mixup_probability: 0.2
 
 # 任务配置 - 统一管理预训练和微调
 task:
   type: mlm  # mlm | regression | classification | binary_classification | multi_label_classification
   target_property: null  # 留空表示从数据集元信息自动推断（QM9默认 homo）
   normalization: standard  # standard, minmax, robust
+
+  # 🆕 损失函数配置（可选，用于超参搜索覆盖）
+  loss_config: null  # 如果为null，使用数据集默认配置
+  # 注意：实验测试显示Focal Loss和Weighted CE未能提升MOLHIV数据集的AUC性能
+  # 示例配置：
+  # # 1. 标准交叉熵 (默认推荐)
+  # loss_config:
+  #   method: standard     # 默认配置，测试中性能最佳
+  #
+  # # 2. Focal Loss (实验中未见AUC提升)
+  # loss_config:
+  #   method: focal        # focal | weighted | standard
+  #   gamma: 2.5          # Focal Loss参数
+  #   alpha: 1.0          # Focal Loss参数
+  #
+  # # 3. 加权交叉熵 (实验中未见AUC提升)
+  # loss_config:
+  #   method: weighted
+  #   auto_weights: true   # 基于训练集自动计算类别权重
+  #
+  # # 4. 加权交叉熵 (自定义权重)
+  # loss_config:
+  #   method: weighted
+  #   weights: [1.0, 2.0]  # 自定义权重，长度等于类别数
 
 # 日志和监控配置
 logging:
@@ -141,7 +273,7 @@ logging:
   tensorboard_log_dir: logs/tensorboard
   
   # WandB配置
-  use_wandb: true  # 是否启用WandB
+  use_wandb: false  # 是否启用WandB
   wandb_project: tokenizerGraph  # WandB项目名称（可被环境变量WANDB_PROJECT覆盖）
   wandb_entity: null  # WandB实体名称（可被环境变量WANDB_ENTITY覆盖）
   wandb_offline: true  # 是否强制离线模式（true=离线，false=自动检测，可被环境变量WANDB_MODE覆盖）

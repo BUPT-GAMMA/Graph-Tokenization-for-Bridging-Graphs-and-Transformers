@@ -17,13 +17,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Tuple, Optional
 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
 from config import ProjectConfig
 from src.data.unified_data_factory import get_dataloader
 from src.data.base_loader import BaseDataLoader
 from src.algorithms.serializer.serializer_factory import SerializerFactory
+from src.utils.logger import get_logger
 
 # from src.models.bert.vocab_manager import build_vocab_from_sequences  # 延迟导入避免循环依赖
-
+logger = get_logger(__name__)
 
 @dataclass
 class UnifiedDataInterface:
@@ -308,11 +313,21 @@ class UnifiedDataInterface:
         assert 'graph_ids' in serialized, "序列化结果缺少必需字段 'graph_ids'"
         graph_ids = serialized['graph_ids']
             
-        assert 'properties' in serialized, "序列化结果缺少必需字段 'properties'"
-        properties = serialized['properties']
-        if not properties:
-            # 如果没有属性，创建空字典列表
-            properties = [{} for _ in sequences]
+        # 无条件从 DataLoader 依据 graph_id 获取属性，保证标签与当前数据集一致
+        # 忽略序列化结果中的 properties 字段
+        loader = self.get_dataset_loader()
+        all_graphs = self.get_graphs()
+        properties: List[Dict[str, Any]] = []
+        for gid in graph_ids:
+            try:
+                ig = int(gid)
+                if 0 <= ig < len(all_graphs):
+                    properties.append(all_graphs[ig].get('properties', {}))
+                else:
+                    properties.append({})
+            except Exception:
+                print(f"数据加载时异常:从序列化的数据中，无法通过gid找到其在原本数据集中的对应label。无效的图ID: {gid}")
+                raise ValueError(f"无效的图ID: {gid}")
             
         # 组装返回格式：图ID在前
         sequences_with_ids = [(gid, seq) for seq, gid in zip(sequences, graph_ids)]
@@ -401,13 +416,42 @@ class UnifiedDataInterface:
             (val_seqs_with_id, _),
             (test_seqs_with_id, _),
         ) = self.get_training_data(method)
-        
+
         # 提取纯序列，丢弃graph_id
         train_sequences = [seq for _, seq in train_seqs_with_id]
         val_sequences = [seq for _, seq in val_seqs_with_id]
         test_sequences = [seq for _, seq in test_seqs_with_id]
-        
+
         return train_sequences, val_sequences, test_sequences
+
+    def get_training_data_flat_with_ids(
+        self,
+        method: str,
+    ) -> Tuple[
+        Tuple[List[List[int]], List[int]],  # train (sequences, graph_ids)
+        Tuple[List[List[int]], List[int]],  # val (sequences, graph_ids)
+        Tuple[List[List[int]], List[int]],  # test (sequences, graph_ids)
+    ]:
+        """
+        获取扁平化的训练序列数据，包含graph_ids，用于预训练图级采样。
+        """
+        (
+            (train_seqs_with_id, _),
+            (val_seqs_with_id, _),
+            (test_seqs_with_id, _),
+        ) = self.get_training_data(method)
+
+        # 提取序列和graph_id
+        train_sequences = [seq for _, seq in train_seqs_with_id]
+        train_gids = [gid for gid, _ in train_seqs_with_id]
+
+        val_sequences = [seq for _, seq in val_seqs_with_id]
+        val_gids = [gid for gid, _ in val_seqs_with_id]
+
+        test_sequences = [seq for _, seq in test_seqs_with_id]
+        test_gids = [gid for gid, _ in test_seqs_with_id]
+
+        return (train_sequences, train_gids), (val_sequences, val_gids), (test_sequences, test_gids)
 
     def _resolve_target_property(self, requested_target_property: str | None) -> str | None:
         """
@@ -559,13 +603,11 @@ class UnifiedDataInterface:
 
     def get_split_indices(
         self,
-        seed: Optional[int] = None,
     ) -> Dict[str, List[int]]:
         """
         获取数据集划分索引。
         
         Args:
-            seed: 随机种子参数（当前忽略，保留接口兼容性）
             
         Returns:
             包含 'train', 'val', 'test' 索引列表的字典
@@ -594,6 +636,96 @@ class UnifiedDataInterface:
         """获取数据集任务类型"""
         loader = self.get_dataset_loader()
         return loader.get_dataset_task_type()
+<<<<<<< HEAD
+=======
+
+    def get_loss_config(self) -> Optional[Dict[str, Any]]:
+        """获取损失配置，支持超参覆盖"""
+        # 1. 检查配置文件是否有覆盖
+        if hasattr(self.config, 'task') and hasattr(self.config.task, 'loss_config') and self.config.task.loss_config:
+            # 超参搜索覆盖
+            return self.config.task.loss_config
+
+        # 2. 返回数据集默认配置
+        loader = self.get_dataset_loader()
+        return loader.get_loss_config()
+
+    def get_class_weights(self) -> Optional[torch.Tensor]:
+        """获取类别权重（代理DataLoader的方法）"""
+        loader = self.get_dataset_loader()
+        return loader.get_class_weights()
+
+    def create_loss_function(self, task_type: str, num_classes: int) -> nn.Module:
+        """
+        根据配置创建损失函数
+
+        Args:
+            task_type: 任务类型
+            num_classes: 类别数
+
+        Returns:
+            损失函数实例
+        """
+        loss_config = self.get_loss_config()
+
+        if task_type == "mlm":
+            return nn.CrossEntropyLoss(ignore_index=-100)
+        elif task_type in ["binary_classification", "classification"]:
+            if loss_config and loss_config.get('method') == 'focal':
+                return self._create_focal_loss(loss_config)
+            elif loss_config and loss_config.get('method') == 'weighted':
+                return self._create_weighted_loss(loss_config, num_classes)
+            else:
+                return nn.CrossEntropyLoss()
+        elif task_type == "regression":
+            return nn.MSELoss()
+        elif task_type == "multi_target_regression":
+            return nn.L1Loss()
+        elif task_type == "multi_label_classification":
+            return nn.BCEWithLogitsLoss()
+        else:
+            raise ValueError(f"不支持的任务类型: {task_type}")
+
+    def _create_focal_loss(self, config: Dict[str, Any]) -> nn.Module:
+        """创建Focal Loss（PyTorch原生实现）"""
+        gamma = config.get('gamma', 2.0)
+        alpha = config.get('alpha', 1.0)
+
+        class FocalLoss(nn.Module):
+            def __init__(self, gamma=2.0, alpha=1.0):
+                super().__init__()
+                self.gamma = gamma
+                self.alpha = alpha
+
+            def forward(self, inputs, targets):
+                ce_loss = F.cross_entropy(inputs, targets, reduction='none')
+                pt = torch.exp(-ce_loss)
+                focal_loss = self.alpha * (1 - pt) ** self.gamma * ce_loss
+                return focal_loss.mean()
+
+        return FocalLoss(gamma=gamma, alpha=alpha)
+
+    def _create_weighted_loss(self, config: Dict[str, Any], num_classes: int) -> nn.Module:
+        """创建加权交叉熵损失"""
+        auto_weights = config.get('auto_weights', True)
+
+        if auto_weights:
+            # 从DataLoader获取自动计算的权重
+            weights = self.get_class_weights()
+            if weights is None:
+                # 如果无法获取权重，使用均匀权重
+                logger.warning("⚠️  无法计算类别权重，使用均匀权重")
+                weights = torch.ones(num_classes)
+        else:
+            # 使用自定义权重
+            custom_weights = config.get('weights')
+            if custom_weights is not None:
+                weights = torch.tensor(custom_weights, dtype=torch.float)
+            else:
+                weights = torch.ones(num_classes)
+
+        return nn.CrossEntropyLoss(weight=weights)
+>>>>>>> dev
     
     def create_empty_dataset_loader(self) -> BaseDataLoader:
         """

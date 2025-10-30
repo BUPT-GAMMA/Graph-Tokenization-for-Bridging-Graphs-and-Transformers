@@ -398,6 +398,24 @@ class BaseDataLoader(ABC):
     def get_downstream_label_keys(self) -> List[str]:
         """返回下游可用的标签键列表。默认空列表，子类可覆盖。"""
         return ['label']
+<<<<<<< HEAD
+=======
+
+    def get_loss_config(self) -> Optional[Dict[str, Any]]:
+        """
+        返回数据集推荐的损失函数配置。
+
+        Returns:
+            损失配置字典，None表示使用默认配置
+            格式: {
+                'method': 'focal',  # 'focal' | 'weighted' | 'standard'
+                'gamma': 2.5,       # Focal Loss参数
+                'alpha': 1.0,       # Focal Loss参数
+                'auto_weights': True  # 是否自动计算类别权重
+            }
+        """
+        return None  # 默认无特殊配置
+>>>>>>> dev
     
     def get_data_statistics(self) -> Dict[str, Any]:
         """
@@ -490,11 +508,61 @@ class BaseDataLoader(ABC):
     def get_token_readable(self, token_id: int) -> str:
         """
         获取token到可读字符串的映射（可选实现）
-        
+
         Returns:
             Dict[int, str]: 从token ID到可读字符串的映射
         """
         raise NotImplementedError(f"数据集 {self.dataset_name} 不支持token到可读字符串的映射")
+
+    def get_class_weights(self) -> Optional[torch.Tensor]:
+        """
+        计算类别权重（用于处理类别不平衡）
+
+        这个方法应该在数据加载完成后调用，确保_train_data可用
+
+        Returns:
+            torch.Tensor: 类别权重向量，形状为[num_classes]
+            如果不是分类任务或无法计算权重，返回None
+        """
+        if self._train_data is None:
+            self.load_data()
+
+        # 检查是否为分类任务
+        task_type = self.get_dataset_task_type()
+        if task_type not in ['classification', 'binary_classification']:
+            return None
+
+        # 检查是否有训练标签
+        if not self._train_data:
+            return None
+
+        # 统计训练集类别分布
+        train_labels = self._extract_labels(self._train_data)
+        if not train_labels:
+            return None
+
+        # 计算类别权重
+        num_classes = self.get_num_classes()
+        class_counts = torch.zeros(num_classes, dtype=torch.float)
+
+        for label in train_labels:
+            if isinstance(label, (int, torch.Tensor)):
+                label_idx = int(label) if isinstance(label, torch.Tensor) else label
+                if 0 <= label_idx < num_classes:
+                    class_counts[label_idx] += 1
+
+        # 计算权重：total_samples / (num_classes * class_count)
+        total_samples = len(train_labels)
+        class_weights = torch.zeros(num_classes, dtype=torch.float)
+
+        for i in range(num_classes):
+            if class_counts[i] > 0:
+                class_weights[i] = total_samples / (num_classes * class_counts[i])
+            else:
+                # 处理缺失类别的情况
+                class_weights[i] = 1.0
+
+        return class_weights
       
     # 注意：get_most_frequent_edge_type 必须由子类实现（见上方 abstractmethod 声明）
         

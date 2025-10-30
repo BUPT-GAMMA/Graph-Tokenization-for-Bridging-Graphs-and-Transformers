@@ -19,6 +19,7 @@ import re
 import subprocess
 import sys
 import math
+import shlex
 
 
 SBATCH_SCRIPT_DIR = "sbatch_scripts"
@@ -54,6 +55,34 @@ def read_tasks_from_file(tasks_file_path: str):
     return tasks
 
 
+def read_tasks_from_script(script_path: str):
+    """执行一个脚本（如 .sh 或 .py），将其标准输出的每一行作为一条任务命令。忽略空行和以#开头的行。"""
+    if not os.path.isfile(script_path):
+        print(f"FATAL: 指定的脚本文件不存在: {script_path}", file=sys.stderr)
+        sys.exit(1)
+    try:
+        # 以 /bin/bash 运行 .sh；其他文件也按可执行脚本处理
+        if script_path.endswith('.sh'):
+            proc = subprocess.run(["bash", script_path], check=True, capture_output=True, text=True)
+        else:
+            proc = subprocess.run([script_path], check=True, capture_output=True, text=True)
+        output = proc.stdout
+    except subprocess.CalledProcessError as e:
+        print(f"FATAL: 执行脚本失败: {script_path}", file=sys.stderr)
+        print(f"stderr: {e.stderr}", file=sys.stderr)
+        sys.exit(1)
+    tasks = []
+    for line in output.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith('#'):
+            continue
+        tasks.append(stripped)
+    if not tasks:
+        print("FATAL: 脚本标准输出为空或均为注释/空行。", file=sys.stderr)
+        sys.exit(1)
+    return tasks
+
+
 def sanitize_task_command(task: str) -> str:
     """移除命令中显式设置的 CUDA_VISIBLE_DEVICES，以避免与 Slurm 分配冲突。"""
     tokens = task.strip().split()
@@ -62,19 +91,82 @@ def sanitize_task_command(task: str) -> str:
     return sanitized
 
 
+def _parse_experiment_info_from_task(task: str) -> tuple[str, str]:
+    """从任务命令中解析 --experiment_group 与 --experiment_name。
+
+    支持 `--key value` 与 `--key=value` 两种写法。若缺失则给出默认占位。
+    """
+    try:
+        tokens = shlex.split(task)
+    except ValueError:
+        tokens = task.split()
+
+    exp_group = None
+    exp_name = None
+    i = 0
+    while i < len(tokens):
+        tok = tokens[i]
+        if tok.startswith("--experiment_group="):
+            exp_group = tok.split("=", 1)[1]
+        elif tok == "--experiment_group":
+            if i + 1 < len(tokens):
+                exp_group = tokens[i + 1]
+                i += 1
+        elif tok.startswith("--experiment_name="):
+            exp_name = tok.split("=", 1)[1]
+        elif tok == "--experiment_name":
+            if i + 1 < len(tokens):
+                exp_name = tokens[i + 1]
+                i += 1
+        i += 1
+
+    def sanitize_component(s: str | None) -> str:
+        if not s:
+            return "unknown"
+        # 仅保留常见安全字符，其余替换为下划线
+        return re.sub(r"[^A-Za-z0-9._-]", "_", s)
+
+    return sanitize_component(exp_group), sanitize_component(exp_name)
+
+
+def _detect_stage_from_task(task: str) -> str:
+    """从任务命令中粗略判断阶段：pretrain 或 finetune。若无法判断则返回 other。"""
+    try:
+        tokens = shlex.split(task)
+    except ValueError:
+        tokens = task.split()
+
+    joined = " ".join(tokens).lower()
+    # 优先精确匹配常见入口脚本
+    for tok in tokens:
+        low = tok.lower()
+        if low.endswith("run_finetune.py") or "finetune" in low:
+            return "finetune"
+        if low.endswith("run_pretrain.py") or "pretrain" in low:
+            return "pretrain"
+    # 回退基于整体字符串的包含判断
+    if "finetune" in joined:
+        return "finetune"
+    if "pretrain" in joined:
+        return "pretrain"
+    return "other"
+
+
 def generate_single_task_sbatch_script(task: str, cpus_per_task: int, job_name: str, partition: str = None) -> str:
     """生成单个任务的 sbatch 脚本内容。"""
     sanitized_task = sanitize_task_command(task)
+    exp_group, exp_name = _parse_experiment_info_from_task(sanitized_task)
+    stage = _detect_stage_from_task(sanitized_task)
+    log_base = f"{stage}_{exp_group}_{exp_name}"
     extra_directives = f"#SBATCH --partition={partition}\n" if partition else ""
     script_content = f"""#!/bin/bash
 #SBATCH --job-name={job_name}
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gres=gpu:1
-#SBATCH --time=12:00:00 
 #SBATCH --cpus-per-task={cpus_per_task}
-{extra_directives}#SBATCH --output=logs/{job_name}_%j.out
-#SBATCH --error=logs/{job_name}_%j.err
+{extra_directives}#SBATCH --output=logs/{log_base}_%j.out
+#SBATCH --error=logs/{log_base}_%j.err
 
 
 export NCCL_IB_HCA=mlx5_0,mlx5_1,mlx5_2,mlx5_3,mlx5_4,mlx5_6,mlx5_7,mlx5_8
@@ -97,9 +189,11 @@ def parse_sbatch_job_id(sbatch_stdout: str):
     return match.group(1)
 
 
+
 def main():
     parser = argparse.ArgumentParser(description="按任务文件逐条提交单卡 sbatch 作业（不扫描资源不指定节点）")
     parser.add_argument("--tasks-file", "-f", default="commands.list", type=str, help="包含任务指令的文本文件（每行一个）")
+    parser.add_argument("--script", type=str, default=None, help="可选：执行该脚本并将标准输出的每行作为任务命令")
     parser.add_argument("--cpus-per-task", type=int, default=2, help="每个任务申请的 CPU 数（默认 2）")
     parser.add_argument("--job-name-prefix", type=str, default="gzy", help="作业名前缀（默认 gzy_task）")
     parser.add_argument("--partition", "-p", type=str, default='h01,a01', help="Slurm 分区名（如 a01）。若集群无默认分区，则必须指定")
@@ -112,10 +206,14 @@ def main():
     # 任务编号起始
     parser.add_argument("--task-id-start", type=int, default=0, help="任务编号起始值（用于作业名后缀），默认 0")
     # 一一对应依赖：前后两半数量相等，第二半第k个依赖第一半第k个
-    parser.add_argument("--pairwise", action="store_true", help="启用一一对应依赖：将任务按前后两半划分，后半第k个依赖前半第k个（数量必须相等）")
+    parser.add_argument("--pair", action="store_true", help="启用一一对应依赖：将任务按前后两半划分，后半第k个依赖前半第k个（数量必须相等）")
     args = parser.parse_args()
 
-    tasks = read_tasks_from_file(args.tasks_file)
+    # 联动：如果提供了脚本，则优先用脚本的标准输出作为任务列表；否则读取文件
+    if args.script:
+        tasks = read_tasks_from_script(args.script)
+    else:
+        tasks = read_tasks_from_file(args.tasks_file)
 
     print("\n" + "=" * 40)
     print(" 提交计划预览")
@@ -139,11 +237,13 @@ def main():
             print(f"FATAL: --phase-split 参数无效: {args.phase_split}", file=sys.stderr)
             sys.exit(1)
 
-    # 若启用 pairwise，则强制将 split_idx 设为一半，并校验数量
-    if args.pairwise:
+    # 若启用 pair，则强制将 split_idx 设为一半，并校验数量
+    if args.pair:
         if len(tasks) % 2 != 0:
-            print("FATAL: --pairwise 模式要求任务数量为偶数（前后两半数量相等）", file=sys.stderr)
-            sys.exit(1)
+            print("WARNING: --pair 模式要求任务数量为偶数（前后两半数量相等）", file=sys.stderr)
+            #在开头补一个空行
+            tasks.insert(0, "")
+            # sys.exit(1)
         split_idx = len(tasks) // 2
 
     if args.dry_run:
@@ -159,7 +259,7 @@ def main():
                 batch_content = generate_single_task_sbatch_script(task, args.cpus_per_task, job_name, partition=args.partition)
                 print(f"[{i}] {job_name}: {batch_content}")
             print(f"\n[Phase 2] 任务数: {len(tasks) - split_idx}")
-            if args.pairwise:
+            if args.pair:
                 for offset, task in enumerate(tasks[split_idx:], start=0):
                     i = args.task_id_start + offset  # 对应前半编号
                     j = args.task_id_start + split_idx + offset  # 后半编号
@@ -226,7 +326,7 @@ def main():
             submitted += 1
 
         # Phase 2 提交
-        if args.pairwise:
+        if args.pair:
             # 一一对应：第 k 个后半依赖第 k 个前半
             if len(phase1_job_ids) != split_idx:
                 print("FATAL: Phase1 JobID 数量与 split_idx 不一致，无法建立一一对应依赖。", file=sys.stderr)

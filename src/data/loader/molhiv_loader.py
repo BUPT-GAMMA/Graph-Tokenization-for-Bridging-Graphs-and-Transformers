@@ -127,6 +127,38 @@ class MOLHIVLoader(BaseDataLoader):
     def get_num_classes(self) -> int:
         return 2
 
+<<<<<<< HEAD
+=======
+    def get_loss_config(self) -> Optional[Dict[str, Any]]:
+        """
+        molhiv数据集的专用损失配置
+
+        基于实验结果，使用标准交叉熵作为默认配置
+        Focal Loss和Weighted CE在测试中未能提升AUC性能
+        """
+        # 测试结果：Focal Loss和Weighted CE未能提升AUC指标
+        # 因此使用标准交叉熵作为默认配置
+
+        # 标准交叉熵 (默认配置)
+        return {
+            'method': 'standard'
+        }
+
+        # 备选方案：Focal Loss (测试中未见AUC提升)
+        # return {
+        #     'method': 'focal',
+        #     'gamma': 2.5,
+        #     'alpha': 1.0,
+        #     'auto_weights': False
+        # }
+
+        # 备选方案：加权交叉熵 (测试中未见AUC提升)
+        # return {
+        #     'method': 'weighted',
+        #     'auto_weights': True
+        # }
+
+>>>>>>> dev
     def get_node_attribute(self, graph: dgl.DGLGraph, node_id: int) -> int:
         if self._cache_built and id(graph) in self._node_attr_cache:
             return int(self._node_attr_cache[id(graph)][int(node_id)])

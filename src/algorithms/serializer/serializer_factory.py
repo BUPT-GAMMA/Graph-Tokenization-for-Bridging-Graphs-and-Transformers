@@ -92,7 +92,7 @@ class SerializerFactory:
     def get_available_serializers() -> list:
         """获取可用的序列化器类型"""
         return [
-            "smiles", 
+            "smiles", "smiles_1", "smiles_2", "smiles_3", "smiles_4",
             "dfs", "bfs", "eulerian", "topo", "feuler", "cpp", "fcpp",
         ]
     @staticmethod
