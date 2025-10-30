@@ -20,6 +20,7 @@ logger = get_logger(__name__)
 class TaskHandler:
     """
     处理不同任务类型的逻辑
+
     核心职责：
     1. 根据任务类型选择合适的损失函数
     2. 处理模型输出的后处理（如softmax、sigmoid）

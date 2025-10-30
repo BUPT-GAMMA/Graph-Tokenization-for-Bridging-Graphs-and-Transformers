@@ -233,13 +233,6 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
     
     # 不再支持通过 flag 控制 reset，统一使用 config 默认
 
-    # 🆕 添加编码器相关参数
-    if task.get("encoder_type") and task["encoder_type"] != "bert":
-        cmd.extend(["--encoder_type", task["encoder_type"]])
-    
-    if task.get("reinit_weights", False):
-        cmd.append("--reinit_weights")
-
     if combined_config_json:
         cmd.extend(["--config_json", combined_config_json])
 
@@ -360,10 +353,6 @@ def main():
 
     parser.add_argument("--use_augmentation", type=str, choices=["true", "false"], default=None,
                         help="是否启用MLM增强（true/false，不指定则保持config默认）")
-    
-    # 🆕 编码器类型选择（灵活配置）
-    parser.add_argument("--encoders", type=str, default="bert", 
-                        help="要运行的编码器类型，逗号分隔。可选: bert,gte,gte-reset。默认bert保持向后兼容")
 
     # 编码器类型选择（改为 --encoder，且仅支持 bert,gte）
     parser.add_argument("--encoder", type=str, default="bert",
