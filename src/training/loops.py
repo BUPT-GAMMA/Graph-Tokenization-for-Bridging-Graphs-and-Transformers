@@ -56,10 +56,6 @@ def train_epoch(
         if task_handler is None:
             raise ValueError("统一架构要求提供task_handler参数")
             
-<<<<<<< HEAD
-        outputs = model(input_ids, attention_mask)
-        loss = task_handler.compute_loss(outputs['outputs'], labels)
-=======
         # 创建增强器（简洁的方式）
         from src.training.augmentation import create_augmentation
         # 根据task_handler类型判断任务类型
@@ -92,7 +88,6 @@ def train_epoch(
         if (epoch_num > 1 and loss_value > 20.0) or (epoch_num > 1 and steps>10 and loss_value > (epoch_loss / (steps + 1)) * 10) :
             logger.warning(f"⚠️ Unusually large loss at step {steps+1}: {loss_value:.4f}")
             
->>>>>>> dev
         loss.backward()
         
         # 检测梯度NaN/Inf和异常大梯度
@@ -191,10 +186,6 @@ def evaluate_epoch(model, dataloader, device, task_handler, epoch_num: int = 1, 
         # 🆕 统一架构：所有模型都使用TaskHandler计算损失
         outputs = model(input_ids, attention_mask)
         loss = task_handler.compute_loss(outputs['outputs'], labels)
-<<<<<<< HEAD
-            
-        total_loss += loss.item()
-=======
         
         # 检测validation loss NaN/Inf
         loss_value = loss.item()
@@ -208,7 +199,6 @@ def evaluate_epoch(model, dataloader, device, task_handler, epoch_num: int = 1, 
             logger.warning(f"⚠️ Unusually large validation loss at step {steps+1}: {loss_value:.4f}")
             
         total_loss += loss_value
->>>>>>> dev
         steps += 1
 
         if log_style == "online":

@@ -28,11 +28,7 @@ DEFAULT_METHODS = ["feuler", "eulerian", "cpp", "fcpp", "topo", "smiles"]
 DEFAULT_GPUS = [0]
 # DEFAULT_BPE_SCENARIOS = ["raw", "all", "random", "gaussian"]
 DEFAULT_BPE_SCENARIOS = ["all"]
-<<<<<<< HEAD
-DEFAULT_HYPERPARAMS = [{"epochs": 100, "batch_size": 128, "learning_rate": 5e-4}]
-=======
 # 删除硬编码超参，使用config默认值，只在raw模型时调整学习率
->>>>>>> dev
 DEFAULT_MLM_AUG_METHODS = [
     "random_deletion",
     "random_swap",
@@ -113,19 +109,6 @@ def build_hyperparams_list(hp_json: Optional[str], epochs: Optional[int],
             if not isinstance(item, dict) or not {"epochs", "batch_size", "learning_rate"} <= set(item.keys()):
                 raise ValueError("--hyperparams_json 中每个对象必须包含 epochs, batch_size, learning_rate 三个键")
         return loaded
-<<<<<<< HEAD
-    # 🆕 支持部分参数指定，缺失的用默认值填充
-    if epochs is None and batch_size is None and learning_rate is None:
-        return DEFAULT_HYPERPARAMS
-    
-    # 从默认配置中取基准值
-    default_config = DEFAULT_HYPERPARAMS[0]
-    final_epochs = epochs if epochs is not None else default_config["epochs"]
-    final_batch_size = batch_size if batch_size is not None else default_config["batch_size"]
-    final_learning_rate = learning_rate if learning_rate is not None else default_config["learning_rate"]
-    
-    return [{"epochs": int(final_epochs), "batch_size": int(final_batch_size), "learning_rate": float(final_learning_rate)}]
-=======
     # 未指定三者且没有JSON：不下传任何训练超参，使用config默认
     if epochs is None and batch_size is None and learning_rate is None:
         return []
@@ -139,16 +122,11 @@ def build_hyperparams_list(hp_json: Optional[str], epochs: Optional[int],
     if learning_rate is not None:
         params["learning_rate"] = float(learning_rate)
     return [params]
->>>>>>> dev
 
 
 def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: List[Dict[str, Any]],
                      hyperparams_list: List[Dict[str, Any]], exp_prefix: str, tag: Optional[str],
-<<<<<<< HEAD
-                     aug_label: Optional[str], encoders: List[str] = None) -> List[Dict[str, Any]]:
-=======
                      aug_label: Optional[str], encoders: List[str] = None, mult: int = 1) -> List[Dict[str, Any]]:
->>>>>>> dev
     """创建任务列表，支持灵活的编码器选择"""
     tasks: List[Dict[str, Any]] = []
     
@@ -156,19 +134,6 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
     if encoders is None:
         encoders = ["bert"]
     
-<<<<<<< HEAD
-    # 根据指定的编码器类型构建配置
-    encoder_configs = []
-    for encoder_name in encoders:
-        if encoder_name == "bert":
-            encoder_configs.append({"type": "bert", "reinit": False, "suffix": ""})
-        elif encoder_name == "gte":
-            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "reinit": False, "suffix": "_gte_keep"})
-        elif encoder_name == "gte-reset":
-            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "reinit": True, "suffix": "_gte_reinit"})
-        else:
-            raise ValueError(f"不支持的编码器类型: {encoder_name}。支持: bert, gte, gte-reset")
-=======
     # 根据指定的编码器类型构建配置（仅 bert/gte）
     encoder_configs = []
     for encoder_name in encoders:
@@ -178,7 +143,6 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
             encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "suffix": "_gte"})
         else:
             raise ValueError(f"不支持的编码器类型: {encoder_name}。仅支持: bert,gte")
->>>>>>> dev
     
     for dataset in datasets:
         for method in methods:
@@ -186,16 +150,6 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
                 continue
             for bpe_config in bpe_test_configs:
                 for encoder_config in encoder_configs:
-<<<<<<< HEAD
-                    if hyperparams_list:
-                        for params in hyperparams_list:
-                            bpe_suffix = bpe_config["config_name"]
-                            aug_part = f"_{aug_label}" if aug_label else ""
-                            encoder_suffix = encoder_config["suffix"]
-                            # 删除 epoch 标记，确保与微调阶段的实验名一致
-                            exp_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}{encoder_suffix}"
-                            experiment_name = f"{exp_prefix}{exp_core}{('_' + tag) if tag else ''}"
-=======
                     aug_part = f"_{aug_label}" if aug_label else ""
                     bpe_suffix = bpe_config["config_name"]
                     encoder_suffix = encoder_config["suffix"]
@@ -205,38 +159,21 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
                     if hyperparams_list:
                         for params in hyperparams_list:
                             # 删除 epoch 标记，确保与微调阶段的实验名一致
->>>>>>> dev
                             tasks.append({
                                 "dataset": dataset,
                                 "method": method,
                                 "hyperparams": params,
                                 "bpe_config": bpe_config,
                                 "encoder_type": encoder_config["type"],
-<<<<<<< HEAD
-                                "reinit_weights": encoder_config["reinit"],
                                 "experiment_name": experiment_name
                             })
                     else:
-                        bpe_suffix = bpe_config["config_name"]
-                        aug_part = f"_{aug_label}" if aug_label else ""
-                        encoder_suffix = encoder_config["suffix"]
-                        exp_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}{encoder_suffix}_default"
-                        experiment_name = f"{exp_prefix}{exp_core}{('_' + tag) if tag else ''}"
-=======
-                                "experiment_name": experiment_name
-                            })
-                    else:
->>>>>>> dev
                         tasks.append({
                             "dataset": dataset,
                             "method": method,
                             "hyperparams": None,
                             "bpe_config": bpe_config,
                             "encoder_type": encoder_config["type"],
-<<<<<<< HEAD
-                            "reinit_weights": encoder_config["reinit"],
-=======
->>>>>>> dev
                             "experiment_name": experiment_name
                         })
     return tasks
@@ -514,17 +451,12 @@ def main():
         combined_json_obj = merge_dicts(combined_json_obj, {"system": {"log_style": args.log_style}})
         combined_config_json = json.dumps(combined_json_obj, ensure_ascii=False)
 
-<<<<<<< HEAD
-    # 🆕 解析编码器类型
-    encoders_list = [enc.strip() for enc in args.encoders.split(',') if enc.strip()] if args.encoders else ["bert"]
-=======
     # 解析编码器类型（--encoder）
     encoders_list = [enc.strip() for enc in args.encoder.split(',') if enc.strip()] if args.encoder else ["bert"]
     # 仅允许 bert 与 gte
     for enc in encoders_list:
         if enc not in {"bert", "gte"}:
             raise ValueError(f"不支持的编码器类型: {enc}。仅支持: bert,gte")
->>>>>>> dev
     
     tasks = create_task_list(
         datasets=datasets,

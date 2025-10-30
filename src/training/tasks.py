@@ -10,17 +10,11 @@ from src.models.bert.data import (
     LabelNormalizer,
 )
 from src.data.unified_data_interface import UnifiedDataInterface
-<<<<<<< HEAD
-
-
-
-=======
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
->>>>>>> dev
 def _effective_max_len(seqs, max_pos: int, config=None) -> int:
     if not seqs:
         return max_pos
@@ -67,22 +61,6 @@ def build_regression_datasets(
     val_eff = _effective_max_len(val_sequences, max_pos, config)
     test_eff = _effective_max_len(test_sequences, max_pos, config)
 
-<<<<<<< HEAD
-    # 创建统一的transforms
-    transforms = create_transforms_from_config(config, vocab_manager.get_valid_tokens(), "regression")
-    
-    train_ds = NormalizedRegressionDataset(
-        train_sequences, train_labels, vocab_manager, transforms, train_eff,
-        graph_ids=train_gids
-    )
-    val_ds = NormalizedRegressionDataset(
-        val_sequences, val_labels, vocab_manager, transforms, val_eff,
-        graph_ids=val_gids
-    )
-    test_ds = NormalizedRegressionDataset(
-        test_sequences, test_labels, vocab_manager, transforms, test_eff,
-        graph_ids=test_gids
-=======
     # 仅训练集启用增强；验证/测试使用NoOp
     train_transforms = create_transforms_from_config(config, vocab_manager.get_valid_tokens(), "regression", vocab_manager,logger)
     from src.models.bert.data import NoOpTransform
@@ -105,7 +83,6 @@ def build_regression_datasets(
         graph_ids=test_gids,
         group_by_graph=apply_graph_level_to_test,
         variant_selection='first',
->>>>>>> dev
     )
 
     train_ds.normalizer = normalizer
@@ -127,22 +104,6 @@ def build_classification_datasets(
     *,
     num_classes: int,
 ):
-<<<<<<< HEAD
-    # 🆕 直接从配置和UDI获取所需信息
-    max_pos = int(config.bert.architecture.max_position_embeddings)
-    vocab_manager = udi.get_vocab(method=method)
-    
-    train_eff = _effective_max_len(train_sequences, max_pos, config)
-    val_eff = _effective_max_len(val_sequences, max_pos, config)
-    test_eff = _effective_max_len(test_sequences, max_pos, config)
-
-    # 创建统一的transforms
-    transforms = create_transforms_from_config(config, vocab_manager.get_valid_tokens(), "classification")
-    
-    train_ds = ClassificationDataset(train_sequences, train_labels, vocab_manager, transforms, train_eff, train_gids)
-    val_ds = ClassificationDataset(val_sequences, val_labels, vocab_manager, transforms, val_eff, val_gids)
-    test_ds = ClassificationDataset(test_sequences, test_labels, vocab_manager, transforms, test_eff, test_gids)
-=======
     # 图级采样配置
     finetune_cfg = getattr(config.bert, 'finetuning')
     use_graph_level_sampling: bool = bool(getattr(finetune_cfg, 'use_graph_level_sampling', False))
@@ -178,7 +139,6 @@ def build_classification_datasets(
         group_by_graph=apply_graph_level_to_test,
         variant_selection='first',
     )
->>>>>>> dev
     return train_ds, val_ds, test_ds
 
 
@@ -223,11 +183,7 @@ def build_regression_loaders(
     if udi is not None and method is not None:
         try:
             from src.data.bpe_transform import create_bpe_worker_init_fn_from_udi
-<<<<<<< HEAD
-            bpe_worker_init_fn = create_bpe_worker_init_fn_from_udi(udi, config, method)
-=======
             bpe_worker_init_fn = create_bpe_worker_init_fn_from_udi(udi, config, method, split="train")
->>>>>>> dev
         except Exception as e:
             # 如果BPE创建失败，回退到无BPE模式（但不静默忽略错误）
             import logging
@@ -307,11 +263,7 @@ def build_classification_loaders(
     if udi is not None and method is not None:
         try:
             from src.data.bpe_transform import create_bpe_worker_init_fn_from_udi
-<<<<<<< HEAD
-            bpe_worker_init_fn = create_bpe_worker_init_fn_from_udi(udi, config, method)
-=======
             bpe_worker_init_fn = create_bpe_worker_init_fn_from_udi(udi, config, method, split="train")
->>>>>>> dev
         except Exception as e:
             # 如果BPE创建失败，回退到无BPE模式（但不静默忽略错误）
             import logging

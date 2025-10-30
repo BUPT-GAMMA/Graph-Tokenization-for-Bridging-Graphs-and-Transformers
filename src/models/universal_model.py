@@ -24,22 +24,15 @@ from typing import Dict, Optional
 import torch
 import torch.nn as nn
 
-<<<<<<< HEAD
-=======
 from src.utils.logger import get_logger
 
 # 创建模块级logger
 logger = get_logger(__name__)
 
->>>>>>> dev
 from src.models.unified_encoder import BaseEncoder
 from src.models.unified_task_head import UnifiedTaskHead
 
 
-<<<<<<< HEAD
-=======
-
->>>>>>> dev
 class UniversalModel(nn.Module):
     """统一模型 - 支持所有任务类型"""
     
@@ -49,47 +42,31 @@ class UniversalModel(nn.Module):
         task_type: str,
         output_dim: int,
         pooling_method: str = 'mean',
-<<<<<<< HEAD
-        task_head_config: Dict = None
-=======
         dtype: torch.dtype = torch.float32
->>>>>>> dev
     ):
         super().__init__()
         
         self.encoder = encoder
         self.task_type = task_type
         self.pooling_method = pooling_method
-<<<<<<< HEAD
-        
-=======
         task_head_config={'hidden_ratio': 0.5, 'activation': 'relu', 'dropout': 0.1}
         
         embedding_weight = None
         if task_type == 'mlm':
             embedding_weight = encoder.get_word_embeddings_weight()  # <- 这里拿到 [V,H]
             
->>>>>>> dev
         # 创建统一任务头
         self.task_head = UnifiedTaskHead(
             input_dim=encoder.get_hidden_size(),  # 编码器输出维度，如512或768
             task_type=task_type,
             output_dim=output_dim,                # 任务输出维度：MLM=vocab_size, 分类=num_classes
-<<<<<<< HEAD
-            config=task_head_config or {}
-=======
             config=task_head_config,
             embedding_weight=embedding_weight,
             dtype=dtype
->>>>>>> dev
         )
         
         # 保存元数据
         self.output_dim = output_dim
-<<<<<<< HEAD
-        self.vocab_manager = getattr(encoder, 'vocab_manager', None)
-=======
->>>>>>> dev
     
     def forward(
         self, 
@@ -178,10 +155,7 @@ class UniversalModel(nn.Module):
         
         # 保存模型权重
         torch.save(self.state_dict(), os.path.join(save_path, 'pytorch_model.bin'))
-<<<<<<< HEAD
-=======
         # print(list(self.state_dict().keys())[:10])
->>>>>>> dev
         
         # 保存配置信息
         config_to_save = {
@@ -192,13 +166,8 @@ class UniversalModel(nn.Module):
         }
         torch.save(config_to_save, os.path.join(save_path, 'config.bin'))
         
-<<<<<<< HEAD
-        print(f"🎯 UniversalModel已保存到: {save_path}")
-    
-=======
         logger.info(f"🎯 UniversalModel已保存到: {save_path}")
      
->>>>>>> dev
     @classmethod
     def load_model(cls, model_path: str, encoder: BaseEncoder) -> 'UniversalModel':
         """加载统一模型"""
@@ -219,9 +188,5 @@ class UniversalModel(nn.Module):
         state_dict = torch.load(os.path.join(model_path, 'pytorch_model.bin'), map_location='cpu')
         model.load_state_dict(state_dict)
         
-<<<<<<< HEAD
-        print(f"🎯 UniversalModel已从 {model_path} 加载完成")
-=======
         logger.info(f"🎯 UniversalModel已从 {model_path} 加载完成")
->>>>>>> dev
         return model

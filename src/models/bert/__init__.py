@@ -10,10 +10,6 @@ BERT训练Pipeline - Token ID序列支持
 
 from .vocab_manager import VocabManager, build_vocab_from_sequences
 from .config import BertConfig  # 🆕 BertConfig从单独文件导入
-<<<<<<< HEAD
-# BertMLM已迁移到备份目录，现在使用 src.models.universal_model.UniversalModel
-=======
->>>>>>> dev
 from .data import (
     MLMDataset,
     create_mlm_dataloader

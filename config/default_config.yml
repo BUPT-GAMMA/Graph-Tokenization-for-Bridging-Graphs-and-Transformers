@@ -37,14 +37,8 @@ serialization:
   method: feuler  # feuler(原 graph_seq), topo(topological), eulerian, smiles
   # 多重采样配置（仅适用于支持随机性的序列化方法）
   multiple_sampling:
-<<<<<<< HEAD
-    enabled: true          # 是否启用多重采样
-    num_realizations: 10     # 每个图的采样次数
-    flatten_variants: true  # 是否将多个采样结果平铺为独立样本
-=======
     enabled: false          # 是否启用多重采样
     num_realizations: 100     # 每个图的采样次数
->>>>>>> dev
   bpe:  # BPE压缩配置
     enabled: true
     num_merges: 2000
@@ -61,23 +55,15 @@ serialization:
 
 # 编码后端配置（用于在线encode）
 encoding:
-<<<<<<< HEAD
-  backend: cpp  # 可选: py-standard | numba | cpp （无隐式回退，缺失即报错）
-=======
   backend: cpp  # 可选: py-standard | numba | cpp 
->>>>>>> dev
   threads:
     omp_num_threads: 1
     mkl_num_threads: 1
 
 # 编码器配置
 encoder:
-<<<<<<< HEAD
-  type: bert  # bert | Alibaba-NLP/gte-multilingual-base | 其他编码器
-=======
   type: gte  # bert | gte | 其他编码器
   reset_weights: true
->>>>>>> dev
   
 # BERT模型配置
 bert:
@@ -88,21 +74,13 @@ bert:
     num_attention_heads: 4  # n_heads
     num_hidden_layers: 4  # n_layers
     intermediate_size: 2048  # d_ff
-<<<<<<< HEAD
-    max_seq_length: 1027  # 最大上限（effective_max_length 不会超过此值）
-=======
     max_seq_length: 8096  # 最大上限（effective_max_length 不会超过此值）
->>>>>>> dev
     max_len_policy: max # max | sigma
     max_len_sigma_k: 3
     layer_norm_eps: 1e-12
     hidden_dropout_prob: 0.1
     attention_probs_dropout_prob: 0.1
-<<<<<<< HEAD
-    max_position_embeddings: 1027
-=======
     max_position_embeddings: 8096
->>>>>>> dev
     type_vocab_size: 2
     initializer_range: 0.02
     pooling_method: mean
@@ -114,15 +92,6 @@ bert:
   
   # 预训练配置
   pretraining:
-<<<<<<< HEAD
-    epochs: 5
-    batch_size: 32
-    learning_rate: 2e-4
-    mask_prob: 0.15
-    warmup_steps: 1000
-    weight_decay: 0.05
-    max_grad_norm: 1.0
-=======
     epochs: 200
     batch_size: 32
     learning_rate: 1e-4
@@ -130,7 +99,6 @@ bert:
     weight_decay: 0.1
     warmup_ratio: 0.12
     max_grad_norm: 2
->>>>>>> dev
     save_steps: 1000
     eval_steps: 500
     vocab_min_freq: 1
@@ -177,18 +145,11 @@ bert:
   
   # 微调配置
   finetuning:
-<<<<<<< HEAD
-    epochs: 60
-    batch_size: 32
-    learning_rate: 5e-5
-    weight_decay: 0.15
-=======
     epochs: 200
     batch_size: 32
     learning_rate: 1e-5
     weight_decay: 0.1
     warmup_ratio: 0.025
->>>>>>> dev
     head_lr_multiplier: 2.0
     early_stopping_patience: 20
     use_layered_lr: false

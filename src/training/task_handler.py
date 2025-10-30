@@ -6,16 +6,10 @@
 保持简洁，避免过度设计。
 """
 
-<<<<<<< HEAD
-from typing import Optional, Dict
-import torch
-import torch.nn as nn
-=======
 from typing import Optional, Dict, Tuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
->>>>>>> dev
 import numpy as np
 
 from src.utils.logger import get_logger
@@ -26,47 +20,26 @@ logger = get_logger(__name__)
 class TaskHandler:
     """
     处理不同任务类型的逻辑
-<<<<<<< HEAD
-    
-=======
-
->>>>>>> dev
     核心职责：
     1. 根据任务类型选择合适的损失函数
     2. 处理模型输出的后处理（如softmax、sigmoid）
     3. 提供任务特定的预测方法
     """
-<<<<<<< HEAD
-    
-    def __init__(self, task_type: str, output_dim: int, dataset_name: str = None, vocab_size: int = None):
-=======
 
     def __init__(self, task_type: str, output_dim: int, dataset_name: str = None,
                  vocab_size: int = None, loss_fn: Optional[nn.Module] = None):
->>>>>>> dev
         """
         Args:
             task_type: 任务类型（从UDI获取或手动指定）
             output_dim: 输出维度
             dataset_name: 数据集名称（用于特定数据集的指标配置）
             vocab_size: 词表大小（MLM任务需要）
-<<<<<<< HEAD
-=======
             loss_fn: 预创建的损失函数（从UDI获取）
->>>>>>> dev
         """
         self.task_type = task_type
         self.output_dim = output_dim
         self.dataset_name = dataset_name
         self.vocab_size = vocab_size  # 🆕 MLM任务需要
-<<<<<<< HEAD
-        
-        # 🆕 MLM任务时自动设置输出维度
-        if task_type == 'mlm' and vocab_size is not None:
-            self.output_dim = vocab_size
-            
-        self.loss_fn = self._get_loss_function()
-=======
 
         # 🆕 MLM任务时自动设置输出维度
         if task_type == 'mlm' and vocab_size is not None:
@@ -77,7 +50,6 @@ class TaskHandler:
             self.loss_fn = loss_fn
         else:
             self.loss_fn = self._get_default_loss_function()
->>>>>>> dev
     
     def is_mlm_task(self) -> bool:
         """判断是否为MLM预训练任务"""
@@ -99,13 +71,8 @@ class TaskHandler:
         """判断是否为多目标回归任务"""
         return self.task_type == "multi_target_regression"
     
-<<<<<<< HEAD
-    def _get_loss_function(self):
-        """根据任务类型返回损失函数"""
-=======
     def _get_default_loss_function(self):
         """根据任务类型返回默认损失函数"""
->>>>>>> dev
         if self.task_type == "mlm":
             # 🆕 MLM任务：CrossEntropy with ignore_index=-100 (与原BertMLM一致)
             return nn.CrossEntropyLoss(ignore_index=-100)
@@ -163,13 +130,6 @@ class TaskHandler:
             # 单目标回归：确保标签是[batch_size, 1]
             if labels.dim() == 1:
                 labels = labels.unsqueeze(-1)
-<<<<<<< HEAD
-            loss = self.loss_fn(outputs, labels.float())
-            
-        elif self.task_type == "multi_target_regression":
-            # 多目标回归：标签已经是[batch_size, num_targets]
-            loss = self.loss_fn(outputs, labels.float())
-=======
             # 与输出保持相同dtype，避免与bf16混用导致的dtype错误
             labels = labels.to(outputs.dtype)
             loss = self.loss_fn(outputs, labels)
@@ -178,7 +138,6 @@ class TaskHandler:
             # 多目标回归：标签已经是[batch_size, num_targets]
             labels = labels.to(outputs.dtype)
             loss = self.loss_fn(outputs, labels)
->>>>>>> dev
             
         elif self.task_type in ["binary_classification", "classification"]:
             # 分类：标签是整数索引
@@ -186,20 +145,14 @@ class TaskHandler:
             
         elif self.task_type == "multi_label_classification":
             # 多标签分类：标签是二进制向量
-<<<<<<< HEAD
-            loss = self.loss_fn(outputs, labels.float())
-=======
             labels = labels.to(outputs.dtype)
             loss = self.loss_fn(outputs, labels)
->>>>>>> dev
             
         else:
             raise ValueError(f"不支持的任务类型: {self.task_type}")
         
         return loss
     
-<<<<<<< HEAD
-=======
     def compute_consistency_loss(
         self,
         outputs1: torch.Tensor,
@@ -285,7 +238,6 @@ class TaskHandler:
         
         return total_loss, task_loss, consistency_loss
     
->>>>>>> dev
     def process_outputs(
         self,
         outputs: torch.Tensor,
@@ -340,18 +292,6 @@ class TaskHandler:
         """
         with torch.no_grad():
             if self.task_type in ["regression", "multi_target_regression"]:
-<<<<<<< HEAD
-                # 回归：直接返回
-                return outputs.cpu().numpy()
-                
-            elif self.task_type in ["binary_classification", "classification"]:
-                # 分类：返回预测类别
-                return torch.argmax(outputs, dim=-1).cpu().numpy()
-                
-            elif self.task_type == "multi_label_classification":
-                # 多标签：返回二进制预测
-                return (torch.sigmoid(outputs) > 0.5).float().cpu().numpy()
-=======
                 # 回归：直接返回（bfloat16 先转 float32 再 numpy）
                 return outputs.detach().to(torch.float32).cpu().numpy()
                 
@@ -362,7 +302,6 @@ class TaskHandler:
             elif self.task_type == "multi_label_classification":
                 # 多标签：返回二进制预测
                 return (torch.sigmoid(outputs) > 0.5).float().detach().cpu().numpy()
->>>>>>> dev
                 
             else:
                 raise ValueError(f"不支持的任务类型: {self.task_type}")
@@ -385,18 +324,11 @@ class TaskHandler:
                 return None
                 
             elif self.task_type in ["binary_classification", "classification"]:
-<<<<<<< HEAD
-                return torch.softmax(outputs, dim=-1).cpu().numpy()
-                
-            elif self.task_type == "multi_label_classification":
-                return torch.sigmoid(outputs).cpu().numpy()
-=======
                 # 概率在 bf16 下先转 float32 再 numpy
                 return torch.softmax(outputs, dim=-1).to(torch.float32).detach().cpu().numpy()
                 
             elif self.task_type == "multi_label_classification":
                 return torch.sigmoid(outputs).to(torch.float32).detach().cpu().numpy()
->>>>>>> dev
                 
             else:
                 raise ValueError(f"不支持的任务类型: {self.task_type}")
@@ -503,15 +435,6 @@ class TaskHandler:
                 return {}
 
 
-<<<<<<< HEAD
-def create_task_handler(udi=None, task_type: str = None, vocab_size: int = None) -> TaskHandler:
-    """
-    创建任务处理器 - 支持MLM和其他任务类型
-    
-    Args:
-        udi: UnifiedDataInterface实例（可选，微调任务使用）
-        task_type: 任务类型（可选，用于MLM等预训练任务）
-=======
 def create_task_handler(udi, task_type: str , vocab_size: int = None) -> Tuple[TaskHandler, int]:
     """
     创建任务处理器 - 支持MLM、强制任务类型和UDI推断
@@ -519,44 +442,12 @@ def create_task_handler(udi, task_type: str , vocab_size: int = None) -> Tuple[T
     Args:
         udi: UnifiedDataInterface实例（可选）
         task_type: 任务类型（可选，强制指定时使用）
->>>>>>> dev
         vocab_size: 词表大小（MLM任务需要）
         
     Returns:
         TaskHandler实例
     """
     
-<<<<<<< HEAD
-    # 🆕 支持直接指定任务类型（MLM预训练使用）
-    if task_type == 'mlm':
-        if vocab_size is None:
-            raise ValueError("MLM任务需要提供vocab_size")
-        
-        logger.info(f"📋 创建MLM任务处理器: vocab_size={vocab_size}")
-        return TaskHandler(task_type='mlm', output_dim=vocab_size, vocab_size=vocab_size)
-    
-    # 原有逻辑：从UDI推断任务类型（微调任务使用）
-    if udi is None:
-        raise ValueError("微调任务需要提供udi参数")
-        
-    inferred_task_type = udi.get_dataset_task_type()
-    
-    # 获取输出维度
-    if inferred_task_type in ["regression"]:
-        output_dim = 1
-    elif inferred_task_type in ["binary_classification"]:
-        output_dim = 2
-    elif inferred_task_type in ["classification", "multi_label_classification", "multi_target_regression"]:
-        output_dim = udi.get_num_classes()
-    else:
-        raise ValueError(f"无法确定输出维度: {inferred_task_type}")
-    
-    dataset_name = udi.dataset  # 从UDI获取数据集名称
-    
-    logger.info(f"📋 创建任务处理器: {inferred_task_type} (输出维度={output_dim}, 数据集={dataset_name})")
-    
-    return TaskHandler(inferred_task_type, output_dim, dataset_name)
-=======
     # 模式1: MLM任务（预训练使用）
     if task_type == 'mlm':
         assert vocab_size is not None, "MLM任务需要提供vocab_size"
@@ -591,4 +482,3 @@ def create_task_handler(udi, task_type: str , vocab_size: int = None) -> Tuple[T
     # 模式3: 从UDI推断任务类型（标准微调使用）
     raise ValueError("流程异常：上层未指定task_type，将根据UDI推断任务类型(理论上这一步推断应该在上层完成)")
     
->>>>>>> dev

@@ -636,8 +636,6 @@ class UnifiedDataInterface:
         """获取数据集任务类型"""
         loader = self.get_dataset_loader()
         return loader.get_dataset_task_type()
-<<<<<<< HEAD
-=======
 
     def get_loss_config(self) -> Optional[Dict[str, Any]]:
         """获取损失配置，支持超参覆盖"""
@@ -725,7 +723,6 @@ class UnifiedDataInterface:
                 weights = torch.ones(num_classes)
 
         return nn.CrossEntropyLoss(weight=weights)
->>>>>>> dev
     
     def create_empty_dataset_loader(self) -> BaseDataLoader:
         """
