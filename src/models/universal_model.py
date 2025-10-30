@@ -33,7 +33,6 @@ from src.models.unified_encoder import BaseEncoder
 from src.models.unified_task_head import UnifiedTaskHead
 
 
-
 class UniversalModel(nn.Module):
     """统一模型 - 支持所有任务类型"""
     
