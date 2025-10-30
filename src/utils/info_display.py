@@ -49,6 +49,7 @@ def display_data_info(logger, train_size: int, val_size: int, test_size: int,
 def display_model_info(logger, model, task_type: str, encoder_type: str):
     """模型创建完成后显示模型信息"""
     logger.info("🏗️ 模型概览:")
+    print(model)
     
     # 计算参数量
     total_params = sum(p.numel() for p in model.parameters())

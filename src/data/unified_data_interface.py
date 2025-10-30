@@ -313,11 +313,21 @@ class UnifiedDataInterface:
         assert 'graph_ids' in serialized, "序列化结果缺少必需字段 'graph_ids'"
         graph_ids = serialized['graph_ids']
             
-        assert 'properties' in serialized, "序列化结果缺少必需字段 'properties'"
-        properties = serialized['properties']
-        if not properties:
-            # 如果没有属性，创建空字典列表
-            properties = [{} for _ in sequences]
+        # 无条件从 DataLoader 依据 graph_id 获取属性，保证标签与当前数据集一致
+        # 忽略序列化结果中的 properties 字段
+        loader = self.get_dataset_loader()
+        all_graphs = self.get_graphs()
+        properties: List[Dict[str, Any]] = []
+        for gid in graph_ids:
+            try:
+                ig = int(gid)
+                if 0 <= ig < len(all_graphs):
+                    properties.append(all_graphs[ig].get('properties', {}))
+                else:
+                    properties.append({})
+            except Exception:
+                print(f"数据加载时异常:从序列化的数据中，无法通过gid找到其在原本数据集中的对应label。无效的图ID: {gid}")
+                raise ValueError(f"无效的图ID: {gid}")
             
         # 组装返回格式：图ID在前
         sequences_with_ids = [(gid, seq) for seq, gid in zip(sequences, graph_ids)]

@@ -34,8 +34,18 @@ nohup.out
 *.log*
 *.tar.gz
 
+*.tex
 /agg/
 
+final/**/*.csv
+final/**/*.pdf
+final/**/*.png
+final/**/*.svg
+final/**/*.jpg
+final/**/*.json
+final/**/*.md
+final/**/*.txt
+final/**/*.log
 /tests/
 /sbatch_scripts/
 *.safetensors
@@ -57,3 +67,5 @@ hyperopt/journal/test_large_batch.db
 hyperopt/journal/finetune_with_options.db
 comparison_results/
 analysis_results
+
+ 
