@@ -1,25 +1,43 @@
 #!/usr/bin/env python3
 """
-单个方法BERT预训练脚本
-====================
+单个方法 BERT 预训练脚本（权威用法）
+================================
 
-支持对指定数据集和序列化方法进行BERT预训练，具备灵活的配置参数覆盖功能。
+本脚本是项目内“标准/唯一”的预训练入口，被批量脚本与超参搜索脚本调用。
 
-使用示例:
-  # 基本使用
-  python run_pretrain.py --dataset qm9test --method feuler
-  
-  # 使用BPE压缩
-  python run_pretrain.py --dataset qm9test --method feuler --bpe
-  
-  # 自定义训练参数
-  python run_pretrain.py --dataset qm9test --method feuler --epochs 10 --batch_size 32 --learning_rate 1e-4
-  
-  # 自定义模型架构
-  python run_pretrain.py --dataset qm9test --method feuler --hidden_size 768 --num_layers 6 --num_heads 12
-  
-  # 高级配置覆盖
-  python run_pretrain.py --dataset qm9test --method feuler --config_override bert.pretraining.warmup_steps=1000 system.device=cuda:1
+必须参数（命令行）:
+  --dataset DATASET   例如: qm9, qm9test, zinc, ...
+  --method  METHOD    例如: feuler, eulerian, cpp, fcpp, topo, smilesHeyBaby
+  --bpe_encode_rank_mode MODE BPE模式: none|all|topk|random|gaussian
+  --epochs E                  训练轮数
+  --batch_size B              批大小
+  --learning_rate LR          学习率
+  --config_json JSON_OR_PATH  高级配置（JSON字符串或文件路径），用于嵌套项覆盖
+
+推荐实践：用显式 CLI 参数或 --config_json，不要使用其他“覆盖器”。
+
+示例：用默认配置训练一个可被微调脚本识别的“默认预训练模型”
+  python run_pretrain.py \
+    --dataset qm9 \
+    --method feuler \
+    --experiment_group large_bs_hyperopt_all \
+    --experiment_name  large_bs_all_pt_default \
+    --bpe_encode_rank_mode all
+
+示例：显式指定基础训练超参
+  python run_pretrain.py \
+    --dataset qm9 --method feuler \
+    --experiment_group large_bs_hyperopt_all \
+    --experiment_name  large_bs_all_pt_default \
+    --bpe_encode_rank_mode all \
+    --epochs 200 --batch_size 256 --learning_rate 4e-4
+
+示例：用 JSON 覆盖嵌套配置（不建议滥用，仅用于必要场景）
+  python run_pretrain.py \
+    --dataset qm9 --method feuler \
+    --experiment_group large_bs_hyperopt_all \
+    --experiment_name  large_bs_all_pt_default \
+    --config_json '{"serialization": {"bpe": {"engine": {"encode_rank_mode": "all"}}}}'
 """
 
 from __future__ import annotations
@@ -30,15 +48,19 @@ import os
 import re
 import io
 from pathlib import Path
+import time
+from typing import Optional
+
+from src.training.pretrain_pipeline import train_bert_mlm
+from clearml import Task
+
 
 # 设置项目路径
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
-
+os.chdir('/home/gzy/py/tokenizerGraph')
 from config import ProjectConfig  # noqa: E402
-from src.data.unified_data_interface import UnifiedDataInterface  # noqa: E402
-from src.training.pretrain_api import pretrain as pretrain_api  # noqa: E402
 from src.utils.config_override import (  # noqa: E402
     add_all_args,
     apply_args_to_config,
@@ -49,6 +71,26 @@ from src.utils.config_override import (  # noqa: E402
 
 
 
+
+# ClearML 任务初始化（支持直接运行和Agent执行）
+# 检测是否已经在任务上下文中（通过Agent执行的情况）
+current_task = Task.current_task()
+if current_task is not None:
+    # 已经在任务上下文中，使用现有的任务
+    task = current_task
+    print(f"✅ 使用现有ClearML任务: {task.name} (ID: {task.id})")
+else:
+    # 直接运行的情况，创建新任务
+    try:
+        task = Task.init(
+            project_name="TokenizerGraph",
+            task_name=f"pretrain_manual_{int(time.time())}",
+            auto_connect_frameworks=True  # 确保自动捕获TensorBoard
+        )
+        print(f"✅ ClearML任务初始化成功: {task.name} (ID: {task.id})")
+    except Exception as e:
+        print(f"⚠️ ClearML初始化失败，将继续运行: {e}")
+        task = None
 
 
 _ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
@@ -131,61 +173,29 @@ def _configure_output_mode(offline: bool):
         if not isinstance(sys.stderr, _AnsiStrippingWriter):
             sys.stderr = _AnsiStrippingWriter(sys.stderr)
 
-def run_pretraining(config: ProjectConfig) -> dict:
+def run_pretraining(config: ProjectConfig, run_i: Optional[int] = None) -> dict:
     """
     运行BERT预训练
-    
+
     Args:
         config: 项目配置
-        
+        run_i: 重复运行编号
+
     Returns:
         训练结果字典
     """
     print("🚀 开始BERT预训练...")
-    
-    # 创建UDI实例
-    udi = UnifiedDataInterface(config, config.dataset.name)
-    
-    # 加载训练数据
-    print(f"📂 加载序列化数据: {config.serialization.method}")
-    try:
-        train_sequences, val_sequences, test_sequences = udi.get_training_data_flat(config.serialization.method)
-        
-        print("✅ 数据加载完成:")
-        print(f"  训练集: {len(train_sequences)} 个序列")
-        print(f"  验证集: {len(val_sequences)} 个序列")
-        print(f"  测试集: {len(test_sequences)} 个序列")
-        
-        token_splits = {
-            'train': train_sequences,
-            'val': val_sequences,
-            'test': test_sequences,
-        }
-    except Exception as e:
-        print(f"❌ 数据加载失败: {e}")
-        raise
-    
-    # 加载词表
-    print("📚 加载词表...")
-    try:
-        vocab_manager = udi.get_vocab(method=config.serialization.method)
-        vocab_info = vocab_manager.get_vocab_info()
-        print(f"✅ 词表加载成功: {vocab_info['vocab_size']} 个token")
-    except Exception as e:
-        print(f"❌ 词表加载失败: {e}")
-        print("💡 请确保已运行数据准备流程构建词表")
-        raise
-    
+
     # 运行预训练
     print("🎓 开始模型训练...")
     try:
-        result = pretrain_api(config, token_splits, vocab_manager, udi, config.serialization.method)
+        result = train_bert_mlm(config, run_i=run_i)
         print("✅ 预训练完成!")
-        
+
         print(f"📊 最优验证损失: {result['best_val_loss']:.4f}")
-        
+
         return result
-        
+
     except Exception as e:
         print(f"❌ 预训练失败: {e}")
         raise
@@ -232,7 +242,19 @@ def main():
     parser.add_argument("--plain_logs", action="store_true", help="启用无颜色、无控制符的离线输出（兼容重定向/日志文件，解决乱码）")
     
     # 解析参数
-    args = parser.parse_args()
+    try:
+        args = parser.parse_args()
+    except SystemExit as e:
+        print("\n❌ 参数解析失败！传入的参数信息:")
+        print("=" * 60)
+        print("脚本名称:", sys.argv[0])
+        print("所有传入参数:")
+        for i, arg in enumerate(sys.argv[1:], 1):
+            print(f"  {i:2d}: {arg}")
+        print("=" * 60)
+        print("请检查参数是否正确，或使用 --help 查看帮助信息")
+        print("=" * 60)
+        raise
     
     print("🔧 初始化配置...")
     
@@ -249,6 +271,10 @@ def main():
     
     # 自动生成实验名称（如果未指定）
     create_experiment_name(config)
+    # if config.serialization.bpe.engine.encode_rank_mode == 'none' and config.encoder.type == 'gte':
+    #     print(f"Warn: bpe编码模式为Raw，且encoder为GTE,降低bs为一半（由于此encoder是动态显存大小，随序列长度正比）")
+    #     config.bert.pretraining.batch_size = config.bert.pretraining.batch_size // 2
+    
     
     # 验证配置
     try:
@@ -269,33 +295,84 @@ def main():
 
     # 打印配置摘要
     print_config_summary(config)
-    
-    # 运行预训练
+    raw_seed=config.system.seed
+    # 🆕 检查是否需要重复运行
+    repeat_runs = getattr(config, 'repeat_runs', 1)
+
+    # if repeat_runs > 1:
+    print(f"🔄 启用重复运行模式: {repeat_runs} 次")
+    all_results = []
+    for run_i in range(repeat_runs):
+        print(f"\n{'='*60}")
+        print(f"🚀 开始第 {run_i + 1}/{repeat_runs} 次运行")
+        print(f"{'='*60}")
+        
+        seed=raw_seed+run_i
+        try:
+            # 重新设置种子
+            from config import setup_global_seeds
+            setup_global_seeds(seed)
+            result = run_pretraining(config, run_i=run_i)
+            result['seed'] = seed
+            all_results.append(result)
+            print(f"✅ 第 {run_i + 1} 次运行完成")
+            print(f"📊 最优验证损失: {result['best_val_loss']:.4f}")
+        except Exception as e:
+            print(f"❌ 第 {run_i + 1} 次运行失败: {e}")
+            task.mark_failed()
+            raise
+          
+    # 聚合统计结果
+    if all_results:
+        print(f"\n{'='*60}")
+        print("📊 聚合统计结果")
+        print(f"{'='*60}")
+        from src.utils.stats_aggregation import aggregate_experiment_results, print_aggregated_stats
+        aggregated = aggregate_experiment_results(
+            config, config.experiment_name, len(all_results), "pretrain"
+        )
+        print_aggregated_stats(aggregated, "pretrain")
+  
     try:
-        result = run_pretraining(config)
-        
-        print("\n" + "="*60)
-        print("🎉 预训练完成!")
-        print("="*60)
-        
-        print(f"📁 模型保存路径: {result['model_dir']}")
-        print(f"🏷️ 实验名称: {config.experiment_name}")
-        print(f"📊 最优验证损失: {result['best_val_loss']:.4f}")
-        
-        print("\n💡 可以使用以下命令进行微调:")
-        print(f"python run_finetune.py --dataset {config.dataset.name} --method {config.serialization.method}")
-        
-        return 0
-        
-    except KeyboardInterrupt:
-        print("\n⚠️ 用户中断训练")
-        return 130
-    except Exception as e:
-        print(f"\n❌ 预训练失败: {e}")
-        import traceback
-        traceback.print_exc()
-        return 1
+        sys.stdout.flush()
+        sys.stderr.flush()
+    except Exception:
+        raise
+    os._exit(0)
+
+    # else:
+    #     # 普通单次运行
+    #     try:
+    #         result = run_pretraining(config)
+
+    #         print("\n" + "="*60)
+    #         print("🎉 预训练完成!")
+    #         print("="*60)
+
+    #         print(f"📁 模型保存路径: {result['model_dir']}")
+    #         print(f"🏷️ 实验名称: {config.experiment_name}")
+    #         print(f"📊 最优验证损失: {result['best_val_loss']:.4f}")
+
+    #         print("\n💡 可以使用以下命令进行微调:")
+    #         print(f"python run_finetune.py --dataset {config.dataset.name} --method {config.serialization.method}")
+    #         try:
+    #             sys.stdout.flush()
+    #             sys.stderr.flush()
+    #         except Exception:
+    #             pass
+    #         os._exit(0)
+    #         print("exit后仍未结束！！！！！")
+
+    #     except KeyboardInterrupt:
+    #         print("\n⚠️ 用户中断训练")
+    #         return 130
+    #     except Exception as e:
+    #         print(f"\n❌ 预训练失败: {e}")
+    #         task.mark_failed()
+    #         import traceback
+    #         traceback.print_exc()
+    #         raise
 
 
 if __name__ == "__main__":
-    exit(main())
+    main()

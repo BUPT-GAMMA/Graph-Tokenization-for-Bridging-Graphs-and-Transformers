@@ -72,7 +72,7 @@ class BFSSerializer(BaseGraphSerializer):
             Tuple[List[int], List[str]]: (token序列, element序列)
         """
         # 使用公共方法验证图数据
-        dgl_graph = self._validate_graph_data(mol_data)
+        dgl_graph  = self._validate_graph_data(mol_data)
         num_nodes = dgl_graph.num_nodes()
         
         # 单节点特殊情况

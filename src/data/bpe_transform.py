@@ -183,7 +183,9 @@ def create_bpe_transform_from_udi(
 def create_bpe_worker_init_fn_from_udi(
     udi: "UnifiedDataInterface",
     config: "ProjectConfig", 
-    method: str
+    method: str,
+    *,
+    split: str = "train",
 ):
     """
     从UDI和配置创建DataLoader的worker_init_fn
@@ -204,10 +206,54 @@ def create_bpe_worker_init_fn_from_udi(
         # 构建engine参数（统一构建，mode参数控制实际行为）
         bpe_config = config.serialization.bpe
         engine_config = bpe_config.engine
+        # 训练/评估拆分：
+        # - 训练：按训练配置（允许随机/采样）
+        # - 验证/测试：优先使用 eval_mode/eval_topk；若未设置且训练为 random/gaussian，则映射为 topk(k=期望值)；
+        #           训练为 none/all/topk 时，沿用训练的确定性模式与参数。
+        # 可选增强（未实现）：MC-eval（测试时多次随机BPE采样取平均预测）。
+        if str(split).lower() in {"val", "eval", "test"}:
+            eval_mode = getattr(bpe_config, 'eval_mode', None)
+            eval_topk = getattr(bpe_config, 'eval_topk', None)
+            if eval_mode is not None:
+                encode_rank_mode = eval_mode
+                encode_rank_k = eval_topk
+            else:
+                train_mode = str(engine_config.encode_rank_mode).lower()
+                # 默认映射规则
+                if train_mode in {"random", "gaussian"}:
+                    encode_rank_mode = "topk"
+                    # 期望值计算
+                    k_val = engine_config.encode_rank_k
+                    k_min = engine_config.encode_rank_min
+                    k_max = engine_config.encode_rank_max
+                    if train_mode == "gaussian":
+                        # 高斯：使用 encode_rank_k 作为均值；若缺失则回退到 max
+                        if k_val is None:
+                            k_val = k_max
+                    else:  # random
+                        # 随机：优先使用 (min+max)/2；否则回退到 k 或 max
+                        if (k_min is not None) and (k_max is not None):
+                            try:
+                                k_val = int(round((int(k_min) + int(k_max)) / 2))
+                            except Exception:
+                                k_val = k_val if k_val is not None else k_max
+                        else:
+                            k_val = k_val if k_val is not None else k_max
+                    # 裁剪到[min,max]区间（若提供）
+                    if (k_min is not None) and (k_max is not None) and (k_val is not None):
+                        k_val = max(int(k_min), min(int(k_max), int(k_val)))
+                    encode_rank_k = int(k_val) if k_val is not None else None
+                else:
+                    # none/all/topk：沿用训练设置
+                    encode_rank_mode = engine_config.encode_rank_mode
+                    encode_rank_k = engine_config.encode_rank_k
+        else:
+            encode_rank_mode = engine_config.encode_rank_mode
+            encode_rank_k = engine_config.encode_rank_k
         engine_kwargs = {
             'encode_backend': engine_config.encode_backend,
-            'encode_rank_mode': engine_config.encode_rank_mode,  # 包括"none"模式
-            'encode_rank_k': engine_config.encode_rank_k,
+            'encode_rank_mode': encode_rank_mode,  # 评估时切到确定性模式
+            'encode_rank_k': encode_rank_k,
             'encode_rank_min': engine_config.encode_rank_min,
             'encode_rank_max': engine_config.encode_rank_max,
             'encode_rank_dist': engine_config.encode_rank_dist,

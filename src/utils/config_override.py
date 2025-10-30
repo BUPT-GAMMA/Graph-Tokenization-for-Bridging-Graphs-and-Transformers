@@ -33,31 +33,34 @@ def add_basic_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--device", type=str, help="设备 (cuda:0, cpu, auto)")
     parser.add_argument("--log_style", type=str, choices=["online", "offline"], help="日志样式：online=使用tqdm；offline=每个epoch按10%输出摘要")
 
+    # 🆕 重复运行参数
+    parser.add_argument("--repeat_runs", type=int, default=1, help="重复运行次数，默认1次（不重复）")
+
 
 def add_common_args(parser: argparse.ArgumentParser) -> None:
     """添加常用参数（仅在没有JSON覆盖时使用）"""
     
     # BPE压缩参数
     bpe_group = parser.add_argument_group('BPE压缩配置')
-    bpe_group.add_argument("--bpe_num_merges", type=int, help="BPE合并次数，0表示不使用BPE")
-    bpe_group.add_argument("--bpe_encode_backend", type=str, choices=["python", "cpp"], 
-                          default="cpp", help="BPE编码后端")
+    # bpe_group.add_argument("--bpe_num_merges", type=int, help="BPE合并次数，0表示不使用BPE")
+    # bpe_group.add_argument("--bpe_encode_backend", type=str, choices=["python", "cpp"], 
+    #                       default="cpp", help="BPE编码后端")
     bpe_group.add_argument("--bpe_encode_rank_mode", type=str, 
                           choices=["none", "all", "topk", "random", "gaussian"], default="none",
                           help="BPE编码排序模式")
     bpe_group.add_argument("--bpe_encode_rank_k", type=int, help="BPE编码Top-K参数")
-    bpe_group.add_argument("--bpe_encode_rank_min", type=int, help="BPE编码随机范围最小值")
-    bpe_group.add_argument("--bpe_encode_rank_max", type=int, help="BPE编码随机范围最大值")
+    # bpe_group.add_argument("--bpe_encode_rank_min", type=int, help="BPE编码随机范围最小值")
+    # bpe_group.add_argument("--bpe_encode_rank_max", type=int, help="BPE编码随机范围最大值")
     bpe_group.add_argument("--bpe_encode_rank_dist", type=str, help="BPE编码随机分布类型")
     bpe_group.add_argument("--bpe_eval_mode", type=str, 
                           choices=["all", "topk"], help="BPE评估模式")
     bpe_group.add_argument("--bpe_eval_topk", type=int, help="BPE评估Top-K参数")
     
     # BERT架构
-    arch_group = parser.add_argument_group('BERT架构')
-    arch_group.add_argument("--hidden_size", type=int, help="隐藏层大小")
-    arch_group.add_argument("--num_layers", type=int, help="层数")
-    arch_group.add_argument("--num_heads", type=int, help="注意力头数")
+    # arch_group = parser.add_argument_group('BERT架构')
+    # arch_group.add_argument("--hidden_size", type=int, help="隐藏层大小")
+    # arch_group.add_argument("--num_layers", type=int, help="层数")
+    # arch_group.add_argument("--num_heads", type=int, help="注意力头数")
     
     # 训练参数 (根据脚本自动映射到预训练或微调)
     train_group = parser.add_argument_group('训练参数')
@@ -67,6 +70,7 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
     
     # 任务参数
     task_group = parser.add_argument_group('任务参数')
+<<<<<<< HEAD
     task_group.add_argument("--task", choices=["mlm", "regression", "classification", "multi_label_classification", "multi_target_regression"], 
                            help="任务类型（可选，不指定时从数据集自动推断）")
     task_group.add_argument("--target_property", type=str, help="回归目标属性")
@@ -75,6 +79,14 @@ def add_common_args(parser: argparse.ArgumentParser) -> None:
     encoder_group = parser.add_argument_group('编码器参数')
     encoder_group.add_argument("--encoder_type", type=str, choices=["bert", "Alibaba-NLP/gte-multilingual-base"], help="编码器类型")
     encoder_group.add_argument("--reinit_weights", action="store_true", help="重新初始化编码器权重(用于GTE MLM预训练)")
+=======
+
+    task_group.add_argument("--target_property", type=str, help="回归目标属性")
+    
+    # 编码器参数（简化：仅接收 bert/gte）
+    encoder_group = parser.add_argument_group('编码器参数')
+    encoder_group.add_argument("--encoder", type=str, choices=["bert", "gte"], help="编码器类型（bert 或 gte）")
+>>>>>>> dev
 
 
 def add_json_override_args(parser: argparse.ArgumentParser) -> None:
@@ -136,6 +148,11 @@ def apply_args_to_config(config: ProjectConfig, args: argparse.Namespace, *, com
     if hasattr(args, 'log_style') and args.log_style:
         config.system.log_style = args.log_style
         print(f"🎯 system.log_style = {args.log_style}")
+
+    # 🆕 处理重复运行参数
+    if hasattr(args, 'repeat_runs') and args.repeat_runs is not None:
+        config.repeat_runs = args.repeat_runs
+        print(f"🎯 repeat_runs = {args.repeat_runs}")
     
     # BPE参数
     if hasattr(args, 'bpe_num_merges') and args.bpe_num_merges is not None:
@@ -206,6 +223,20 @@ def apply_args_to_config(config: ProjectConfig, args: argparse.Namespace, *, com
             config.bert.pretraining.learning_rate = args.learning_rate
             print(f"🎯 bert.pretraining.learning_rate = {args.learning_rate}")
     
+    if hasattr(args, 'mult') and args.mult:
+        config.serialization.multiple_sampling.num_realizations = args.mult
+        config.serialization.multiple_sampling.enabled = args.mult > 1
+        print(f"🎯 serialization.multiple_sampling.num_realizations = {args.mult},enable={config.serialization.multiple_sampling.enabled}")
+    
+    if hasattr(args, 'pool') and args.pool:
+        config.bert.architecture.pooling_method = args.pool
+        print(f"🎯 bert.architecture.pooling_method = {args.pool}")
+    if hasattr(args, 'max_length') and args.max_length:
+        config.bert.architecture.max_seq_length = args.max_length
+        print(f"🎯 bert.architecture.max_seq_length = {args.max_length}")
+    if hasattr(args, 'max_len_policy') and args.max_len_policy:
+        config.bert.architecture.max_len_policy = args.max_len_policy
+        print(f"🎯 bert.architecture.max_len_policy = {args.max_len_policy}")
     # 任务参数
     if hasattr(args, 'task') and args.task:
         config.task.type = args.task
@@ -215,6 +246,7 @@ def apply_args_to_config(config: ProjectConfig, args: argparse.Namespace, *, com
         config.task.target_property = args.target_property
         print(f"🎯 task.target_property = {args.target_property}")
     
+<<<<<<< HEAD
     # 🆕 编码器参数
     if hasattr(args, 'encoder_type') and args.encoder_type:
         config.encoder.type = args.encoder_type
@@ -224,6 +256,12 @@ def apply_args_to_config(config: ProjectConfig, args: argparse.Namespace, *, com
         # 通过临时属性传递给模型工厂
         config._reinit_weights = True
         print(f"🎯 reinit_weights = True (GTE权重重新初始化)")
+=======
+    # 🆕 编码器参数（--encoder）
+    if hasattr(args, 'encoder') and args.encoder:
+        config.encoder.type = args.encoder
+        print(f"🎯 encoder.type = {args.encoder}")
+>>>>>>> dev
     
 # 删除冗余的finetune_*参数处理，统一使用--epochs等通用参数
 
@@ -295,47 +333,7 @@ def show_full_config(config: ProjectConfig) -> None:
     print("="*60)
     
     # 构建主要配置字典
-    config_dict = {
-        "bert": {
-            "architecture": {
-                "hidden_size": config.bert.architecture.hidden_size,
-                "num_hidden_layers": config.bert.architecture.num_hidden_layers,
-                "num_attention_heads": config.bert.architecture.num_attention_heads,
-                "max_seq_length": config.bert.architecture.max_seq_length,
-                "hidden_dropout_prob": config.bert.architecture.hidden_dropout_prob,
-                "attention_probs_dropout_prob": config.bert.architecture.attention_probs_dropout_prob,
-            },
-            "pretraining": {
-                "epochs": config.bert.pretraining.epochs,
-                "batch_size": config.bert.pretraining.batch_size,
-                "learning_rate": config.bert.pretraining.learning_rate,
-                "warmup_steps": config.bert.pretraining.warmup_steps,
-                "mask_prob": config.bert.pretraining.mask_prob,
-                "early_stopping_patience": config.bert.pretraining.early_stopping_patience,
-            },
-            "finetuning": {
-                "epochs": config.bert.finetuning.epochs,
-                "batch_size": config.bert.finetuning.batch_size,
-                "learning_rate": config.bert.finetuning.learning_rate,
-                # "warmup_ratio": config.bert.finetuning.warmup_ratio,  # 配置中不存在
-                "early_stopping_patience": config.bert.finetuning.early_stopping_patience,
-            }
-        },
-        "system": {
-            "num_workers": config.system.num_workers,
-            # "mixed_precision": config.system.mixed_precision,  # 配置中不存在
-        }
-    }
-    
-    # 添加任务配置（如果存在）
-    if hasattr(config.task, 'type') and config.task.type:
-        config_dict["task"] = {
-            "type": config.task.type,
-            "normalization": config.task.normalization,
-        }
-        if hasattr(config.task, 'target_property') and config.task.target_property:
-            config_dict["task"]["target_property"] = config.task.target_property
-    
+    config_dict = config.to_dict()
     print(json.dumps(config_dict, indent=2, ensure_ascii=False))
     print("\n💡 可以将上述JSON内容保存到文件，然后用 --config_json 参数加载")
     print("="*60)
@@ -348,34 +346,39 @@ def add_all_args(parser: argparse.ArgumentParser, include_finetune: bool = True)
     
     # BPE参数在预训练和微调中都需要
     bpe_group = parser.add_argument_group('BPE压缩配置')
-    bpe_group.add_argument("--bpe_num_merges", type=int, help="BPE合并次数，0表示不使用BPE")
-    bpe_group.add_argument("--bpe_encode_backend", type=str, choices=["python", "cpp"], 
-                          default="cpp", help="BPE编码后端")
+    # bpe_group.add_argument("--bpe_num_merges", type=int, help="BPE合并次数，0表示不使用BPE")
+    # bpe_group.add_argument("--bpe_encode_backend", type=str, choices=["python", "cpp"], 
+    #                       default="cpp", help="BPE编码后端")
     bpe_group.add_argument("--bpe_encode_rank_mode", type=str, 
-                          choices=["none", "all", "topk", "random", "gaussian"], default="none",
+                          choices=["none", "all", "topk", "random", "gaussian"], default="all",
                           help="BPE编码排序模式")
     bpe_group.add_argument("--bpe_encode_rank_k", type=int, help="BPE编码Top-K参数")
-    bpe_group.add_argument("--bpe_encode_rank_min", type=int, help="BPE编码随机范围最小值")
-    bpe_group.add_argument("--bpe_encode_rank_max", type=int, help="BPE编码随机范围最大值")
-    bpe_group.add_argument("--bpe_encode_rank_dist", type=str, help="BPE编码随机分布类型")
-    bpe_group.add_argument("--bpe_eval_mode", type=str, 
-                          choices=["all", "topk"], help="BPE评估模式")
-    bpe_group.add_argument("--bpe_eval_topk", type=int, help="BPE评估Top-K参数")
+    # bpe_group.add_argument("--bpe_encode_rank_min", type=int, help="BPE编码随机范围最小值")
+    # bpe_group.add_argument("--bpe_encode_rank_max", type=int, help="BPE编码随机范围最大值")
+    # bpe_group.add_argument("--bpe_encode_rank_dist", type=str, help="BPE编码随机分布类型")
+    # bpe_group.add_argument("--bpe_eval_mode", type=str, 
+    #                       choices=["all", "topk"], help="BPE评估模式")
+    # bpe_group.add_argument("--bpe_eval_topk", type=int, help="BPE评估Top-K参数")
     
     # 通用训练参数（两阶段均可使用同名参数）
     train_group = parser.add_argument_group('训练参数')
     train_group.add_argument("--epochs", type=int, help="训练轮数")
     train_group.add_argument("--batch_size", type=int, help="批次大小")
     train_group.add_argument("--learning_rate", "--lr", type=float, help="学习率")
+    train_group.add_argument("--mult", type=int, help="多重采样次数")
+    train_group.add_argument("--pool", type=str, help="序列池化方法")
+    train_group.add_argument("--max_length", type=int, help="最大长度")
+    train_group.add_argument("--max_len_policy", type=str, help="最大长度策略")
 
     # 预训练特有架构参数（仅在预训练脚本中会实际使用）
-    arch_group = parser.add_argument_group('BERT架构')
-    arch_group.add_argument("--hidden_size", type=int, help="隐藏层大小")
-    arch_group.add_argument("--num_layers", type=int, help="层数")
-    arch_group.add_argument("--num_heads", type=int, help="注意力头数")
+    # arch_group = parser.add_argument_group('BERT架构')
+    # arch_group.add_argument("--hidden_size", type=int, help="隐藏层大小")
+    # arch_group.add_argument("--num_layers", type=int, help="层数")
+    # arch_group.add_argument("--num_heads", type=int, help="注意力头数")
 
     # 编码器参数 (预训练和微调都需要)
     encoder_group = parser.add_argument_group('编码器配置')
+<<<<<<< HEAD
     encoder_group.add_argument("--encoder_type", type=str, choices=["bert", "Alibaba-NLP/gte-multilingual-base"], help="编码器类型")
     encoder_group.add_argument("--reinit_weights", action="store_true", help="重新初始化编码器权重")
     
@@ -384,6 +387,14 @@ def add_all_args(parser: argparse.ArgumentParser, include_finetune: bool = True)
         task_group = parser.add_argument_group('任务配置')
         task_group.add_argument("--task", type=str, choices=["mlm", "regression", "classification", "multi_label_classification", "multi_target_regression"], 
                              help="任务类型（可选，不指定时从数据集自动推断）")
+        task_group.add_argument("--target_property", type=str, help="目标属性名称")
+=======
+    encoder_group.add_argument("--encoder", type=str, choices=["bert", "gte"], help="编码器类型（bert 或 gte）")
+>>>>>>> dev
+    
+    # 任务参数 (仅微调需要)
+    if include_finetune:
+        task_group = parser.add_argument_group('任务配置')
         task_group.add_argument("--target_property", type=str, help="目标属性名称")
     
     add_json_override_args(parser)

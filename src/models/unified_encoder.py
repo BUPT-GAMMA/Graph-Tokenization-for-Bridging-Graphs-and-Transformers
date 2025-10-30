@@ -18,8 +18,23 @@ from abc import ABC, abstractmethod
 import torch
 import torch.nn as nn
 
+<<<<<<< HEAD
 from src.models.bert.vocab_manager import VocabManager
 from src.models.utils.pooling import pool_sequence
+=======
+
+from src.models.bert.vocab_manager import VocabManager
+from src.models.utils.pooling import pool_sequence
+from src.utils.check import parse_torch_dtype
+from src.utils.logger import get_logger
+
+# 模型相关导入
+from transformers import BertModel, AutoModel, AutoConfig
+from src.models.bert.config import BertConfig
+
+# 创建模块级logger
+logger = get_logger(__name__)
+>>>>>>> dev
 
 
 class BaseEncoder(nn.Module, ABC):
@@ -53,7 +68,13 @@ class BaseEncoder(nn.Module, ABC):
         # 支持HuggingFace config对象 (GTE等)
         else:
             return int(getattr(self.config, 'max_position_embeddings', getattr(self.config, 'max_seq_length', 512)))
+<<<<<<< HEAD
 
+=======
+    @abstractmethod
+    def get_word_embeddings_weight(self) -> torch.nn.Parameter:
+        pass
+>>>>>>> dev
     def save_model(self, save_path: str) -> None:
         # 默认无特殊保存逻辑，由具体实现决定
         pass
@@ -68,10 +89,13 @@ class BertEncoder(BaseEncoder):
 
     def __init__(self, model_name: str, config: Dict[str, Any], vocab_manager: VocabManager):
         super().__init__(model_name, config, vocab_manager)
+<<<<<<< HEAD
 
         # 🔧 直接重构原有逻辑，不再依赖备份代码
         from transformers import BertModel
         from src.models.bert.config import BertConfig
+=======
+>>>>>>> dev
         
         # 创建BERT配置（与原create_bert_mlm逻辑一致）
         bert_config = BertConfig(
@@ -96,15 +120,49 @@ class BertEncoder(BaseEncoder):
         
         # 保存配置和词表管理器
         self.bert_config = bert_config
+<<<<<<< HEAD
         self._hidden_size = int(config.get('hidden_size', 512))
+=======
+        self._hidden_size = config['hidden_size']
+
+        # 统一从config读取reset标志
+        reset_weights = bool(config['reset_weights'])
+        if reset_weights:
+            self._reinitialize_bert_weights()
+    
+    def get_word_embeddings_weight(self) -> torch.nn.Parameter:
+        return self.bert.embeddings.word_embeddings.weight  # [V, H]
+      
+    def _reinitialize_bert_weights(self):
+        """重新初始化BERT权重"""
+        logger.info("🔄 重新初始化BERT权重...")
+        for module in self.bert.modules():
+            if isinstance(module, torch.nn.Linear):
+                torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+                if module.bias is not None:
+                    torch.nn.init.zeros_(module.bias)
+            elif isinstance(module, torch.nn.Embedding):
+                torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
+                if hasattr(module, 'padding_idx') and module.padding_idx is not None:
+                    torch.nn.init.zeros_(module.weight[module.padding_idx])
+            elif isinstance(module, torch.nn.LayerNorm):
+                torch.nn.init.ones_(module.weight)
+                torch.nn.init.zeros_(module.bias)
+        logger.info("✅ BERT权重重新初始化完成")
+>>>>>>> dev
 
     def encode(self, input_ids: torch.Tensor, attention_mask: torch.Tensor | None = None, pooling_method: str = 'mean') -> torch.Tensor:
         """句子级编码 - 获取池化后的表示 [batch, hidden_size]"""
         outputs = self.bert(input_ids=input_ids, attention_mask=attention_mask, return_dict=True)
         sequence_output = outputs.last_hidden_state  # [batch_size, seq_len, hidden_size]
         if pooling_method == 'pooler':
+<<<<<<< HEAD
             raise ValueError("BertEncoder 不支持 'pooler' 池化；请使用 'mean' 或 'cls'")
         return pool_sequence(sequence_output, attention_mask, method=('cls' if pooling_method == 'cls' else 'mean'))
+=======
+            raise ValueError("BertEncoder 不支持 'pooler' 池化；请使用 'mean'、'max' 或 'cls'")
+        return pool_sequence(sequence_output, attention_mask, method=pooling_method)
+>>>>>>> dev
     
     def get_sequence_output(self, input_ids: torch.Tensor, attention_mask: torch.Tensor | None = None) -> torch.Tensor:
         """获取BERT序列级编码输出 [batch, seq_len, hidden_size] - MLM任务使用"""
@@ -121,6 +179,7 @@ class GTEEncoder(BaseEncoder):
     def __init__(self, model_name: str, config: Dict[str, Any], vocab_manager: VocabManager):
         super().__init__(model_name, config, vocab_manager)
 
+<<<<<<< HEAD
         from transformers import AutoModel
         import torch.nn as nn
 
@@ -174,6 +233,67 @@ class GTEEncoder(BaseEncoder):
         # 使用底层 config，保持单一数据源
         self.config = self.gte_model.config
 
+=======
+        optimization = config['optimization']
+        reset_weights = config['reset_weights']
+
+        torch_dtype = parse_torch_dtype(optimization['torch_dtype'])
+
+        # 词表与 pad 协议目标值（来自项目词表）
+        target_vocab_size = int(vocab_manager.vocab_size)
+        target_pad_id = int(vocab_manager.pad_token_id)
+
+        if reset_weights:
+            # 方案A：从配置新建模型，按库规则随机初始化全部参数
+            logger.warning("🆕 使用AutoConfig.from_pretrained + AutoModel.from_config进行随机初始化GTE模型（丢弃预训练）")
+            cfg = AutoConfig.from_pretrained(model_name, trust_remote_code=True)
+            # 统一写入优化与词表/Pad设定（先占位，稍后根据vocab_manager覆盖）
+            cfg.unpad_inputs = optimization['unpad_inputs']
+            cfg.use_memory_efficient_attention = optimization['use_memory_efficient_attention']
+            cfg.torch_dtype = torch_dtype
+            # 直接在配置阶段设置目标 vocab/pad，避免后续再 resize 带来的再初始化差异
+            cfg.vocab_size = target_vocab_size
+            cfg.pad_token_id = target_pad_id
+            self.gte_model = AutoModel.from_config(cfg, torch_dtype=torch_dtype, trust_remote_code=True)
+        else:
+            logger.info("🔄 加载官方GTE预训练权重")
+            self.gte_model = AutoModel.from_pretrained(
+                model_name,
+                trust_remote_code=True,
+                unpad_inputs=optimization['unpad_inputs'],
+                use_memory_efficient_attention=optimization['use_memory_efficient_attention'],
+                torch_dtype=torch_dtype,
+            )
+        
+        # 词表与 pad 协议对齐
+        if reset_weights:
+            # 已在配置阶段设置 vocab/pad，确保初始嵌入即为目标形状
+            assert self.gte_model.config.vocab_size == target_vocab_size
+            assert self.gte_model.config.pad_token_id == target_pad_id
+            emb = self.gte_model.get_input_embeddings()
+            emb.padding_idx = target_pad_id
+            with torch.no_grad():
+                emb.weight[target_pad_id].zero_()
+            logger.info(f"✅ 随机初始化GTE模型并适配词表/Pad：vocab={target_vocab_size}, pad_id={target_pad_id}")
+        else:
+            # 预训练路径：先设置 pad_token_id，再调整嵌入尺寸，最后清零 pad 行
+            self.gte_model.config.pad_token_id = target_pad_id
+            self.gte_model.resize_token_embeddings(target_vocab_size)
+            emb = self.gte_model.get_input_embeddings()
+            emb.padding_idx = target_pad_id
+            with torch.no_grad():
+                emb.weight[target_pad_id].zero_()
+            logger.info("📚 使用官方GTE预训练权重，仅适配词表")
+
+        self._hidden_size = self.gte_model.config.hidden_size
+        assert isinstance(self._hidden_size, int), "GTE编码器hidden_size必须是整数"
+        # 使用底层 config，保持单一数据源
+        self.config = self.gte_model.config
+
+    def get_word_embeddings_weight(self) -> torch.nn.Parameter:
+        return self.gte_model.get_input_embeddings().weight  # [V, H]
+
+>>>>>>> dev
     def encode(self, input_ids: torch.Tensor, attention_mask: torch.Tensor | None = None, pooling_method: str = 'mean') -> torch.Tensor:
         outputs = self.gte_model(input_ids=input_ids, attention_mask=attention_mask, return_dict=True)
         if pooling_method == 'pooler':
@@ -192,8 +312,14 @@ class GTEEncoder(BaseEncoder):
 
 def create_encoder(model_name: str, config: Dict[str, Any], vocab_manager: VocabManager) -> BaseEncoder:
     name = (model_name or '').lower()
+<<<<<<< HEAD
     if 'gte' in name or 'alibaba-nlp' in name:
         return GTEEncoder(model_name, config, vocab_manager)
+=======
+    if 'gte' in name:
+      #note： 这个是必要的，因为如果不用本地这个目录的话，他会去尝试访问huggingface的。模型接口那个需要联网，而在服务器上会卡死。
+        return GTEEncoder('./gte_model', config, vocab_manager)
+>>>>>>> dev
     # 默认走bert
     return BertEncoder(model_name or 'bert', config, vocab_manager)
 
@@ -205,6 +331,9 @@ def list_supported_encoders() -> Dict[str, str]:
     }
 
 
+<<<<<<< HEAD
 # UnifiedTaskModel已被删除，现在使用src/models/universal_model.py中的UniversalModel
 
 
+=======
+>>>>>>> dev

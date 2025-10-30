@@ -1,31 +1,26 @@
 #!/usr/bin/env python3
 """
-单个方法BERT微调脚本
-==================
+单个方法 BERT 微调脚本（权威用法）
+================================
 
-支持对指定数据集和序列化方法进行BERT微调，具备灵活的配置参数覆盖功能。
+本脚本是项目内“标准/唯一”的微调入口，被批量/搜索脚本复用。
 
-使用示例:
-  # 基本回归任务
-  python run_finetune.py --dataset qm9test --method feuler --task regression
-  
-  # 指定目标属性
-  python run_finetune.py --dataset qm9test --method feuler --task regression --target_property homo
-  
-  # 分类任务
-  python run_finetune.py --dataset mnist --method feuler --task classification --num_classes 10
-  
-  # 自定义微调参数
-  python run_finetune.py --dataset qm9test --method feuler --task regression \\
-    --finetune_epochs 20 --finetune_batch_size 16 --finetune_learning_rate 2e-5
-  
-  # 自定义数据处理
-  python run_finetune.py --dataset qm9test --method feuler --task regression \\
-    --normalization standard --pooling_method mean
-  
-  # 高级配置覆盖
-  python run_finetune.py --dataset qm9test --method feuler --task regression \\
-    --config_override bert.finetuning.warmup_ratio=0.1 system.device=cuda:1
+必须参数（命令行）:
+  --dataset DATASET   例如: qm9, qm9test, zinc, ...
+  --method  METHOD    例如: feuler, eulerian, cpp, fcpp, topo, smiles
+
+加载预训练的两种方式（择一）:
+  --pretrained_dir PATH       直接指定模型目录（包含 config.bin 与 pytorch_model.bin）
+  --pretrain_exp_name NAME    指定预训练实验名，按标准目录结构加载
+
+常用参数（命令行）:
+  --experiment_group NAME     归档分组
+  --experiment_name  NAME     微调实验名（仅影响保存路径，与加载预训练解耦）
+  --bpe_encode_rank_mode MODE BPE模式: none|all|topk|random|gaussian
+  --epochs / --batch_size / --learning_rate / --weight_decay / --warmup_ratio / --max_grad_norm
+  --config_json JSON_OR_PATH  高级配置（JSON字符串或文件路径），用于嵌套项覆盖
+
+目标指标: 微调阶段以测试集 MAE 为唯一优化指标（脚本内部严格检查）。
 """
 
 from __future__ import annotations
@@ -36,11 +31,14 @@ import os
 import re
 import io
 from pathlib import Path
-
+import time
+from typing import Optional, Literal
+from clearml import Logger, Task
 # 设置项目路径
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+os.chdir('/home/gzy/py/tokenizerGraph')
 
 from config import ProjectConfig  # noqa: E402
 from src.data.unified_data_interface import UnifiedDataInterface  # noqa: E402
@@ -53,6 +51,25 @@ from src.utils.config_override import (  # noqa: E402
     show_full_config
 )
 
+# ClearML 任务初始化（支持直接运行和Agent执行）
+# 检测是否已经在任务上下文中（通过Agent执行的情况）
+current_task = Task.current_task()
+if current_task is not None:
+    # 已经在任务上下文中，使用现有的任务
+    task: Task = current_task
+    print(f"✅ 使用现有ClearML任务: {task.name} (ID: {task.id})")
+else:
+    # 直接运行的情况，创建新任务
+    try:
+        task: Task = Task.init(
+            project_name="TokenizerGraph",
+            task_name=f"finetune_manual_{int(time.time())}",
+            auto_connect_frameworks=True  # 确保自动捕获TensorBoard
+        )
+        print(f"✅ ClearML任务初始化成功: {task.name} (ID: {task.id})")
+    except Exception as e:
+        print(f"⚠️ ClearML初始化失败，将继续运行: {e}")
+        task: Task = None
 
 _ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
@@ -112,6 +129,9 @@ def _ensure_utf8_streams():
             except Exception:
                 pass
 
+    # 降噪：静默TensorFlow冗余日志（与本训练流程无关）
+    os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")  # 只显示WARNING及以上
+
 
 def _configure_output_mode(offline: bool):
     """根据 offline 模式配置输出：禁用颜色、去除ANSI、确保UTF-8。"""
@@ -127,6 +147,7 @@ def _configure_output_mode(offline: bool):
         if not isinstance(sys.stderr, _AnsiStrippingWriter):
             sys.stderr = _AnsiStrippingWriter(sys.stderr)
 
+<<<<<<< HEAD
 def infer_task_and_targets(config: ProjectConfig, udi: UnifiedDataInterface, 
                           task_cli: str | None, num_classes_cli: int | None) -> tuple[str, int | None]:
     """
@@ -223,10 +244,19 @@ def run_finetuning(
     task: str | None = None,
     num_classes: int | None = None,
     aggregation_mode: str = "avg",
+=======
+def run_finetuning(
+    config: ProjectConfig,
+    aggregation_mode: Literal["avg", "best", "learned"] = "avg",
+>>>>>>> dev
     save_name_prefix: str | None = None,
     save_name_suffix: str | None = None,
     pretrained_dir: str | None = None,
     pretrain_exp_name: str | None = None,
+<<<<<<< HEAD
+=======
+    run_i: int | None = None,
+>>>>>>> dev
 ) -> dict:
     """
     运行BERT微调
@@ -241,6 +271,7 @@ def run_finetuning(
         微调结果字典
     """
     print("🚀 开始BERT微调...")
+<<<<<<< HEAD
     if task is not None:
         print(f"📋 任务类型: {task}")
     else:
@@ -256,6 +287,8 @@ def run_finetuning(
     #     print("\n💡 请先运行预训练:")
     #     print(f"python run_pretrain.py --dataset {config.dataset.name} --method {config.serialization.method}")
     #     assert False, "预训练模型不存在"
+=======
+>>>>>>> dev
     
     # 运行微调
     print("🎓 开始微调...")
@@ -263,12 +296,19 @@ def run_finetuning(
         # 统一架构会自动从UDI推断任务类型和维度，不需要显式传递num_classes等参数
         result = run_finetune(
             config,
+<<<<<<< HEAD
             task=task,
+=======
+>>>>>>> dev
             aggregation_mode=aggregation_mode,
             save_name_prefix=save_name_prefix,
             save_name_suffix=save_name_suffix,
             pretrained_dir=pretrained_dir,
             pretrain_exp_name=pretrain_exp_name,
+<<<<<<< HEAD
+=======
+            run_i=run_i,
+>>>>>>> dev
         )
         print("✅ 微调完成!")
         print(f"📊 最优验证损失: {result['best_val_loss']:.4f}")
@@ -287,30 +327,6 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 使用示例:
-  # 基本回归任务（默认BPE all模式）
-  python run_finetune.py --dataset qm9test --method feuler --task regression
-  
-  # 无BPE压缩微调（使用原始序列）
-  python run_finetune.py --dataset qm9test --method feuler --task regression --bpe_encode_rank_mode none
-  
-  # BPE Top-K压缩微调
-  python run_finetune.py --dataset qm9test --method feuler --task regression \\
-    --bpe_encode_rank_mode topk --bpe_encode_rank_k 1000
-  
-  # BPE随机压缩微调（训练时随机，评估时确定性）
-  python run_finetune.py --dataset qm9test --method feuler --task regression \\
-    --bpe_encode_rank_mode random --bpe_eval_mode all
-  
-  # 指定回归目标属性
-  python run_finetune.py --dataset qm9test --method feuler --task regression --target_property homo
-  
-  # 分类任务（自动推断类别数）
-  python run_finetune.py --dataset mnist --method feuler --task classification
-  
-  # JSON配置覆盖
-  python run_finetune.py --dataset qm9test --method feuler --task regression \\
-    --config_json '{"bert": {"finetuning": {"epochs": 30, "learning_rate": 1e-5}},
-                    "serialization": {"bpe": {"engine": {"encode_rank_mode": "topk", "encode_rank_k": 1000}}}}'
         """
     )
     
@@ -323,7 +339,7 @@ def main():
     parser.add_argument(
         "--aggregation_mode",
         type=str,
-        default="avg",
+        default="learned",
         choices=["avg", "best", "learned"],
         help=(
             "测试时增强（TTA）的聚合模式: "
@@ -352,7 +368,19 @@ def main():
     )
     
     # 解析参数
-    args = parser.parse_args()
+    try:
+        args = parser.parse_args()
+    except SystemExit as e:
+        print("\n❌ 参数解析失败！传入的参数信息:")
+        print("=" * 60)
+        print("脚本名称:", sys.argv[0])
+        print("所有传入参数:")
+        for i, arg in enumerate(sys.argv[1:], 1):
+            print(f"  {i:2d}: {arg}")
+        print("=" * 60)
+        print("请检查参数是否正确，或使用 --help 查看帮助信息")
+        print("=" * 60)
+        raise
     
     print("🔧 初始化配置...")
     # 提前配置输出模式
@@ -374,16 +402,10 @@ def main():
     
     # 自动生成实验名称（如果未指定）
     create_experiment_name(config)
-    
-    # 创建UDI并推断任务信息
-    udi = UnifiedDataInterface(config, config.dataset.name)
-    task = args.task
-    num_classes = args.num_classes
-    task, num_classes = infer_task_and_targets(config, udi, task, num_classes)
-    
-    # 更新配置中的任务类型
-    config.task.type = task
-    
+    # if config.serialization.bpe.engine.encode_rank_mode == 'none' and config.encoder.type == 'gte':
+    #     print(f"Warn: bpe编码模式为Raw，且encoder为GTE,降低bs为一半（由于此encoder是动态显存大小，随序列长度正比）")
+    #     config.bert.finetuning.batch_size = config.bert.finetuning.batch_size // 2
+        
     # 验证配置
     try:
         config.validate()
@@ -393,7 +415,9 @@ def main():
     
     # 打印配置摘要
     print_config_summary(config)
+    raw_seed=config.system.seed
     
+<<<<<<< HEAD
     # 运行微调
     try:
         result = run_finetuning(
@@ -406,33 +430,117 @@ def main():
             pretrained_dir=getattr(args, 'pretrained_dir', None),
             pretrain_exp_name=getattr(args, 'pretrain_exp_name', None),
         )
+=======
+    # 🆕 检查是否需要重复运行
+    repeat_runs = getattr(config, 'repeat_runs', 1)
+
+    # if repeat_runs > 1:
+    print(f"🔄 启用重复运行模式: {repeat_runs} 次")
+    all_results = []
+    for run_i in range(repeat_runs):
+          print(f"\n{'='*60}")
+          print(f"🚀 开始第 {run_i + 1}/{repeat_runs} 次运行")
+          print(f"{'='*60}")
+          
+          seed=raw_seed+run_i
+          try:
+              # 重新设置种子
+              from config import setup_global_seeds
+              setup_global_seeds(seed)
+              result = run_finetuning(
+                  config,
+                  aggregation_mode=args.aggregation_mode,
+                  save_name_prefix=args.save_name_prefix,
+                  save_name_suffix=args.save_name_suffix,
+                  pretrained_dir=getattr(args, 'pretrained_dir', None),
+                  pretrain_exp_name=getattr(args, 'pretrain_exp_name', None),
+                  run_i=run_i,
+              )
+              
+              result['seed'] = seed
+              all_results.append(result)
+              print(f"✅ 第 {run_i + 1} 次运行完成")
+              print(f"📊 最优验证损失: {result['best_val_loss']:.4f}")
+              
+              # 显示测试结果
+              test_metrics = result.get('test_metrics', {})
+              if test_metrics:
+                  print("📈 测试指标:")
+                  for metric, value in test_metrics.items():
+                      if isinstance(value, (int, float)):
+                          print(f"  {metric}: {value:.4f}")
+          except Exception as e:
+              print(f"❌ 第 {run_i + 1} 次运行失败: {e}")
+              task.mark_failed()
+              raise
+    # 聚合统计结果
+    if all_results:
+        print(f"\n{'='*60}")
+        print("📊 聚合统计结果")
+        print(f"{'='*60}")
+        from src.utils.stats_aggregation import aggregate_experiment_results, print_aggregated_stats
+        aggregated = aggregate_experiment_results(
+            config, config.experiment_name, len(all_results), "finetune"
+        )
+        print_aggregated_stats(aggregated, "finetune")
+        task.get_logger().report_single_value(name="ft_metric", value=aggregated['statistics']['test']['avg']['pk']['mean'])
+>>>>>>> dev
         
-        print("\n" + "="*60)
-        print("🎉 微调完成!")
-        print("="*60)
-        
-        print(f"📁 最优模型路径: {result['best_dir']}")
-        print(f"📁 最终模型路径: {result['final_dir']}")
-        print(f"📊 最优验证损失: {result['best_val_loss']:.4f}")
-        
-        # 显示测试结果
-        test_metrics = result['test_metrics']
-        print("\n📈 测试集性能:")
-        for metric, value in test_metrics.items():
-            if isinstance(value, (int, float)):
-                print(f"  {metric}: {value:.4f}")
-        
-        return 0
-        
-    except KeyboardInterrupt:
-        print("\n⚠️ 用户中断训练")
-        return 130
-    except Exception as e:
-        print(f"\n❌ 微调失败: {e}")
-        import traceback
-        traceback.print_exc()
-        return 1
+    try:
+        sys.stdout.flush()
+        sys.stderr.flush()
+    except Exception:
+        pass
+    os._exit(0)
+
+    # else:
+    #     # 普通单次运行
+    #     try:
+    #         result = run_finetuning(
+    #             config,
+    #             aggregation_mode=args.aggregation_mode,
+    #             save_name_prefix=args.save_name_prefix,
+    #             save_name_suffix=args.save_name_suffix,
+    #             pretrained_dir=getattr(args, 'pretrained_dir', None),
+    #             pretrain_exp_name=getattr(args, 'pretrain_exp_name', None),
+    #             run_i=None,  # 单个脚本运行时不使用run_i
+    #         )
+
+    #         print("\n" + "="*60)
+    #         print("🎉 微调完成!")
+    #         print("="*60)
+
+    #         print(f"📁 模型路径: {result['best_dir']}")
+    #         print(f"📊 最优验证损失: {result['best_val_loss']:.4f}")
+
+    #         # 显示测试结果
+    #         test_metrics = result['test_metrics']
+    #         print("\n📈 test_metrics:")
+    #         for metric, value in test_metrics.items():
+    #             if isinstance(value, (int, float)):
+    #                 print(f"  {metric}: {value:.4f}")
+            
+    #         task.get_logger().report_single_value(name="ft_metric", value=result['finetune_metrics'])
+
+    #         try:
+    #             sys.stdout.flush()
+    #             sys.stderr.flush()
+    #         except Exception:
+    #             pass
+    #         os._exit(0)
+    #         print("exit后仍未结束！！！！！")
+
+    #     except KeyboardInterrupt:
+    #         print("\n⚠️ 用户中断训练")
+    #         task.mark_failed()
+    #         return 130
+    #     except Exception as e:
+    #         print(f"\n❌ 微调失败: {e}")
+    #         task.mark_failed()
+    #         import traceback
+    #         traceback.print_exc()
+    #         return 1
 
 
 if __name__ == "__main__":
-    exit(main())
+    main()

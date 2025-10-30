@@ -10,9 +10,17 @@ from src.models.bert.data import (
     LabelNormalizer,
 )
 from src.data.unified_data_interface import UnifiedDataInterface
+<<<<<<< HEAD
 
 
 
+=======
+from src.utils.logger import get_logger
+
+logger = get_logger(__name__)
+
+
+>>>>>>> dev
 def _effective_max_len(seqs, max_pos: int, config=None) -> int:
     if not seqs:
         return max_pos
@@ -34,7 +42,21 @@ def build_regression_datasets(
     train_labels, val_labels, test_labels,
     train_gids, val_gids, test_gids,
 ) -> Tuple[Any, Any, Any, LabelNormalizer]:
+    # 读取图级采样配置
+    finetune_cfg = getattr(config.bert, 'finetuning')
+    use_graph_level_sampling: bool = bool(getattr(finetune_cfg, 'use_graph_level_sampling', False))
+    apply_graph_level_to_val: bool = bool(getattr(finetune_cfg, 'apply_graph_level_to_val', False))
+    apply_graph_level_to_test: bool = bool(getattr(finetune_cfg, 'apply_graph_level_to_test', False))
+    variant_selection: str = str(getattr(finetune_cfg, 'graph_variant_selection', 'random'))
+    print(
+        f"多重采样配置: 训练集图级采样={use_graph_level_sampling}，"
+        f"验证集图级采样={apply_graph_level_to_val}，"
+        f"测试集图级采样={apply_graph_level_to_test}，"
+        f"变体选择策略={variant_selection}"
+    )
+
     normalizer = LabelNormalizer(method=config.task.normalization)
+    # 简化：始终按序列级标签拟合（多重采样次数一致，无需特别处理）
     normalizer.fit(train_labels)
 
     # 🆕 直接从配置和UDI获取所需信息
@@ -45,6 +67,7 @@ def build_regression_datasets(
     val_eff = _effective_max_len(val_sequences, max_pos, config)
     test_eff = _effective_max_len(test_sequences, max_pos, config)
 
+<<<<<<< HEAD
     # 创建统一的transforms
     transforms = create_transforms_from_config(config, vocab_manager.get_valid_tokens(), "regression")
     
@@ -59,6 +82,30 @@ def build_regression_datasets(
     test_ds = NormalizedRegressionDataset(
         test_sequences, test_labels, vocab_manager, transforms, test_eff,
         graph_ids=test_gids
+=======
+    # 仅训练集启用增强；验证/测试使用NoOp
+    train_transforms = create_transforms_from_config(config, vocab_manager.get_valid_tokens(), "regression", vocab_manager,logger)
+    from src.models.bert.data import NoOpTransform
+    eval_transforms = NoOpTransform()
+    
+    train_ds = NormalizedRegressionDataset(
+        train_sequences, train_labels, vocab_manager, train_transforms, train_eff,
+        graph_ids=train_gids,
+        group_by_graph=use_graph_level_sampling,
+        variant_selection=variant_selection,
+    )
+    val_ds = NormalizedRegressionDataset(
+        val_sequences, val_labels, vocab_manager, eval_transforms, val_eff,
+        graph_ids=val_gids,
+        group_by_graph=apply_graph_level_to_val,
+        variant_selection=variant_selection,
+    )
+    test_ds = NormalizedRegressionDataset(
+        test_sequences, test_labels, vocab_manager, eval_transforms, test_eff,
+        graph_ids=test_gids,
+        group_by_graph=apply_graph_level_to_test,
+        variant_selection='first',
+>>>>>>> dev
     )
 
     train_ds.normalizer = normalizer
@@ -80,6 +127,7 @@ def build_classification_datasets(
     *,
     num_classes: int,
 ):
+<<<<<<< HEAD
     # 🆕 直接从配置和UDI获取所需信息
     max_pos = int(config.bert.architecture.max_position_embeddings)
     vocab_manager = udi.get_vocab(method=method)
@@ -94,6 +142,43 @@ def build_classification_datasets(
     train_ds = ClassificationDataset(train_sequences, train_labels, vocab_manager, transforms, train_eff, train_gids)
     val_ds = ClassificationDataset(val_sequences, val_labels, vocab_manager, transforms, val_eff, val_gids)
     test_ds = ClassificationDataset(test_sequences, test_labels, vocab_manager, transforms, test_eff, test_gids)
+=======
+    # 图级采样配置
+    finetune_cfg = getattr(config.bert, 'finetuning')
+    use_graph_level_sampling: bool = bool(getattr(finetune_cfg, 'use_graph_level_sampling', False))
+    apply_graph_level_to_val: bool = bool(getattr(finetune_cfg, 'apply_graph_level_to_val', False))
+    apply_graph_level_to_test: bool = bool(getattr(finetune_cfg, 'apply_graph_level_to_test', False))
+    variant_selection: str = str(getattr(finetune_cfg, 'graph_variant_selection', 'random'))
+
+    # 🆕 直接从配置和UDI获取所需信息
+    max_pos = int(config.bert.architecture.max_position_embeddings)
+    vocab_manager = udi.get_vocab(method=method)
+    
+    train_eff = _effective_max_len(train_sequences, max_pos, config)
+    val_eff = _effective_max_len(val_sequences, max_pos, config)
+    test_eff = _effective_max_len(test_sequences, max_pos, config)
+
+    # 仅训练集启用增强；验证/测试使用NoOp
+    train_transforms = create_transforms_from_config(config, vocab_manager.get_valid_tokens(), "classification", vocab_manager,logger)
+    from src.models.bert.data import NoOpTransform
+    eval_transforms = NoOpTransform()
+    
+    train_ds = ClassificationDataset(
+        train_sequences, train_labels, vocab_manager, train_transforms, train_eff, train_gids,
+        group_by_graph=use_graph_level_sampling,
+        variant_selection=variant_selection,
+    )
+    val_ds = ClassificationDataset(
+        val_sequences, val_labels, vocab_manager, eval_transforms, val_eff, val_gids,
+        group_by_graph=apply_graph_level_to_val,
+        variant_selection=variant_selection,
+    )
+    test_ds = ClassificationDataset(
+        test_sequences, test_labels, vocab_manager, eval_transforms, test_eff, test_gids,
+        group_by_graph=apply_graph_level_to_test,
+        variant_selection='first',
+    )
+>>>>>>> dev
     return train_ds, val_ds, test_ds
 
 
@@ -135,41 +220,48 @@ def build_regression_loaders(
     
     # 创建BPE worker初始化函数（统一创建，mode控制行为）
     bpe_worker_init_fn = None
-    num_workers = 4  # 统一使用多进程
     if udi is not None and method is not None:
         try:
             from src.data.bpe_transform import create_bpe_worker_init_fn_from_udi
+<<<<<<< HEAD
             bpe_worker_init_fn = create_bpe_worker_init_fn_from_udi(udi, config, method)
+=======
+            bpe_worker_init_fn = create_bpe_worker_init_fn_from_udi(udi, config, method, split="train")
+>>>>>>> dev
         except Exception as e:
             # 如果BPE创建失败，回退到无BPE模式（但不静默忽略错误）
             import logging
             logger_instance = logging.getLogger("tokenizerGraph.data")
             logger_instance.warning(f"BPE创建失败，回退到无BPE模式: {e}")
-            num_workers = 0
     
+    _num_workers = int(config.system.num_workers)
+    _persistent_workers = bool(config.system.persistent_workers and _num_workers > 0)
     train_dl = torch.utils.data.DataLoader(
         train_ds, 
         batch_size=config.bert.finetuning.batch_size, 
         shuffle=True, 
         pin_memory=True,
         worker_init_fn=bpe_worker_init_fn,
-        num_workers=num_workers
+        num_workers=_num_workers,
+        persistent_workers=_persistent_workers,
     )
     val_dl = torch.utils.data.DataLoader(
         val_ds, 
         batch_size=config.bert.finetuning.batch_size, 
         shuffle=False, 
         pin_memory=True,
-        worker_init_fn=bpe_worker_init_fn,
-        num_workers=num_workers
+        worker_init_fn=create_bpe_worker_init_fn_from_udi(udi, config, method, split="val"),
+        num_workers=_num_workers,
+        persistent_workers=_persistent_workers,
     )
     test_dl = torch.utils.data.DataLoader(
         test_ds, 
         batch_size=config.bert.finetuning.batch_size, 
         shuffle=False, 
         pin_memory=True,
-        worker_init_fn=bpe_worker_init_fn,
-        num_workers=num_workers
+        worker_init_fn=create_bpe_worker_init_fn_from_udi(udi, config, method, split="test"),
+        num_workers=_num_workers,
+        persistent_workers=_persistent_workers,
     )
     return train_dl, val_dl, test_dl, normalizer
 
@@ -212,41 +304,48 @@ def build_classification_loaders(
     
     # 创建BPE worker初始化函数（统一创建，mode控制行为）
     bpe_worker_init_fn = None
-    num_workers = 4  # 统一使用多进程
     if udi is not None and method is not None:
         try:
             from src.data.bpe_transform import create_bpe_worker_init_fn_from_udi
+<<<<<<< HEAD
             bpe_worker_init_fn = create_bpe_worker_init_fn_from_udi(udi, config, method)
+=======
+            bpe_worker_init_fn = create_bpe_worker_init_fn_from_udi(udi, config, method, split="train")
+>>>>>>> dev
         except Exception as e:
             # 如果BPE创建失败，回退到无BPE模式（但不静默忽略错误）
             import logging
             logger_instance = logging.getLogger("tokenizerGraph.data")
             logger_instance.warning(f"BPE创建失败，回退到无BPE模式: {e}")
-            num_workers = 0
     
+    _num_workers = int(config.system.num_workers)
+    _persistent_workers = bool(config.system.persistent_workers and _num_workers > 0)
     train_dl = torch.utils.data.DataLoader(
         train_ds, 
         batch_size=config.bert.finetuning.batch_size, 
         shuffle=True, 
         pin_memory=True,
         worker_init_fn=bpe_worker_init_fn,
-        num_workers=num_workers
+        num_workers=_num_workers,
+        persistent_workers=_persistent_workers,
     )
     val_dl = torch.utils.data.DataLoader(
         val_ds, 
         batch_size=config.bert.finetuning.batch_size, 
         shuffle=False, 
         pin_memory=True,
-        worker_init_fn=bpe_worker_init_fn,
-        num_workers=num_workers
+        worker_init_fn=create_bpe_worker_init_fn_from_udi(udi, config, method, split="val"),
+        num_workers=_num_workers,
+        persistent_workers=_persistent_workers,
     )
     test_dl = torch.utils.data.DataLoader(
         test_ds, 
         batch_size=config.bert.finetuning.batch_size, 
         shuffle=False, 
         pin_memory=True,
-        worker_init_fn=bpe_worker_init_fn,
-        num_workers=num_workers
+        worker_init_fn=create_bpe_worker_init_fn_from_udi(udi, config, method, split="test"),
+        num_workers=_num_workers,
+        persistent_workers=_persistent_workers,
     )
     return train_dl, val_dl, test_dl
 

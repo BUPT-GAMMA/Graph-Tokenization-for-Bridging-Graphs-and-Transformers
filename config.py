@@ -141,6 +141,9 @@ class ProjectConfig:
         # 初始化后处理
         self.__post_init__()
         setup_global_seeds(self.system.seed)
+        
+        # 🆕 Optuna超参数搜索支持
+        self.optuna_trial = None  # 存储optuna trial对象，用于剪枝支持
     
     def _process_special_configs(self):
         """
@@ -154,17 +157,22 @@ class ProjectConfig:
         """
         # 处理设备配置
         if self.system.device == 'auto':
-            try:
-                import importlib
-                _t = importlib.import_module('torch')
-                self.device = 'cuda' if _t.cuda.is_available() else 'cpu'
-            except Exception:
-                self.device = 'cpu'
+            import importlib
+            _t = importlib.import_module('torch')
+            assert _t.cuda.is_available()
+            self.device = 'cuda'
+
+            # try:
+            #     import importlib
+            #     _t = importlib.import_module('torch')
+            #     self.device = 'cuda' if _t.cuda.is_available() else 'cpu'
+            # except Exception:
+            #     self.device = 'cpu'
         else:
             self.device = self.system.device
         
         # 基础路径配置（统一解析为以项目根为基准的绝对路径，避免依赖当前工作目录）
-        project_root = Path(__file__).resolve().parent
+        project_root = Path(self.paths.project_root)
 
         def _as_abs(p: str | Path) -> Path:
             p = Path(p)
@@ -212,6 +220,9 @@ class ProjectConfig:
         self.experiment_name = None  # 用户可指定的实验名（可为空）
         self.experiment_group = None  # 实验分组（可为空，支持多级）
 
+        # 🆕 重复运行配置
+        self.repeat_runs = 1  # 重复运行次数，默认1次（不重复）
+
         # 运行时间戳（在配置创建时固定下来，全局统一使用）
         self._run_simple_ts = datetime.now().strftime("%m%d_%H%M")  # 用于exp_name后缀（月日_时分）
         self._run_full_ts = datetime.now().strftime("%Y%m%d_%H%M%S")  # 用于experiment_id（年月至秒）
@@ -222,11 +233,15 @@ class ProjectConfig:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.model_dir.mkdir(parents=True, exist_ok=True)
         self.log_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # 创建子目录
         (self.cache_dir / "serialization").mkdir(exist_ok=True)
         (self.cache_dir / "bpe").mkdir(exist_ok=True)
         (self.cache_dir / "bert").mkdir(exist_ok=True)
+
+        # 🆕 加载重复运行配置
+        if hasattr(self, 'repeat_runs'):
+            self.repeat_runs = int(self.repeat_runs)
     
     @classmethod
     def from_args(cls, args) -> 'ProjectConfig':
@@ -403,17 +418,19 @@ class ProjectConfig:
     def get_logs_dir(self,
                      group: Optional[str] = None,
                      exp_name: Optional[str] = None,
+                     run_i: Optional[int] = None,
                      dataset: Optional[str] = None,
                      method: Optional[str] = None) -> Path:
         """获取标准日志目录。
 
-        目录层级："log/<group>/<exp_name>/<dataset>/<method>"。
+        目录层级："log/<group>/<exp_name>/run_{i}" 或兼容旧格式。
 
         参数：
           group (Optional[str]): 实验分组；为 None 时使用 self.experiment_group。必须存在，否则抛出异常。
           exp_name (Optional[str]): 显式指定的 exp_name；为 None 时根据用户名称与后缀自动生成。
-          dataset (Optional[str]): 数据集层名称；默认使用 self.dataset.name。
-          method (Optional[str]): 方法层名称；默认使用 _compute_method_dir()（如 "feuler-BPE"）。
+          run_i (Optional[int]): 重复运行编号，为 None 时使用传统路径格式。
+          dataset (Optional[str]): 数据集层名称；默认使用 self.dataset.name（仅兼容旧格式）。
+          method (Optional[str]): 方法层名称；默认使用 _compute_method_dir()（仅兼容旧格式）。
 
         返回：
           Path: 日志目录路径。
@@ -422,16 +439,9 @@ class ProjectConfig:
           ValueError: 当实验分组未设置时抛出。
 
         示例：
-          - group=g1, user_name=None, dataset=qm9, method=feuler, BPE=True, seed=42，假设简单时间戳为0101_0000
-            → log/g1/seed42-0101_0000/qm9/feuler-BPE
-          - group=ablation, user_name=testX, dataset=qm9, method=feuler, BPE=True, seed=42
-            → log/ablation/testX-seed42-0101_0000/qm9/feuler-BPE
-          - group=g2, user_name=None, dataset=qm9, method=feuler, BPE=False, seed=123
-            → log/g2/seed123-0101_0000/qm9/feuler-RAW
-          - group=bench, user_name=None, dataset=cifar10, method=topological, BPE=True, seed=7
-            → log/bench/seed7-0101_0000/cifar10/topological-BPE
-          - group=ablation/2025, user_name=try1, dataset=qm9, method=feuler, BPE=True, seed=99
-            → log/ablation/2025/try1-seed99-0101_0000/qm9/feuler-BPE
+          - 重复运行：group=g1, exp_name=testX, run_i=1 → log/g1/testX/run_1
+          - 聚合日志目录：group=g1, exp_name=testX, run_i=-1 → log/g1/testX
+          - 兼容旧格式：group=g1, exp_name=testX, run_i=None → log/g1/testX/qm9/feuler-BPE
         """
         # 严格要求必要字段存在，不做静默回退
         group = group if group is not None else self.experiment_group
@@ -440,24 +450,30 @@ class ProjectConfig:
         if exp_name is None:
             # 始终根据用户提供的名称派生 exp_name（user_name-suffix 或纯 suffix）
             exp_name = self.build_exp_name(self.experiment_name)
-        dataset = dataset if dataset is not None else self.dataset.name
-        method = method if method is not None else self._compute_method_dir()
-        return self.log_dir / group / exp_name / dataset / method
+
+        if run_i is None:
+          return self.log_dir / group / exp_name / f"run_1" #默认返回第一个重复运行日志目录无论有没有设置重复运行次数
+        elif run_i == -1: #聚合日志目录
+            return self.log_dir / group / exp_name
+        else:
+          return self.log_dir / group / exp_name / f"run_{run_i}"
 
     def get_model_dir(self,
                       group: Optional[str] = None,
                       exp_name: Optional[str] = None,
+                      run_i: Optional[int] = None,
                       dataset: Optional[str] = None,
                       method: Optional[str] = None) -> Path:
         """获取标准模型目录。
 
-        目录层级："model/<group>/<exp_name>/<dataset>/<method>"。
+        目录层级："model/<group>/<exp_name>/run_{i}" 或兼容旧格式。
 
         参数：
           group (Optional[str]): 实验分组；为 None 时使用 self.experiment_group。必须存在，否则抛出异常。
           exp_name (Optional[str]): 显式指定的 exp_name；为 None 时根据用户名称与后缀自动生成。
-          dataset (Optional[str]): 数据集层名称；默认使用 self.dataset.name。
-          method (Optional[str]): 方法层名称；默认使用 _compute_method_dir()（如 "feuler-BPE"）。
+          run_i (Optional[int]): 重复运行编号，为 None 时使用传统路径格式。
+          dataset (Optional[str]): 数据集层名称；默认使用 self.dataset.name（仅兼容旧格式）。
+          method (Optional[str]): 方法层名称；默认使用 _compute_method_dir()（仅兼容旧格式）。
 
         返回：
           Path: 模型目录路径。
@@ -466,25 +482,21 @@ class ProjectConfig:
           ValueError: 当实验分组未设置时抛出。
 
         示例：
-          - group=g1, user_name=None, dataset=qm9, method=feuler, BPE=True, seed=42，假设简单时间戳为0101_0000
-            → model/g1/seed42-0101_0000/qm9/feuler-BPE
-          - group=ablation, user_name=testX, dataset=qm9, method=feuler, BPE=True, seed=42
-            → model/ablation/testX-seed42-0101_0000/qm9/feuler-BPE
-          - group=g2, user_name=None, dataset=qm9, method=feuler, BPE=False, seed=123
-            → model/g2/seed123-0101_0000/qm9/feuler-RAW
-          - group=bench, user_name=None, dataset=cifar10, method=topological, BPE=True, seed=7
-            → model/bench/seed7-0101_0000/cifar10/topological-BPE
-          - group=ablation/2025, user_name=try1, dataset=qm9, method=feuler, BPE=True, seed=99
-            → model/ablation/2025/try1-seed99-0101_0000/qm9/feuler-BPE
+          - 重复运行：group=g1, exp_name=testX, run_i=1 → model/g1/testX/run_1
+          - 兼容旧格式：group=g1, exp_name=testX, run_i=None → model/g1/testX/qm9/feuler-BPE
         """
         group = group if group is not None else self.experiment_group
         if group is None:
             raise ValueError("experiment_group 未设置")
         if exp_name is None:
             exp_name = self.build_exp_name(self.experiment_name)
-        dataset = dataset if dataset is not None else self.dataset.name
-        method = method if method is not None else self._compute_method_dir()
-        return self.model_dir / group / exp_name / dataset / method
+
+        if run_i is None:
+          return self.model_dir / group / exp_name / f"run_0" #默认返回第一个重复运行模型目录无论有没有设置重复运行次数
+        elif run_i == -1: #聚合模型目录
+          assert False, "聚合模型目录不支持"
+        else:
+          return self.model_dir / group / exp_name / f"run_{run_i}"
 
     # ================= BPE 码本保存路径 =================
     def get_bpe_model_path(self, dataset_name: str, method: str) -> Path:
@@ -498,92 +510,22 @@ class ProjectConfig:
         return out_dir / "bpe_codebook.pkl"
 
     # ================= 实验ID与快照/目录辅助 =================
-    def build_experiment_id(self) -> str:
-        """构建 experiment_id。
 
-        说明：experiment_id = "{group}/{exp_name}"，其中：
-          - group 来源于 self.experiment_group（必须存在）
-          - exp_name 由 build_exp_name(self.experiment_name) 生成
-          - 仅包含一处时间戳：exp_name 内的简单时间戳（mmdd_HHMM）
-
-        返回：
-          str: experiment_id 字符串。
-
-        异常：
-          ValueError: 当 experiment_group 未设置时抛出。
-        """
-        if self.experiment_group is None:
-            raise ValueError("experiment_group 未设置，无法构建 experiment_id")
-        exp_name = self.build_exp_name(self.experiment_name)
-        return f"{self.experiment_group}/{exp_name}"
-
-    def get_config_snapshot_path(self, exp_id: str) -> Path:
-        """获取配置快照写入路径。
-
-        说明：快照写入到日志目录的根层级：
-          logs/<group>/<exp_name>/<dataset>/<method>/<exp_id>_config.json
-          注意：作为文件名使用时将 '/' 替换为 '_'。
+    def ensure_experiment_dirs(self, run_i: Optional[int] = None) -> tuple[Path, Path]:
+        """确保实验目录存在（logs与model）。
 
         参数：
-          exp_id (str): 调用 build_experiment_id() 得到的 experiment_id。
-
-        返回：
-          Path: 配置快照文件路径。
-        """
-        logs_dir = self.get_logs_dir()
-        filename = f"{exp_id.replace('/', '_')}_config.json"
-        return logs_dir / filename
-
-    def ensure_experiment_dirs(self) -> tuple[Path, Path]:
-        """确保实验目录存在（logs与model）。
+          run_i (Optional[int]): 重复运行编号，为 None 时使用传统路径格式。
 
         返回：
           (Path, Path): (logs_dir, model_dir)
         """
-        logs_dir = self.get_logs_dir()
-        model_dir = self.get_model_dir()
+        logs_dir = self.get_logs_dir(run_i=run_i)
+        model_dir = self.get_model_dir(run_i=run_i)
         logs_dir.mkdir(parents=True, exist_ok=True)
         model_dir.mkdir(parents=True, exist_ok=True)
         return logs_dir, model_dir
 
-    def compose_wandb_metadata(self) -> Dict[str, Any]:
-        """组合WandB元数据（不直接导入/依赖wandb）。
-
-        返回：
-          Dict[str, Any]: 包含 project(需外部指定)、group、name、tags 的字典。
-            - group: "{group}/{exp_name}/{dataset}/{method}"
-            - name : experiment_id（当前时间戳）
-            - tags : [dataset, method, bpe_config, seed]（包含BPE配置信息）
-        """
-        group = self.experiment_group or "default"  # 提供默认组名
-        exp_name = self.build_exp_name(self.experiment_name)
-        dataset = self.dataset.name
-        method = self._compute_method_dir()
-        seed = self.system.seed
-        # 可选：由调用方在运行期设置实验阶段（如 "pretrain"、"finetune"）
-        phase = getattr(self, "experiment_phase", None)
-        
-        # 添加BPE配置信息
-        bpe_tag = self._get_bpe_identifier()
-        
-        # name 提供更详细信息：包含 group/exp_name 与 dataset/method
-        detailed_name = f"{group}/{exp_name}__{dataset}/{method}_{bpe_tag}"
-        if phase is not None:
-            detailed_name = f"{detailed_name}__{phase}"
-
-        group_path = f"{group}/{exp_name}/{dataset}/{method}_{bpe_tag}"
-        if phase is not None:
-            group_path = f"{group_path}/{phase}"
-
-        tags = [dataset, method, bpe_tag, f"seed{seed}"]
-        if phase is not None:
-            tags.append(str(phase))
-
-        return {
-            "group": group_path,
-            "name": detailed_name,
-            "tags": tags,
-        }
     
     def _get_bpe_identifier(self) -> str:
         """生成BPE配置标识符"""
@@ -632,9 +574,6 @@ class ProjectConfig:
         # 兼容旧接口：统一回到 log_dir 下
         return self.log_dir / experiment_name
     
-    # 旧路径接口已在重构中移除；请使用以下统一接口：
-    # - get_logs_dir()/get_model_dir()/ensure_experiment_dirs()
-    # - get_config_snapshot_path(build_experiment_id())
 
 # ===========================================
 # 全局配置实例和工具函数

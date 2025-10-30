@@ -17,6 +17,10 @@
 /logs/
 /backup_log/
 /backup/
+<<<<<<< HEAD
+=======
+/archive/
+>>>>>>> dev
 # /foreign_dataset_files_to_convert/
 
 __pycache__/
@@ -33,8 +37,46 @@ nohup.out
 *.log*
 *.tar.gz
 
+<<<<<<< HEAD
 /agg/
 
 /tests/
 /sbatch_scripts/
 *.safetensors
+=======
+*.tex
+/agg/
+
+final/**/*.csv
+final/**/*.pdf
+final/**/*.png
+final/**/*.svg
+final/**/*.jpg
+final/**/*.json
+final/**/*.md
+final/**/*.txt
+final/**/*.log
+/tests/
+/sbatch_scripts/
+*.safetensors
+analysis_results/molhiv_comparison.png
+analysis_results/peptides_func_comparison.png
+analysis_results/zinc_comparison.png
+detailed_analysis/aug_vs_noaug_analysis.png
+detailed_analysis/comprehensive_heatmaps.png
+detailed_analysis/cross_dataset_consistency.png
+detailed_analysis/gte_keep_vs_reset_analysis.png
+analyze_gte_exploration_results.py
+consistency_analysis_summary.png
+create_summary_visualization.py
+detailed_visualization_analysis.py
+gte_exploration_results.csv
+key_findings_summary.png
+hyperopt/journal/large_batch.db
+hyperopt/journal/test_large_batch.db
+hyperopt/journal/finetune_with_options.db
+comparison_results/
+analysis_results
+
+ 
+>>>>>>> dev

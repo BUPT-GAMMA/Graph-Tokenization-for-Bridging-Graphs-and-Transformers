@@ -29,18 +29,23 @@ import shlex
 DEFAULT_EXPERIMENT_GROUP = "test_zinc_10multi_4bpe-way"
 DEFAULT_DATASETS = ["zinc"]
 DEFAULT_METHODS = ["feuler", "eulerian", "cpp", "fcpp", "topo", "smiles"]
+<<<<<<< HEAD
 DEFAULT_GPUS = [0,1,2,3]
 # DEFAULT_BPE_SCENARIOS = ["raw", "all", "random", "gaussian"]
 DEFAULT_BPE_SCENARIOS = ["all"]
 DEFAULT_FT_HYPERPARAMS = [{"epochs": 60, "batch_size": 128, "learning_rate": 5e-5}]
+=======
+DEFAULT_GPUS = [0]
+# DEFAULT_BPE_SCENARIOS = ["raw", "all", "random", "gaussian"]
+DEFAULT_BPE_SCENARIOS = ["all"]
+# 删除硬编码超参，使用config默认值，只在raw模型时调整学习率
+>>>>>>> dev
 DEFAULT_AGGREGATION_MODE = "best"  # or "best"
 DEFAULT_LOG_DIR = "logs/batch_finetune"
 
 # 回归任务增强方法默认集合（与预训练方法名一致，作用于回归任务）
 DEFAULT_REG_AUG_METHODS = [
     "random_deletion",
-    "random_insertion",
-    "random_replacement",
     "random_swap",
     "random_truncation",
 ]
@@ -120,6 +125,7 @@ def build_hyperparams_list(hp_json: Optional[str], epochs: Optional[int],
             if not isinstance(item, dict) or not {"epochs", "batch_size", "learning_rate"} <= set(item.keys()):
                 raise ValueError("--hyperparams_json 中每个对象必须包含 epochs, batch_size, learning_rate 三个键")
         return loaded
+<<<<<<< HEAD
     # 🆕 支持部分参数指定，缺失的用默认值填充
     if epochs is None and batch_size is None and learning_rate is None:
         return DEFAULT_FT_HYPERPARAMS
@@ -131,10 +137,26 @@ def build_hyperparams_list(hp_json: Optional[str], epochs: Optional[int],
     final_learning_rate = learning_rate if learning_rate is not None else default_config["learning_rate"]
     
     return [{"epochs": int(final_epochs), "batch_size": int(final_batch_size), "learning_rate": float(final_learning_rate)}]
+=======
+    # 未指定三者且没有JSON时：不下传任何微调超参，使用config默认
+    if epochs is None and batch_size is None and learning_rate is None:
+        return []
+
+    # 仅传递用户显式提供的项（其余保持由config默认）
+    params: Dict[str, Any] = {}
+    if epochs is not None:
+        params["epochs"] = int(epochs)
+    if batch_size is not None:
+        params["batch_size"] = int(batch_size)
+    if learning_rate is not None:
+        params["learning_rate"] = float(learning_rate)
+    return [params]
+>>>>>>> dev
 
 
 def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: List[Dict[str, Any]],
                      hyperparams_list: List[Dict[str, Any]], exp_prefix: str, tag: Optional[str],
+<<<<<<< HEAD
                      aug_label: Optional[str], finetune_modes: List[str] = None, 
                      pretrain_exp_prefix: str = "") -> List[Dict[str, Any]]:
     """创建微调任务列表，支持灵活的微调模式选择"""
@@ -159,6 +181,26 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
             encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "reinit": True, "suffix": "_gte_reinit_pretrained", "direct": False, "pretrain_suffix": "_gte_reinit"})
         else:
             raise ValueError(f"不支持的微调模式: {mode}。支持: bert, gte-direct, gte-pretrain, gte-reset-direct, gte-reset-pretrain")
+=======
+                     aug_label: Optional[str], encoders: List[str] = None, 
+                     pretrain_exp_prefix: str = "",mult=1) -> List[Dict[str, Any]]:
+    """创建微调任务列表，使用 --encoder 指定 bert/gte，并默认从对应预训练模型加载"""
+    tasks: List[Dict[str, Any]] = []
+    
+    # 默认只使用BERT（向后兼容）
+    if encoders is None:
+        encoders = ["bert"]
+
+    # 根据指定的编码器构建配置（仅支持 bert/gte）
+    encoder_configs = []
+    for enc in encoders:
+        if enc == "bert":
+            encoder_configs.append({"type": "bert", "suffix": "_bert", "pretrain_suffix": "_bert"})
+        elif enc == "gte":
+            encoder_configs.append({"type": "Alibaba-NLP/gte-multilingual-base", "suffix": "_gte", "pretrain_suffix": "_gte"})
+        else:
+            raise ValueError(f"不支持的编码器类型: {enc}。仅支持: bert,gte")
+>>>>>>> dev
     
     for dataset in datasets:
         for method in methods:
@@ -166,6 +208,7 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
                 continue
             for bpe_config in bpe_test_configs:
                 for encoder_config in encoder_configs:
+<<<<<<< HEAD
                     if hyperparams_list:
                         for params in hyperparams_list:
                             bpe_suffix = bpe_config["config_name"]
@@ -181,12 +224,27 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
                                 pretrain_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}{encoder_config['pretrain_suffix']}"
                                 pretrain_exp_name = f"{pretrain_exp_prefix}{pretrain_core}{('_' + tag) if tag else ''}"
                             
+=======
+                    bpe_suffix = bpe_config["config_name"]
+                    aug_part = f"_{aug_label}" if aug_label else ""
+                    encoder_suffix = encoder_config["suffix"]
+                    mult_suffix = f"_{mult}" if mult > 1 else ""
+                    # 删除 _ft_ 和 epoch 标记，确保与预训练阶段的实验名一致
+                    experiment_name = f"{exp_prefix}{dataset}_{method}_{bpe_suffix}{aug_part}{encoder_suffix}{mult_suffix}{('_' + tag) if tag else ''}"
+                    # 🆕 特殊处理：peptides_struct数据集使用peptides_func的预训练模型（数据相同）
+                    pretrain_dataset = "peptides_func" if dataset == "peptides_struct" else dataset
+                    # pretrain_core = f"{pretrain_dataset}_{method}_{bpe_suffix}{aug_part}{encoder_config['pretrain_suffix']}"
+                    pretrain_exp_name = f"{exp_prefix}{pretrain_dataset}_{method}_{bpe_suffix}{aug_part}{encoder_config['pretrain_suffix']}{mult_suffix}{('_' + tag) if tag else ''}"
+                    if hyperparams_list:
+                        for params in hyperparams_list:
+>>>>>>> dev
                             tasks.append({
                                 "dataset": dataset,
                                 "method": method,
                                 "hyperparams": params,
                                 "bpe_config": bpe_config,
                                 "encoder_type": encoder_config["type"],
+<<<<<<< HEAD
                                 "reinit_weights": encoder_config["reinit"],
                                 "pretrain_exp_name": pretrain_exp_name,
                                 "experiment_name": experiment_name
@@ -204,15 +262,28 @@ def create_task_list(datasets: List[str], methods: List[str], bpe_test_configs: 
                             pretrain_core = f"{dataset}_{method}_{bpe_suffix}{aug_part}{encoder_config['pretrain_suffix']}_default"
                             pretrain_exp_name = f"{pretrain_exp_prefix}{pretrain_core}{('_' + tag) if tag else ''}"
                         
+=======
+                                "pretrain_exp_name": pretrain_exp_name,
+                                "experiment_name": experiment_name,
+                                "mult":mult
+                            })
+                    else:
+>>>>>>> dev
                         tasks.append({
                             "dataset": dataset,
                             "method": method,
                             "hyperparams": None,
                             "bpe_config": bpe_config,
                             "encoder_type": encoder_config["type"],
+<<<<<<< HEAD
                             "reinit_weights": encoder_config["reinit"],
                             "pretrain_exp_name": pretrain_exp_name,
                             "experiment_name": experiment_name
+=======
+                            "pretrain_exp_name": pretrain_exp_name,
+                            "experiment_name": experiment_name,
+                            "mult":mult
+>>>>>>> dev
                         })
     return tasks
 
@@ -222,10 +293,12 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
              log_dir: Optional[str],
              commands_only: bool = False, plain_logs: bool = False,
              commands_file: Optional[str] = None,
+             commands_stdout: bool = False,
              save_name_prefix: Optional[str] = None,
-             save_name_suffix: Optional[str] = None) -> Optional[subprocess.Popen]:
+             save_name_suffix: Optional[str] = None,
+             repeat_runs: int = 1, mult: int = 1) -> Optional[subprocess.Popen]:
     cmd = [
-        "python", "run_finetune.py",
+        "/home/gzy/py/tokenizerGraph/finetune_wrapper.sh",
         "--dataset", task["dataset"],
         "--method", task["method"],
         "--experiment_group", experiment_group,
@@ -233,12 +306,20 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
         "--device", "auto",
         # "--aggregation_mode", aggregation_mode,
     ]
+
+    # 添加mult参数传递给run脚本
+    if mult > 1:
+        cmd.extend(["--mult", str(mult)])
     if os.environ.get("TG_LOG_STYLE", "").lower() in {"online", "offline"}:
         cmd.extend(["--log_style", os.environ["TG_LOG_STYLE"].lower()])
 
     # 🆕 收集微调参数 - 任务类型等由数据集自动推断，无需指定
     finetune_extras: list[str] = []
+<<<<<<< HEAD
     finetune_extras.extend(["--aggregation_mode", aggregation_mode])
+=======
+    # finetune_extras.操shouldextend(["--aggregation_mode", aggregation_mode])
+>>>>>>> dev
     if save_name_prefix:
         finetune_extras.extend(["--save_name_prefix", save_name_prefix])
     if save_name_suffix:
@@ -247,9 +328,16 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
     bpe_config = task["bpe_config"]
     if "bpe_encode_rank_mode" in bpe_config and bpe_config["bpe_encode_rank_mode"]:
         cmd.extend(["--bpe_encode_rank_mode", str(bpe_config["bpe_encode_rank_mode"])])
-
+    
+    # 🆕 简化超参逻辑：默认使用config值，只在raw模型时调整学习率
+    # if bpe_config["bpe_encode_rank_mode"] == 'none':
+    #     # raw模型：将默认微调学习率减半（5e-5 -> 2.5e-5）
+    #     cmd.extend(["--learning_rate", str(2e-5)])
+    
+    # 其他超参全部使用config默认值，不再通过命令行传递
     if task["hyperparams"]:
         params = task["hyperparams"]
+<<<<<<< HEAD
         cmd.extend([
             "--epochs", str(params["epochs"]),
             "--batch_size", str(params["batch_size"]),
@@ -263,6 +351,24 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
     if task.get("reinit_weights", False):
         cmd.append("--reinit_weights")
         
+=======
+        # 保留显式传递的超参（如果需要覆盖config默认值）
+        if "epochs" in params:
+            cmd.extend(["--epochs", str(params["epochs"])])
+        if "batch_size" in params:
+            cmd.extend(["--batch_size", str(params["batch_size"])])
+        if "learning_rate" in params:
+            # 非raw模型时才允许传递自定义学习率
+            cmd.extend(["--learning_rate", str(params["learning_rate"])])
+
+    # 🆕 添加编码器相关参数
+    if task.get("encoder_type"):
+        encoder_flag = "bert"
+        if task["encoder_type"] == "Alibaba-NLP/gte-multilingual-base":
+            encoder_flag = "gte"
+        cmd.extend(["--encoder", encoder_flag])
+
+>>>>>>> dev
     if task.get("pretrain_exp_name"):
         cmd.extend(["--pretrain_exp_name", task["pretrain_exp_name"]])
     
@@ -272,6 +378,10 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
     # 将 plain_logs 传递给下层 run_finetune.py，以启用UTF-8与去色包装
     if plain_logs:
         cmd.append("--plain_logs")
+
+    # 🆕 添加重复运行参数
+    if repeat_runs > 1:
+        cmd.extend(["--repeat_runs", str(repeat_runs)])
 
     # 目标日志文件（也用于 commands_only 记录）
     stdout_dest = subprocess.PIPE
@@ -285,14 +395,17 @@ def run_task(task: Dict[str, Any], gpu_id: int, experiment_group: str,
     final_cmd = cmd + finetune_extras
     safe_cmd_str = ' '.join(shlex.quote(part) for part in final_cmd)
 
-    if commands_only:
-        record_line = f"CUDA_VISIBLE_DEVICES={gpu_id} {safe_cmd_str}\n"
-        # 默认写入当前目录 commands.list；如提供 commands_file 则使用之
-        dest_file = commands_file or 'commands.list'
-        Path(os.path.dirname(dest_file) or '.').mkdir(parents=True, exist_ok=True)
-        with open(dest_file, 'a', encoding='utf-8') as fh:
-            fh.write(record_line)
-        print(f"✍️ 记录命令到 {dest_file}: {record_line.strip()}")
+    if commands_only or commands_stdout:
+        record_line = f"{safe_cmd_str}"
+        if commands_stdout:
+            print(record_line)
+        else:
+            # 默认写入当前目录 commands.list；如提供 commands_file 则使用之
+            dest_file = commands_file or 'commands.list'
+            Path(os.path.dirname(dest_file) or '.').mkdir(parents=True, exist_ok=True)
+            with open(dest_file, 'a', encoding='utf-8') as fh:
+                fh.write(record_line + "\n")
+            print(f"✍️ 记录命令到 {dest_file}: {record_line}")
         return None
 
     if log_path:
@@ -375,8 +488,17 @@ def main():
     parser.add_argument("--epochs", type=int, default=None, help="微调轮数（单组超参用）")
     parser.add_argument("--batch_size", type=int, default=None, help="微调批次大小（单组超参用）")
     parser.add_argument("--learning_rate", type=float, default=None, help="微调学习率（单组超参用）")
+<<<<<<< HEAD
     parser.add_argument("--hyperparams_json", type=str, default=None, help="多组超参数的JSON（字符串或文件路径），数组形式")
 
+=======
+    parser.add_argument("--mult", type=int, default=1, help="多重采样次数（单组超参用）")
+    parser.add_argument("--hyperparams_json", type=str, default=None, help="多组超参数的JSON（字符串或文件路径），数组形式")
+
+    # 🆕 重复运行参数
+    parser.add_argument("--repeat_runs", type=int, default=1, help="重复运行次数，默认1次（不重复）")
+
+>>>>>>> dev
     # 评估配置
     parser.add_argument("--aggregation_mode", type=str, default=DEFAULT_AGGREGATION_MODE, choices=["avg", "best", "learned"], help="测试时增强的聚合模式")
 
@@ -384,9 +506,15 @@ def main():
     parser.add_argument("--use_augmentation", type=str, choices=["true", "false"], default=None,
                         help="是否启用回归任务增强（true/false，不指定则保持config默认）")
     
+<<<<<<< HEAD
     # 🆕 微调模式选择（灵活配置）
     parser.add_argument("--finetune_modes", type=str, default="bert", 
                         help="要运行的微调模式，逗号分隔。可选: bert,gte-direct,gte-pretrain,gte-reset-direct,gte-reset-pretrain。默认bert保持向后兼容")
+=======
+    # 编码器选择（仅支持 bert,gte）
+    parser.add_argument("--encoder", type=str, default="bert", 
+                        help="要运行的编码器，逗号分隔。可选: bert,gte。默认 bert")
+>>>>>>> dev
     parser.add_argument("--pretrain_exp_prefix", type=str, default="", 
                         help="预训练实验名前缀，用于构建依赖的预训练实验名（仅对*-pretrain模式有效）")
 
@@ -396,11 +524,24 @@ def main():
     parser.add_argument("--log_style", type=str, choices=["online", "offline"], default=None, help="日志样式：online=使用tqdm；offline=每个epoch按10%输出摘要")
     parser.add_argument("--commands_only", action="store_true", help="仅记录将要运行的命令到统一文件（append），不实际执行")
     parser.add_argument("--commands_file", type=str, default=None, help="commands_only 模式下的统一命令文件（默认 ./commands.list）")
+    parser.add_argument("--commands_stdout", action="store_true", help="仅将将要运行的命令打印到标准输出，不执行也不写文件")
     parser.add_argument("--plain_logs", action="store_true", help="将子任务输出写入无ANSI/emoji的纯文本日志，解决乱码问题")
     parser.add_argument("--save_name_prefix", type=str, default=None, help="仅用于保存目录的实验名前缀（不影响预训练加载）")
     parser.add_argument("--save_name_suffix", type=str, default=None, help="仅用于保存目录的实验名后缀（不影响预训练加载）")
 
-    args = parser.parse_args()
+    try:
+        args = parser.parse_args()
+    except SystemExit as e:
+        print("\n❌ 参数解析失败！传入的参数信息:")
+        print("=" * 60)
+        print("脚本名称:", sys.argv[0])
+        print("所有传入参数:")
+        for i, arg in enumerate(sys.argv[1:], 1):
+            print(f"  {i:2d}: {arg}")
+        print("=" * 60)
+        print("请检查参数是否正确，或使用 --help 查看帮助信息")
+        print("=" * 60)
+        raise
 
     datasets = parse_list_arg(args.datasets) or DEFAULT_DATASETS
     methods = parse_list_arg(args.methods) or DEFAULT_METHODS
@@ -444,26 +585,36 @@ def main():
     if args.use_augmentation is not None:
         aug_label = "aug" if args.use_augmentation == "true" else "noaug"
 
-    print("🚀 开始并行微调...")
-    print(f"实验组: {args.experiment_group}")
-    print(f"数据集: {datasets}")
-    print(f"方法: {methods}")
-    print(f"BPE场景: {scenarios}")
-    print(f"可用GPU: {gpus}")
-    if combined_config_json:
-        print("📝 合并后的JSON覆盖将传入子进程 --config_json")
-    if args.exp_prefix:
-        print(f"🏷️ 实验名前缀: {args.exp_prefix}")
-    if args.tag:
-        print(f"🏷️ 实验名附加标识: {args.tag}")
+    if not args.commands_stdout:
+        print("🚀 开始并行微调...")
+        print(f"实验组: {args.experiment_group}")
+        print(f"数据集: {datasets}")
+        print(f"方法: {methods}")
+        print(f"BPE场景: {scenarios}")
+        print(f"可用GPU: {gpus}")
+        if combined_config_json:
+            print("📝 合并后的JSON覆盖将传入子进程 --config_json")
+        if args.exp_prefix:
+            print(f"🏷️ 实验名前缀: {args.exp_prefix}")
+        if args.tag:
+            print(f"🏷️ 实验名附加标识: {args.tag}")
 
     if args.log_style:
         combined_json_obj = merge_dicts(combined_json_obj, {"system": {"log_style": args.log_style}})
         combined_config_json = json.dumps(combined_json_obj, ensure_ascii=False)
 
+<<<<<<< HEAD
     # 🆕 解析微调模式
     finetune_modes_list = [mode.strip() for mode in args.finetune_modes.split(',') if mode.strip()] if args.finetune_modes else ["bert"]
     
+=======
+    # 解析编码器
+    encoders_list = [enc.strip() for enc in args.encoder.split(',') if enc.strip()] if args.encoder else ["bert"]
+    for enc in encoders_list:
+        if enc not in {"bert", "gte"}:
+            raise ValueError(f"不支持的编码器类型: {enc}。仅支持: bert,gte")
+
+>>>>>>> dev
     tasks = create_task_list(
         datasets=datasets,
         methods=methods,
@@ -472,13 +623,20 @@ def main():
         exp_prefix=args.exp_prefix,
         tag=args.tag,
         aug_label=aug_label,
+<<<<<<< HEAD
         finetune_modes=finetune_modes_list,  # 🆕 传递微调模式列表
         pretrain_exp_prefix=args.pretrain_exp_prefix,  # 🆕 传递预训练前缀
+=======
+        encoders=encoders_list,
+        pretrain_exp_prefix=args.pretrain_exp_prefix,  # 🆕 传递预训练前缀
+        mult=args.mult
+>>>>>>> dev
     )
-    print(f"总任务数: {len(tasks)}")
-    if args.commands_only:
-        target_file = 'commands.list'
-        print(f"✍️ commands_only 模式：仅记录命令到 {target_file}，不执行子任务")
+    if not args.commands_stdout:
+        print(f"总任务数: {len(tasks)}")
+        if args.commands_only:
+            target_file = 'commands.list'
+            print(f"✍️ commands_only 模式：仅记录命令到 {target_file}，不执行子任务")
 
     running_processes = {}
     task_queue = tasks.copy()
@@ -512,10 +670,13 @@ def main():
                         commands_only=args.commands_only,
                         plain_logs=args.plain_logs,
                         commands_file=args.commands_file,
+                        commands_stdout=args.commands_stdout,
                         save_name_prefix=args.save_name_prefix,
                         save_name_suffix=args.save_name_suffix,
+                        repeat_runs=args.repeat_runs,
+                        mult=args.mult,
                     )
-                    if args.commands_only:
+                    if args.commands_only or args.commands_stdout:
                         continue
                     running_processes[gpu_id] = (process, task)
                     # 仅当未重定向日志且未使用纯净日志模式时，才启动流式打印线程
@@ -545,27 +706,28 @@ def main():
             for gpu_id in completed_gpus:
                 del running_processes[gpu_id]
 
-            if running_processes:
+            if running_processes and not args.commands_stdout:
                 time.sleep(2)
 
         # 总结
-        print("\n" + "="*60)
-        print("📊 微调任务执行总结")
-        print("="*60)
-        print(f"✅ 成功完成: {len(completed_tasks)}")
-        print(f"❌ 执行失败: {len(failed_tasks)}")
+        if not args.commands_stdout:
+            print("\n" + "="*60)
+            print("📊 微调任务执行总结")
+            print("="*60)
+            print(f"✅ 成功完成: {len(completed_tasks)}")
+            print(f"❌ 执行失败: {len(failed_tasks)}")
 
-        if completed_tasks:
-            print("\n✅ 成功任务:")
-            for task in completed_tasks:
-                print(f"  - {task['experiment_name']}")
+            if completed_tasks:
+                print("\n✅ 成功任务:")
+                for task in completed_tasks:
+                    print(f"  - {task['experiment_name']}")
 
-        if failed_tasks:
-            print("\n❌ 失败任务:")
-            for task, code in failed_tasks:
-                print(f"  - {task['experiment_name']} (退出码: {code})")
+            if failed_tasks:
+                print("\n❌ 失败任务:")
+                for task, code in failed_tasks:
+                    print(f"  - {task['experiment_name']} (退出码: {code})")
 
-        print("\n🎉 所有微调任务完成!")
+            print("\n🎉 所有微调任务完成!")
         return 0 if not failed_tasks else 1
 
     except Exception as e:

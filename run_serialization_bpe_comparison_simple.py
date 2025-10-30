@@ -696,7 +696,23 @@ def main():
     parser.add_argument("--decode_sample", type=int, default=2000, help="解码准确率抽样数量")
     parser.add_argument("--out", default=None, help="结果输出目录；默认 comparison_results/<dataset>")
 
+<<<<<<< HEAD
     args_ns = parser.parse_args()
+=======
+    try:
+        args_ns = parser.parse_args()
+    except SystemExit as e:
+        print("\n❌ 参数解析失败！传入的参数信息:")
+        print("=" * 60)
+        print("脚本名称:", sys.argv[0])
+        print("所有传入参数:")
+        for i, arg in enumerate(sys.argv[1:], 1):
+            print(f"  {i:2d}: {arg}")
+        print("=" * 60)
+        print("请检查参数是否正确，或使用 --help 查看帮助信息")
+        print("=" * 60)
+        raise
+>>>>>>> dev
 
     datasets: List[str] = [d.strip() for d in args_ns.dataset.split(',') if d.strip()]
 

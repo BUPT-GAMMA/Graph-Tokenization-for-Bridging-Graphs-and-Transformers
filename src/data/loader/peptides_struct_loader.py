@@ -82,14 +82,22 @@ class PeptidesStructLoader(BaseDataLoader):
                 
                 # 标签格式：预处理输出为shape=(11,)的numpy数组
                 assert isinstance(label_obj, np.ndarray) and label_obj.shape == (11,), f"Peptides-struct标签格式错误: {type(label_obj)}, shape={getattr(label_obj, 'shape', 'no-shape')}"
+<<<<<<< HEAD
                 targets = label_obj.tolist()  # 转换为11维列表
+=======
+                labels = label_obj.tolist()  # 转换为11维列表
+>>>>>>> dev
                 
                 sample = {
                     "id": f"{self._normalized_name}_{i}",
                     "dgl_graph": graph,
                     "num_nodes": int(graph.num_nodes()),
                     "num_edges": int(graph.num_edges()),
+<<<<<<< HEAD
                     "properties": {"targets": targets},  # 11维回归目标
+=======
+                    "properties": {"labels": labels},  # 11维回归目标
+>>>>>>> dev
                     "dataset_name": self.dataset_name,
                     "data_type": "peptide_graph",
                 }
@@ -112,7 +120,11 @@ class PeptidesStructLoader(BaseDataLoader):
 
     def _extract_labels(self, data: List[Dict[str, Any]]) -> List[Any]:
         """提取11维回归目标"""
+<<<<<<< HEAD
         return [s["properties"]["targets"] for s in data]  # 直接访问，预处理已确保格式正确
+=======
+        return [s["properties"]["labels"] for s in data]  # 直接访问，预处理已确保格式正确
+>>>>>>> dev
 
     def _get_data_metadata(self) -> Dict[str, Any]:
         if self._train_data is None:
@@ -139,10 +151,17 @@ class PeptidesStructLoader(BaseDataLoader):
         return 11  # 11个回归目标
 
     def get_default_target_property(self) -> Optional[str]:
+<<<<<<< HEAD
         return "targets"
 
     def get_downstream_label_keys(self) -> List[str]:
         return ["targets"]
+=======
+        return "labels"
+
+    def get_downstream_label_keys(self) -> List[str]:
+        return ["labels"]
+>>>>>>> dev
 
     def load_data(self):
         res = super().load_data()
