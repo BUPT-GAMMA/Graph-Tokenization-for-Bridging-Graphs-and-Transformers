@@ -37,7 +37,7 @@ serialization:
   method: feuler  # feuler(原 graph_seq), topo(topological), eulerian, smiles
   # 多重采样配置（仅适用于支持随机性的序列化方法）
   multiple_sampling:
-    enabled: true          # 是否启用多重采样
+    enabled: false          # 是否启用多重采样
     num_realizations: 100     # 每个图的采样次数
   bpe:  # BPE压缩配置
     enabled: true
@@ -92,18 +92,18 @@ bert:
   
   # 预训练配置
   pretraining:
-    epochs: 100
+    epochs: 200
     batch_size: 32
-    learning_rate: 1.5e-4
+    learning_rate: 1e-4
     mask_prob: 0.09
-    weight_decay: 0.01
+    weight_decay: 0.1
     warmup_ratio: 0.12
-    max_grad_norm: 0.5
+    max_grad_norm: 2
     save_steps: 1000
     eval_steps: 500
     vocab_min_freq: 1
     max_vocab_size: 5000
-    early_stopping_patience: 10
+    early_stopping_patience: 20
     # 图级采样开关（仅预训练阶段）：将多重采样的多个序列在Dataset层面按图合并，每步从该图的变体中随机选一条
     use_graph_level_sampling: true
     graph_variant_selection: random  # random | first
@@ -145,13 +145,13 @@ bert:
   
   # 微调配置
   finetuning:
-    epochs: 100
+    epochs: 200
     batch_size: 32
-    learning_rate: 5e-5
-    weight_decay: 0.01
+    learning_rate: 1e-5
+    weight_decay: 0.1
     warmup_ratio: 0.025
     head_lr_multiplier: 2.0
-    early_stopping_patience: 5
+    early_stopping_patience: 20
     use_layered_lr: false
     max_grad_norm: 0.5
     save_models: false

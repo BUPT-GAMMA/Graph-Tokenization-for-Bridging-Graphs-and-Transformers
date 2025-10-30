@@ -91,10 +91,10 @@ def get_fontsize_dict() -> Dict[str, int]:
         字体大小字典
     """
     return {
-        'legend': 12,
-        'label': 16,
-        'ticks': 16,
-        'title': 16
+        'legend': 20,
+        'label': 20,
+        'ticks': 18,
+        'title': 20
     }
 
 
@@ -157,7 +157,7 @@ def save_plot(fig: plt.Figure,
              filename: str,
              output_dir: str = 'output/vis',
              dpi: Optional[int] = None,
-             save_format: Optional[str] = None):
+             save_format: Optional[str] = 'pdf'):
     """
     保存图片到指定目录
 

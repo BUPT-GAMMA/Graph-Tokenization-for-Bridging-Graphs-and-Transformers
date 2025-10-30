@@ -15,13 +15,6 @@ python batch_pretrain_simple.py \
     --experiment_group main/1/mult100 --repeat_runs 1\
     --commands_only
 #normal
-# python batch_pretrain_simple.py \
-#     --encoder gte \
-#     --mult 100\
-#     --datasets mutagenicity,molhiv,qm9,twitter --bpe_scenarios all \
-#     --methods eulerian,feuler,cpp,fcpp \
-#     --experiment_group main/1/mult100 --repeat_runs 1\
-#     --commands_only
 python batch_pretrain_simple.py \
     --encoder bert \
     --mult 100\
@@ -36,14 +29,14 @@ python batch_pretrain_simple.py \
     --batch_size 16 --learning_rate 5e-5 --mult 100\
     --datasets dblp --bpe_scenarios all,raw \
     --methods smiles,topo,dfs,bfs \
-    --experiment_group main/1/mult100 --repeat_runs 1\
+    --experiment_group main/1/mult100 --repeat_runs 3\
     --commands_only  
 python batch_pretrain_simple.py \
     --encoder gte \
     --batch_size 16 --learning_rate 5e-5 --mult 100\
     --datasets dblp --bpe_scenarios all,raw \
     --methods eulerian,feuler,cpp,fcpp \
-    --experiment_group main/1/mult100 --repeat_runs 1\
+    --experiment_group main/1/mult100 --repeat_runs 3\
     --commands_only  
 #normal
 # python batch_pretrain_simple.py \
@@ -58,7 +51,7 @@ python batch_pretrain_simple.py \
     --batch_size 16 --mult 100\
     --datasets dblp --bpe_scenarios all,raw \
     --methods eulerian,feuler,cpp,fcpp,smiles,topo,dfs,bfs \
-    --experiment_group main/1/mult100 --repeat_runs 1\
+    --experiment_group main/1/mult100 --repeat_runs 3\
     --commands_only  
 
 
@@ -68,18 +61,49 @@ python batch_pretrain_simple.py \
 python batch_pretrain_simple.py \
     --encoder bert,gte \
     --batch_size 16 --mult 100\
-    --datasets peptides_func,coildel --bpe_scenarios all,raw \
-    --methods eulerian,feuler,cpp,fcpp,smiles,topo,dfs,bfs \
+    --datasets peptides_func --bpe_scenarios all,raw \
+    --methods eulerian,feuler,cpp,fcpp \
+    --experiment_group main/1/mult100 --repeat_runs 3\
+    --commands_only
+python batch_pretrain_simple.py \
+    --encoder bert,gte \
+    --batch_size 16 --mult 100\
+    --datasets peptides_func --bpe_scenarios all,raw \
+    --methods topo,dfs,bfs \
     --experiment_group main/1/mult100 --repeat_runs 1\
     --commands_only
-
+python batch_pretrain_simple.py \
+    --encoder bert,gte \
+    --batch_size 16 --mult 100\
+    --datasets coildel --bpe_scenarios all,raw \
+    --methods eulerian,feuler,cpp,fcpp,topo,dfs,bfs \
+    --experiment_group main/1/mult100 --repeat_runs 3\
+    --commands_only
 
 # zinc,aqsol
 python batch_pretrain_simple.py \
     --encoder bert,gte --mult 100\
-    --datasets aqsol,colors3 --bpe_scenarios all,raw \
+    --datasets aqsol --bpe_scenarios all,raw \
     --methods eulerian,feuler,cpp,fcpp,smiles,topo,dfs,bfs \
-    --experiment_group main/1/mult100 --repeat_runs 1\
+    --experiment_group main/1/mult100 --repeat_runs 3\
+    --commands_only
+python batch_pretrain_simple.py \
+    --encoder bert,gte --mult 100\
+    --datasets colors3 --bpe_scenarios all \
+    --methods eulerian,feuler,cpp,fcpp,smiles,topo,dfs,bfs \
+    --experiment_group main/1/mult100 --repeat_runs 3\
+    --commands_only
+python batch_pretrain_simple.py \
+    --encoder bert,gte --mult 100 --learning_rate 5e-5\
+    --datasets colors3 --bpe_scenarios raw \
+    --methods eulerian,feuler,cpp,fcpp \
+    --experiment_group main/1/mult100 --repeat_runs 3\
+    --commands_only
+python batch_pretrain_simple.py \
+    --encoder bert,gte --mult 100\
+    --datasets colors3 --bpe_scenarios raw \
+    --methods topo,dfs,bfs \
+    --experiment_group main/1/mult100 --repeat_runs 3\
     --commands_only
 python batch_pretrain_simple.py \
     --encoder bert,gte --mult 100\

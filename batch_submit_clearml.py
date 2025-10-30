@@ -154,16 +154,19 @@ class ClearMLBatchSubmitter:
     def submit_from_file(self, task_file: str) -> List[str]:
         """从文件提交任务到ClearML队列"""
         submitted_tasks = []
+        commands=[]
 
         with open(task_file, 'r') as f:
             for line in f:
                 line = line.strip()
                 if not line or line.startswith('#'):
                     continue
-
-                print(f"🔄 处理命令: {line}")
-                task_id = self.create_task_from_command(line)
-                submitted_tasks.append(task_id)
+                commands.append(line)
+        print(f"需要处理命令{len(commands)}条")
+        for line in commands:
+          print(f"🔄 处理命令: {line}")
+          task_id = self.create_task_from_command(line)
+          submitted_tasks.append(task_id)
 
         return submitted_tasks
 

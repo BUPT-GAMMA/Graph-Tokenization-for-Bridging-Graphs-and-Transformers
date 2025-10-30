@@ -82,7 +82,7 @@ def build_regression_datasets(
         test_sequences, test_labels, vocab_manager, eval_transforms, test_eff,
         graph_ids=test_gids,
         group_by_graph=apply_graph_level_to_test,
-        variant_selection=variant_selection,
+        variant_selection='first',
     )
 
     train_ds.normalizer = normalizer
@@ -137,7 +137,7 @@ def build_classification_datasets(
     test_ds = ClassificationDataset(
         test_sequences, test_labels, vocab_manager, eval_transforms, test_eff, test_gids,
         group_by_graph=apply_graph_level_to_test,
-        variant_selection=variant_selection,
+        variant_selection='first',
     )
     return train_ds, val_ds, test_ds
 
