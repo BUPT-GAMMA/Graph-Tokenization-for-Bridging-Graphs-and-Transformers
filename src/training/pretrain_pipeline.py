@@ -14,11 +14,7 @@ BERT预训练Pipeline (简化重构版)
 from __future__ import annotations
 
 import time
-<<<<<<< HEAD
-from typing import Dict, List, Any
-=======
 from typing import Dict, List, Any, Optional
->>>>>>> dev
 # from pathlib import Path  # unused
 import json
 
@@ -34,10 +30,6 @@ from torch.utils.tensorboard import SummaryWriter
 from config import ProjectConfig
 from src.data.unified_data_interface import UnifiedDataInterface
 from src.data.bpe_transform import create_bpe_worker_init_fn_from_udi
-<<<<<<< HEAD
-from src.models.model_factory import create_universal_model
-=======
->>>>>>> dev
 from src.models.bert.data import compute_effective_max_length
 from src.training.model_builder import build_task_model
 from src.training.loops import train_epoch, evaluate_epoch
@@ -61,13 +53,21 @@ def train_bert_mlm(
     BERT MLM预训练主函数
     
     Args:
-        config: 项目配置
-        token_sequences: 包含"train"/"val"/"test"键的序列字典
-        udi: 统一数据接口
-        method: 序列化方法名，用于BPE Transform（如果需要）
-        
+        config: 项目配置对象，包含数据集、序列化方法、训练超参数等所有配置
+        run_i: 重复运行编号（用于多实验重复运行场景），默认为None
+    
     Returns:
-        包含训练结果的字典
+        Dict[str, Any]: 包含训练结果的字典，包括：
+            - 最佳验证损失
+            - 训练历史
+            - 模型保存路径等
+    
+    流程：
+        1. 创建UnifiedDataInterface并加载数据
+        2. 通过get_training_data_flat获取序列数据
+        3. 获取词表并构建模型
+        4. 创建数据加载器（支持BPE Transform和图级采样）
+        5. 执行MLM训练循环
     """
     # 显示启动配置
     display_startup_config(logger, config, config.dataset.name, config.serialization.method, "预训练")
@@ -99,22 +99,6 @@ def train_bert_mlm(
     all_sequences = train + val + test
     effective_max_length = compute_effective_max_length(all_sequences, config)
     
-<<<<<<< HEAD
-    # 🆕 创建统一模型（MLM任务）
-    logger.info("🏗️ 创建统一MLM模型...")
-    
-    # 确保配置中的位置嵌入大小与有效长度一致
-    config.bert.architecture.max_position_embeddings = int(effective_max_length)
-    
-    # 使用统一模型创建接口
-    mlm_model, task_handler = create_universal_model(
-        config=config,
-        vocab_manager=vocab_manager,
-        task_type='mlm'  # 🎯 MLM作为任务类型
-    )
-    
-    logger.info(f"✅ MLM模型创建完成: 编码器({mlm_model.encoder.get_hidden_size()}维) + MLM头({mlm_model.output_dim})")
-=======
     # 显示数据信息
     display_data_info(
         logger,
@@ -126,7 +110,6 @@ def train_bert_mlm(
     
     # 确保配置中的位置嵌入大小与有效长度一致
     config.bert.architecture.max_position_embeddings = int(effective_max_length)
->>>>>>> dev
     
     # 🆕 使用统一模型创建接口（与微调完全一致）
     mlm_model, task_handler = build_task_model(
@@ -136,28 +119,11 @@ def train_bert_mlm(
         force_task_type='mlm'
     )
     
-<<<<<<< HEAD
-    # 打印模型信息（适配UniversalModel）
-    try:
-        hidden_size = mlm_model.encoder.get_hidden_size()
-        vocab_size = vocab_manager.vocab_size
-        logger.info("📊 模型信息:")
-        logger.info(f"  - 编码器类型: {config.encoder.type}")
-        logger.info(f"  - 隐藏维度: {hidden_size}")
-        logger.info(f"  - 词表大小: {vocab_size}")
-        logger.info("  - 任务类型: MLM")
-        logger.info(f"  - 输出维度: {mlm_model.output_dim}")
-    except Exception as e:
-        logger.warning(f"打印模型信息失败: {e}")
-    
-    logger.info(f"✅ 统一MLM模型创建完成: {config.bert.architecture.hidden_size}d_{config.bert.architecture.num_hidden_layers}l_{config.bert.architecture.num_attention_heads}h")
-=======
     # 显示模型信息
     display_model_info(logger, mlm_model, 'mlm', config.encoder.type)
     
     # 注意：为避免 CUDA 初始化后再 fork 导致的 DataLoader 退出卡住问题，
     # 先构建 DataLoader（spawn/fork 子进程）再将模型迁移到 GPU。
->>>>>>> dev
     
     # 创建BPE Transform worker初始化函数（统一创建，mode控制行为）
     try:

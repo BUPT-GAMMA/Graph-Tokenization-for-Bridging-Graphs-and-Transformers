@@ -15,8 +15,6 @@ from src.utils.metrics import (
 logger = get_logger('tokenizerGraph.training.evaluate')
 
 
-<<<<<<< HEAD
-=======
 def _learned_aggregation_core(
     aggregator, 
     pooled_list: list, 
@@ -82,7 +80,6 @@ def _learned_aggregation_core(
     return result
 
 
->>>>>>> dev
 def _aggregate_regression_predictions(preds_for_gid: np.ndarray, true_for_gid: np.ndarray, 
                                     aggregation_mode: str, label_normalizer, is_multi_target: bool) -> np.ndarray:
     """
@@ -153,15 +150,9 @@ def _aggregate_classification_predictions(preds_for_gid: np.ndarray, logits_for_
         logits_mat = np.array(logits_for_gid, dtype=np.float32)
         
         if len(logits_mat) == 0:
-<<<<<<< HEAD
-            raise ValueError(f"缺少概率数据，无法计算AUC/AP指标")
-        
-        if aggregation_mode == 'avg':
-=======
             raise ValueError("缺少概率数据，无法计算AUC/AP指标")
         
         if aggregation_mode in ['avg', 'learned']:
->>>>>>> dev
             # 概率平均后argmax
             p_agg = np.mean(logits_mat, axis=0)
             agg_pred = int(np.argmax(p_agg))
@@ -290,16 +281,9 @@ def evaluate_model(
     grouped_trues = {}
     grouped_pooled = {}
     grouped_logits = {}  # 仅分类任务
-<<<<<<< HEAD
-    # 为了与 all_pooled 对齐，需要同时迭代 pooled 索引
-    if task_handler.is_regression_task():
-        pooled_iter = iter(all_pooled)
-        for gid, pred, true in zip(all_gids, all_preds, all_trues):
-=======
     # 统一使用索引方式处理pooled数据对齐
     if task_handler.is_regression_task():
         for i, (gid, pred, true) in enumerate(zip(all_gids, all_preds, all_trues)):
->>>>>>> dev
             if gid not in grouped_preds:
                 grouped_preds[gid] = []
                 grouped_trues[gid] = true # 同一个gid的true label是相同的
@@ -312,11 +296,6 @@ def evaluate_model(
                 logger.warning(f"回归任务 gid={gid} 缺少pooled数据，索引={i}, all_pooled长度={len(all_pooled)}")
     else:
         # 分类任务聚合
-<<<<<<< HEAD
-        pooled_iter = iter(all_pooled)
-        
-=======
->>>>>>> dev
         if task_handler.is_multi_label():
             # 多标签：只有概率，没有预测类别
             # 确保数据长度一致
@@ -332,11 +311,8 @@ def evaluate_model(
                 # 处理pooled数据（如果存在）
                 if i < len(all_pooled):
                     grouped_pooled[gid].append(all_pooled[i])
-<<<<<<< HEAD
-=======
                 else:
                     logger.warning(f"多标签分类 gid={gid} 缺少pooled数据，索引={i}, all_pooled长度={len(all_pooled)}")
->>>>>>> dev
         else:
             # 单标签：有预测类别和概率
             # 确保所有数据长度一致
@@ -354,11 +330,8 @@ def evaluate_model(
                 # 处理pooled数据（如果存在）
                 if i < len(all_pooled):
                     grouped_pooled[gid].append(all_pooled[i])
-<<<<<<< HEAD
-=======
                 else:
                     logger.warning(f"单标签分类 gid={gid} 缺少pooled数据，索引={i}, all_pooled长度={len(all_pooled)}")
->>>>>>> dev
 
     # 聚合每个组的预测
     final_preds, final_trues = [], []
@@ -386,39 +359,16 @@ def evaluate_model(
                 if task_handler.is_multi_target():
                     # 多目标回归的learned aggregation
                     if len(pooled_list) != len(preds_for_gid):
-<<<<<<< HEAD
-                        # 回退到avg
-=======
                         # 回退到avg，并给出警告
                         logger.warning(
                             f"[learned->avg fallback] 多目标回归 gid={gid}: pooled数={len(pooled_list)} 与 预测数={len(preds_for_gid)} 不一致"
                         )
->>>>>>> dev
                         preds_for_gid_orig = np.array(label_normalizer.inverse_transform(preds_for_gid))
                         agg_pred = np.mean(preds_for_gid_orig, axis=0)  # 对每个目标分别平均
                     else:
                         # 多目标learned aggregation: 对每个目标分别计算权重聚合
-<<<<<<< HEAD
-                        pooled_arr = np.stack(pooled_list, axis=0).astype(np.float32)
-                        feats = pooled_arr
-                        # 若聚合器声明使用预测作为特征，则拼接（展平预测向量）
-                        if getattr(aggregator, 'use_pred_as_feat', False):
-                            preds_flat = preds_for_gid.reshape(len(preds_for_gid), -1).astype(np.float32)
-                            feats = np.concatenate([pooled_arr, preds_flat], axis=1)
-                        feats_t = torch.from_numpy(feats).unsqueeze(0)
-                        mask_t = torch.ones(1, feats_t.shape[1], dtype=torch.bool)
-                        agg_dev = next(aggregator.parameters()).device if hasattr(aggregator, 'parameters') else torch.device('cpu')
-                        feats_t = feats_t.to(agg_dev)
-                        mask_t = mask_t.to(agg_dev)
-                        with torch.no_grad():
-                            weights = aggregator(feats_t, mask=mask_t)  # [1, K]
-                            # 对多目标预测进行加权聚合
-                            preds_t = torch.from_numpy(preds_for_gid.astype(np.float32)).unsqueeze(0).to(agg_dev)  # [1, K, num_targets]
-                            y_hat_norm = torch.einsum('bk,bkd->bd', weights, preds_t).squeeze(0).cpu().numpy()  # [num_targets]
-=======
                         use_pred_feat = getattr(aggregator, 'use_pred_as_feat', False)
                         y_hat_norm = _learned_aggregation_core(aggregator, pooled_list, preds_for_gid, use_pred_feat)
->>>>>>> dev
                         # 反标准化
                         inv = label_normalizer.inverse_transform([y_hat_norm])
                         agg_pred = np.array(inv[0])
@@ -426,26 +376,6 @@ def evaluate_model(
                     # 单目标回归的learned aggregation（原逻辑）
                     preds_norm = preds_for_gid.reshape(-1)
                     if len(pooled_list) != len(preds_norm):
-<<<<<<< HEAD
-                        # 回退到avg
-                        preds_for_gid_orig = np.array(label_normalizer.inverse_transform(preds_for_gid.reshape(-1, 1))).flatten()
-                        agg_pred = np.mean(preds_for_gid_orig)
-                    else:
-                        pooled_arr = np.stack(pooled_list, axis=0).astype(np.float32)
-                        feats = pooled_arr
-                        # 若聚合器声明使用预测作为特征，则拼接
-                        if getattr(aggregator, 'use_pred_as_feat', False):
-                            feats = np.concatenate([pooled_arr, preds_norm.reshape(-1, 1).astype(np.float32)], axis=1)
-                        feats_t = torch.from_numpy(feats).unsqueeze(0)
-                        mask_t = torch.ones(1, feats_t.shape[1], dtype=torch.bool)
-                        agg_dev = next(aggregator.parameters()).device if hasattr(aggregator, 'parameters') else torch.device('cpu')
-                        feats_t = feats_t.to(agg_dev)
-                        mask_t = mask_t.to(agg_dev)
-                        with torch.no_grad():
-                            weights = aggregator(feats_t, mask=mask_t)  # [1, K]
-                            preds_t = torch.from_numpy(preds_norm.astype(np.float32)).unsqueeze(0).to(agg_dev)
-                            y_hat_norm = (weights * preds_t).sum(dim=1).squeeze(0).item()
-=======
                         # 回退到avg，并给出警告
                         logger.warning(
                             f"[learned->avg fallback] 单目标回归 gid={gid}: pooled数={len(pooled_list)} 与 预测数={len(preds_norm)} 不一致"
@@ -455,17 +385,13 @@ def evaluate_model(
                     else:
                         use_pred_feat = getattr(aggregator, 'use_pred_as_feat', False)
                         y_hat_norm = _learned_aggregation_core(aggregator, pooled_list, preds_norm, use_pred_feat)
->>>>>>> dev
                         # 反标准化：本项目的 LabelNormalizer.inverse_transform 返回 List[float]
                         inv = label_normalizer.inverse_transform([float(y_hat_norm)])
                         assert isinstance(inv, list) and len(inv) == 1, "LabelNormalizer.inverse_transform 应返回长度为1的list"
                         agg_pred = float(inv[0])
-<<<<<<< HEAD
-=======
             elif aggregation_mode == 'learned' and aggregator is None:
                 # 积极检查：learned模式但缺少聚合器
                 raise ValueError(f"aggregation_mode='learned' 但未提供 aggregator，gid={gid}")
->>>>>>> dev
             else:
                 # 使用辅助函数进行聚合
                 agg_pred = _aggregate_regression_predictions(
@@ -473,14 +399,6 @@ def evaluate_model(
                     label_normalizer, task_handler.is_multi_target()
                 )
         else: # classification
-<<<<<<< HEAD
-            # 使用辅助函数进行分类聚合
-            logits_for_gid = grouped_logits.get(gid, [])
-            agg_pred, agg_prob_np = _aggregate_classification_predictions(
-                preds_for_gid, logits_for_gid, true_for_gid, 
-                aggregation_mode, task_handler.is_multi_label()
-            )
-=======
             if aggregation_mode == 'learned' and aggregator is not None:
                 # 分类任务的learned聚合
                 pooled_list = grouped_pooled.get(gid, [])
@@ -529,7 +447,6 @@ def evaluate_model(
                     preds_for_gid, logits_for_gid, true_for_gid, 
                     aggregation_mode, task_handler.is_multi_label()
                 )
->>>>>>> dev
 
         final_preds.append(agg_pred)
         final_trues.append(true_for_gid)

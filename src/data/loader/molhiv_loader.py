@@ -127,8 +127,6 @@ class MOLHIVLoader(BaseDataLoader):
     def get_num_classes(self) -> int:
         return 2
 
-<<<<<<< HEAD
-=======
     def get_loss_config(self) -> Optional[Dict[str, Any]]:
         """
         molhiv数据集的专用损失配置
@@ -158,7 +156,6 @@ class MOLHIVLoader(BaseDataLoader):
         #     'auto_weights': True
         # }
 
->>>>>>> dev
     def get_node_attribute(self, graph: dgl.DGLGraph, node_id: int) -> int:
         if self._cache_built and id(graph) in self._node_attr_cache:
             return int(self._node_attr_cache[id(graph)][int(node_id)])

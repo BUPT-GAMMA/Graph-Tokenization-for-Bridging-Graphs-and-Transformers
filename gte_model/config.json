@@ -41,11 +41,7 @@
     "type": "ntk"
   },
   "rope_theta": 20000,
-<<<<<<< HEAD
-  "torch_dtype": "fp16",
-=======
   "torch_dtype": "float16",
->>>>>>> dev
   "transformers_version": "4.47.1",
   "type_vocab_size": 1,
   "unpad_inputs": true,

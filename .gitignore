@@ -17,10 +17,7 @@
 /logs/
 /backup_log/
 /backup/
-<<<<<<< HEAD
-=======
 /archive/
->>>>>>> dev
 # /foreign_dataset_files_to_convert/
 
 __pycache__/
@@ -37,13 +34,6 @@ nohup.out
 *.log*
 *.tar.gz
 
-<<<<<<< HEAD
-/agg/
-
-/tests/
-/sbatch_scripts/
-*.safetensors
-=======
 *.tex
 /agg/
 
@@ -79,4 +69,3 @@ comparison_results/
 analysis_results
 
  
->>>>>>> dev

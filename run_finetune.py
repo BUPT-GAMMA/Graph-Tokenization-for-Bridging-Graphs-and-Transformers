@@ -147,116 +147,14 @@ def _configure_output_mode(offline: bool):
         if not isinstance(sys.stderr, _AnsiStrippingWriter):
             sys.stderr = _AnsiStrippingWriter(sys.stderr)
 
-<<<<<<< HEAD
-def infer_task_and_targets(config: ProjectConfig, udi: UnifiedDataInterface, 
-                          task_cli: str | None, num_classes_cli: int | None) -> tuple[str, int | None]:
-    """
-    推断任务类型和目标信息
-    
-    Args:
-        config: 项目配置
-        udi: 统一数据接口
-        task_cli: 命令行指定的任务类型
-        num_classes_cli: 命令行指定的类别数
-        
-    Returns:
-        (task_type, num_classes) 元组
-    """
-    meta = udi.get_downstream_metadata()
-    
-    # 推断任务类型
-    if task_cli:
-        task = task_cli
-    else:
-        assert 'dataset_task_type' in meta, "数据集元数据中缺少必需字段 'dataset_task_type'"
-        task = meta['dataset_task_type']
-    
-    # 处理回归任务的目标属性
-    if task == 'regression' and not config.task.target_property:
-        # QM9数据集默认使用homo属性
-        if config.dataset.name.lower().startswith('qm9'):
-            config.task.target_property = 'homo'
-        else:
-            # 其他数据集使用默认属性
-            if 'default_target_property' in meta and meta['default_target_property']:
-                config.task.target_property = meta['default_target_property']
-        
-        if config.task.target_property:
-            print(f"🎯 自动设置回归目标属性: {config.task.target_property}")
-    
-    # 推断分类类别数和多目标维度
-    num_classes = num_classes_cli
-    if task in ['classification', 'multi_label_classification', 'multi_target_regression'] and num_classes is None:
-        assert 'num_classes' in meta, f"{task}任务需要 num_classes，但数据集元数据中未找到此字段"
-        n = meta['num_classes']
-        assert isinstance(n, int) and n > 1, f"数据集元数据中 num_classes 应为大于1的整数，实际值: {n}"
-        num_classes = n
-        if task == 'classification':
-            print(f"🏷️ 自动设置分类类别数: {num_classes}")
-        elif task == 'multi_label_classification':
-            print(f"🏷️ 自动设置多标签分类标签数: {num_classes}")
-        elif task == 'multi_target_regression':
-            print(f"🏷️ 自动设置多目标回归目标数: {num_classes}")
-    
-    return task, num_classes
-
-
-def check_pretrained_model(config: ProjectConfig) -> bool:
-    """
-    检查预训练模型是否存在
-    
-    Args:
-        config: 项目配置
-        
-    Returns:
-        是否存在可用的预训练模型
-    """
-    print("🔍 检查预训练模型...")
-    
-    # 检查标准路径
-    model_base = config.get_model_dir()
-    best_dir = model_base / "best"
-    final_dir = model_base / "final"
-    
-    def _has_model(d: Path) -> bool:
-        return (d / 'config.bin').exists() and (d / 'pytorch_model.bin').exists()
-    
-    if _has_model(best_dir):
-        print(f"✅ 找到预训练模型: {best_dir}")
-        return True
-    elif _has_model(final_dir):
-        print(f"✅ 找到预训练模型: {final_dir}")
-        return True
-    else:
-        # 检查兼容路径
-        compat_dir = config.get_bert_model_path("pretrained").parent
-        if Path(compat_dir, 'config.bin').exists() and Path(compat_dir, 'pytorch_model.bin').exists():
-            print(f"✅ 找到兼容预训练模型: {compat_dir}")
-            return True
-        
-        print("❌ 未找到预训练模型")
-        print(f"   已检查路径: {best_dir}, {final_dir}, {compat_dir}")
-        return False
-
-
-def run_finetuning(
-    config: ProjectConfig,
-    task: str | None = None,
-    num_classes: int | None = None,
-    aggregation_mode: str = "avg",
-=======
 def run_finetuning(
     config: ProjectConfig,
     aggregation_mode: Literal["avg", "best", "learned"] = "avg",
->>>>>>> dev
     save_name_prefix: str | None = None,
     save_name_suffix: str | None = None,
     pretrained_dir: str | None = None,
     pretrain_exp_name: str | None = None,
-<<<<<<< HEAD
-=======
     run_i: int | None = None,
->>>>>>> dev
 ) -> dict:
     """
     运行BERT微调
@@ -271,24 +169,6 @@ def run_finetuning(
         微调结果字典
     """
     print("🚀 开始BERT微调...")
-<<<<<<< HEAD
-    if task is not None:
-        print(f"📋 任务类型: {task}")
-    else:
-        print("📋 任务类型: 将从数据集自动推断")
-    
-    if task == "regression" and config.task.target_property:
-        print(f"📋 回归目标: {config.task.target_property}")
-    elif task == "classification" and num_classes:
-        print(f"📋 分类类别数: {num_classes}")
-    
-    # 检查预训练模型
-    # if not check_pretrained_model(config):
-    #     print("\n💡 请先运行预训练:")
-    #     print(f"python run_pretrain.py --dataset {config.dataset.name} --method {config.serialization.method}")
-    #     assert False, "预训练模型不存在"
-=======
->>>>>>> dev
     
     # 运行微调
     print("🎓 开始微调...")
@@ -296,19 +176,12 @@ def run_finetuning(
         # 统一架构会自动从UDI推断任务类型和维度，不需要显式传递num_classes等参数
         result = run_finetune(
             config,
-<<<<<<< HEAD
-            task=task,
-=======
->>>>>>> dev
             aggregation_mode=aggregation_mode,
             save_name_prefix=save_name_prefix,
             save_name_suffix=save_name_suffix,
             pretrained_dir=pretrained_dir,
             pretrain_exp_name=pretrain_exp_name,
-<<<<<<< HEAD
-=======
             run_i=run_i,
->>>>>>> dev
         )
         print("✅ 微调完成!")
         print(f"📊 最优验证损失: {result['best_val_loss']:.4f}")
@@ -417,20 +290,6 @@ def main():
     print_config_summary(config)
     raw_seed=config.system.seed
     
-<<<<<<< HEAD
-    # 运行微调
-    try:
-        result = run_finetuning(
-            config,
-            task,
-            num_classes,
-            aggregation_mode=args.aggregation_mode,
-            save_name_prefix=args.save_name_prefix,
-            save_name_suffix=args.save_name_suffix,
-            pretrained_dir=getattr(args, 'pretrained_dir', None),
-            pretrain_exp_name=getattr(args, 'pretrain_exp_name', None),
-        )
-=======
     # 🆕 检查是否需要重复运行
     repeat_runs = getattr(config, 'repeat_runs', 1)
 
@@ -484,7 +343,6 @@ def main():
         )
         print_aggregated_stats(aggregated, "finetune")
         task.get_logger().report_single_value(name="ft_metric", value=aggregated['statistics']['test']['avg']['pk']['mean'])
->>>>>>> dev
         
     try:
         sys.stdout.flush()

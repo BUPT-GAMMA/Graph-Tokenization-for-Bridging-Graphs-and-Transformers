@@ -398,8 +398,6 @@ class BaseDataLoader(ABC):
     def get_downstream_label_keys(self) -> List[str]:
         """返回下游可用的标签键列表。默认空列表，子类可覆盖。"""
         return ['label']
-<<<<<<< HEAD
-=======
 
     def get_loss_config(self) -> Optional[Dict[str, Any]]:
         """
@@ -415,7 +413,6 @@ class BaseDataLoader(ABC):
             }
         """
         return None  # 默认无特殊配置
->>>>>>> dev
     
     def get_data_statistics(self) -> Dict[str, Any]:
         """

@@ -696,9 +696,6 @@ def main():
     parser.add_argument("--decode_sample", type=int, default=2000, help="解码准确率抽样数量")
     parser.add_argument("--out", default=None, help="结果输出目录；默认 comparison_results/<dataset>")
 
-<<<<<<< HEAD
-    args_ns = parser.parse_args()
-=======
     try:
         args_ns = parser.parse_args()
     except SystemExit as e:
@@ -712,7 +709,6 @@ def main():
         print("请检查参数是否正确，或使用 --help 查看帮助信息")
         print("=" * 60)
         raise
->>>>>>> dev
 
     datasets: List[str] = [d.strip() for d in args_ns.dataset.split(',') if d.strip()]
 

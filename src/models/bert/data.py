@@ -306,13 +306,7 @@ class LabelNormalizer:
         """
         assert self.is_fitted, "标准化器尚未拟合，请先调用fit()方法"
         
-<<<<<<< HEAD
-        labels_array = np.array(labels)
-        original_shape = labels_array.shape
-        
-=======
         labels_array = np.array(labels)        
->>>>>>> dev
         # 处理不同维度
         if labels_array.ndim == 1:
             # 单目标回归：reshape为[N, 1]
@@ -406,16 +400,8 @@ class NormalizedRegressionDataset:
         
         # 检查是否为多目标回归
         self.is_multi_target = isinstance(labels[0], (list, tuple, torch.Tensor)) if len(labels) > 0 else False
-<<<<<<< HEAD
-        
-        logger.info(f"📊 回归数据集创建完成: {len(token_sequences)} 个序列")
-=======
 
         # 若启用图级采样，构建 gid -> indices 的映射与图级标签
-        if self.group_by_graph:
-            from collections import OrderedDict
-            gid_to_indices = OrderedDict()
-            for idx, gid in enumerate(self.graph_ids):
                 gid_to_indices.setdefault(int(gid), []).append(idx)
             self._gid_to_indices = gid_to_indices
             self._unique_gids = list(gid_to_indices.keys())
@@ -423,13 +409,11 @@ class NormalizedRegressionDataset:
         logger.info(f"📊 回归数据集创建完成: {len(token_sequences)} 个序列")
         if self.group_by_graph:
             logger.info(f"   图级采样启用: {len(self._unique_gids)} 个图，选择策略: {self.variant_selection}")
->>>>>>> dev
         
         if self.is_multi_target:
             # 多目标回归：显示目标维度信息
             num_targets = len(labels[0]) if len(labels) > 0 else 1
             logger.info(f"   多目标回归，目标维度: {num_targets}")
-            # 计算每个目标的范围（转换为numpy数组便于计算）
             import numpy as np
             labels_array = np.array(labels)
             min_vals = labels_array.min(axis=0)
@@ -459,10 +443,6 @@ class NormalizedRegressionDataset:
         """应用标准化（在normalizer已拟合后调用）"""
         if self.normalizer is not None and self.normalizer.is_fitted:
             self.normalized_labels = self.normalizer.transform(self.original_labels)
-<<<<<<< HEAD
-            
-=======
->>>>>>> dev
             # 处理多目标vs单目标的日志记录
             if self.is_multi_target:
                 logger.info(f"   多目标标准化完成，目标维度: {len(self.normalized_labels[0])}")
@@ -632,12 +612,6 @@ class ClassificationDataset(Dataset):
         
         # 检查标签类型：多标签 vs 单标签
         self.is_multi_label = isinstance(labels[0], (list, tuple, torch.Tensor)) if len(labels) > 0 else False
-<<<<<<< HEAD
-        
-        if self.is_multi_label:
-            # 多标签分类：标签是向量
-            self.num_classes = len(labels[0]) if len(labels) > 0 else 1
-=======
 
         # 图级采样支持：构建gid分组与图级标签
         if self.group_by_graph:
@@ -658,18 +632,11 @@ class ClassificationDataset(Dataset):
             # 多标签分类：标签是向量
             base_label = labels[0] if len(labels) > 0 else []
             self.num_classes = len(base_label) if base_label is not None else 1
->>>>>>> dev
             self.class_distribution = "多标签分类"
             print(f"多标签分类数据集创建完成，共 {len(token_sequences)} 个样本")
             print(f"标签维度: {self.num_classes}")
         else:
             # 单标签分类：统计类别信息
-<<<<<<< HEAD
-            unique_labels = sorted(set(labels))
-            self.num_classes = len(unique_labels)
-            self.class_distribution = {label: labels.count(label) for label in unique_labels}
-            print(f"分类数据集创建完成，共 {len(token_sequences)} 个样本")
-=======
             if self.group_by_graph:
                 unique_labels = sorted(set(labels))
                 self.num_classes = len(unique_labels)
@@ -680,7 +647,6 @@ class ClassificationDataset(Dataset):
                 self.num_classes = len(unique_labels)
                 self.class_distribution = {label: labels.count(label) for label in unique_labels}
                 print(f"分类数据集创建完成，共 {len(token_sequences)} 个样本")
->>>>>>> dev
             print(f"类别数量: {self.num_classes}, 类别分布: {self.class_distribution}")
         
         print(f"序列长度固定为: {self.max_length}") 
@@ -709,36 +675,6 @@ class ClassificationDataset(Dataset):
         return len(self.token_sequences)
     
     def __getitem__(self, idx):
-<<<<<<< HEAD
-        token_sequence = self.token_sequences[idx]
-        label = self.labels[idx]
-        
-        # 应用数据增强变换
-        token_sequence = self.transforms(token_sequence)
-        
-        # 应用BPE编码（动态检查，避免初始化时序问题）
-        token_sequence = self._apply_bpe_if_enabled(token_sequence)
-        
-        # 使用词表管理器编码序列
-        encoded = self.vocab_manager.encode_sequence(
-            token_sequence, add_special_tokens=True, max_length=self.max_length
-        )
-        
-        # 根据标签类型选择合适的dtype
-        if self.is_multi_label:
-            # 多标签分类：使用float类型
-            label_tensor = torch.tensor(label, dtype=torch.float)
-        else:
-            # 单标签分类：使用long类型
-            label_tensor = torch.tensor(label, dtype=torch.long)
-        
-        return {
-            'input_ids': encoded['input_ids'],
-            'attention_mask': encoded['attention_mask'],
-            'labels': label_tensor,
-            'graph_id': torch.tensor(self.graph_ids[idx], dtype=torch.long)
-        }
-=======
         if self.group_by_graph:
             gid = self._unique_gids[idx]
             indices = self._gid_to_indices[gid]
@@ -792,7 +728,6 @@ class ClassificationDataset(Dataset):
                 'labels': label_tensor,
                 'graph_id': torch.tensor(self.graph_ids[idx], dtype=torch.long)
             }
->>>>>>> dev
     
     def get_class_weights(self) -> torch.Tensor:
         """计算类别权重（用于处理类别不平衡）"""
@@ -801,14 +736,6 @@ class ClassificationDataset(Dataset):
             return torch.ones(self.num_classes)
         else:
             # 单标签分类：计算基于频率的权重
-<<<<<<< HEAD
-            total_samples = len(self.labels)
-            class_weights = torch.zeros(self.num_classes)
-            
-            for label, count in self.class_distribution.items():
-                class_weights[label] = total_samples / (self.num_classes * count)
-            
-=======
             if self.group_by_graph:
                 total_samples = len(self._grouped_labels)
             else:
@@ -816,7 +743,6 @@ class ClassificationDataset(Dataset):
             class_weights = torch.zeros(self.num_classes)
             for label, count in self.class_distribution.items():
                 class_weights[label] = total_samples / (self.num_classes * count)
->>>>>>> dev
             return class_weights
 
 def create_classification_dataloader(token_sequences: List[List[int]], 

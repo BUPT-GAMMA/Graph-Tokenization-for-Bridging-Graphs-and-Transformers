@@ -1,17 +1,10 @@
 from __future__ import annotations
 
-<<<<<<< HEAD
-from typing import Dict, Optional
-import numpy as np
-from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, accuracy_score, precision_recall_fscore_support, roc_auc_score, average_precision_score
-from sklearn.preprocessing import label_binarize
-=======
 from typing import Dict, Optional, Any
 import numpy as np
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, accuracy_score, precision_recall_fscore_support, roc_auc_score, average_precision_score
 from sklearn.preprocessing import label_binarize
 from torch.utils.tensorboard import SummaryWriter
->>>>>>> dev
 
 
 def compute_regression_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Dict[str, float]:
