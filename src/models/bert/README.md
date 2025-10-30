@@ -1,5 +1,12 @@
 # BERT训练Pipeline - 开发者文档
 
+> **⚠️ 重要提示**: 本文档描述的是BERT模块的独立使用方式（历史版本）。  
+> 当前项目中，BERT已通过统一模型系统集成，实际使用请参考：
+> - [`../../training/pretrain_pipeline.py`](../../training/pretrain_pipeline.py) - 预训练流程
+> - [`../../training/finetune_pipeline.py`](../../training/finetune_pipeline.py) - 微调流程
+> - [`../unified_encoder.py`](../unified_encoder.py) - 统一编码器接口
+> - [根目录`/TokenizerGraph_Detailed_Documentation.md`](../../../TokenizerGraph_Detailed_Documentation.md) - 完整技术文档
+
 这是一个支持Token ID序列输入的BERT训练系统，专为需要自定义词表和序列级回归任务而设计。
 
 ## 核心特性

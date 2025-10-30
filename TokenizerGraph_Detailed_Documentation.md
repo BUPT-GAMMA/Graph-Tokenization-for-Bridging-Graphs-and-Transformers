@@ -50,16 +50,38 @@ get_graph_edge_token_ids(graph) -> torch.Tensor
 ```python
 # 核心数据读取接口
 get_sequences(method: str) -> Tuple[List[Tuple[int, List[int]]], List[Dict]]
+    # 返回：(序列列表[(图ID, token序列)], 标签列表[属性字典])
+
 get_sequences_by_splits(method: str) -> Tuple[6 elements]
+    # 返回：(train_seqs, train_labels, val_seqs, val_labels, test_seqs, test_labels)
 
-# 序列化管理
-prepare_serialization(method: str) -> Path
-_build_and_persist_serialization(method: str) -> Path
+get_training_data(method: str) -> Tuple[
+    Tuple[List[Tuple[int, List[int]]], List[Dict[str, Any]]],  # train (seqs_with_id, props)
+    Tuple[List[Tuple[int, List[int]]], List[Dict[str, Any]]],  # val (seqs_with_id, props)
+    Tuple[List[Tuple[int, List[int]]], List[Dict[str, Any]]],  # test (seqs_with_id, props)
+]
+    # 返回：带graph_id的序列和完整的属性字典（所有划分）
+get_training_data_flat(method: str) -> Tuple[List[List[int]], List[List[int]], List[List[int]]]
+    # 便捷接口：返回纯序列（用于预训练等不需要graph_id的场景）
+get_training_data_flat_with_ids(method: str) -> Tuple[
+    Tuple[List[List[int]], List[int]],  # train (sequences, graph_ids)
+    Tuple[List[List[int]], List[int]],  # val (sequences, graph_ids)
+    Tuple[List[List[int]], List[int]]   # test (sequences, graph_ids)
+]
+    # 返回：序列和graph_id（用于图级采样等需要graph_id的场景）
 
-# BPE管理
+# 图数据读取
+get_graphs() -> List[Dict[str, Any]]
+get_graphs_by_split(split: str) -> List[Dict[str, Any]]
+
+# 词表和BPE
+get_vocab(method: str) -> VocabManager
 get_bpe_codebook(method: str) -> Dict
-get_bpe_encoder(method: str) -> BPEEngine
-save_bpe_codebook(method: str, merge_rules, vocab_size) -> Path
+get_bpe_encoder(method: str) -> BPEEngine  # 内部方法，不直接暴露
+
+# 元信息
+get_split_indices() -> Dict[str, List[int]]
+get_downstream_metadata() -> Dict[str, Any]
 ```
 
 ### 2. 算法层 (Algorithm Layer)
@@ -87,7 +109,8 @@ save_bpe_codebook(method: str, merge_rules, vocab_size) -> Path
 
 2. **EulerianSerializer** (`eulerian_serializer.py`)
    - 标准欧拉回路算法
-   - 不使用频率引导，随机性更强
+   - 不使用频率引导
+   - 通过邻居排序保证确定性
 
 3. **ChinesePostmanSerializer** (`chinese_postman_serializer.py`)
    - 中国邮递员算法
@@ -213,23 +236,28 @@ max_seq_length = 64   # 最大序列长度
 
 **预训练流程：**
 ```python
-# 1. 数据准备
-train_sequences, val_sequences, test_sequences = udi.get_training_data_flat(method)
+from config import ProjectConfig
+from src.data.unified_data_interface import UnifiedDataInterface
+from src.training.pretrain_pipeline import train_bert_mlm
 
-# 2. 模型初始化
-model = BERTModel(config)
-optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
+# 1. 配置
+config = ProjectConfig()
+config.dataset.name = "qm9test"
+config.serialization.method = "feuler"
 
-# 3. MLM训练
-for epoch in range(num_epochs):
-    # 前向传播和损失计算
-    outputs = model(input_ids, attention_mask)
-    loss = mlm_loss(outputs.logits, labels, mask_positions)
+# 2. 运行预训练（内部自动处理数据加载和模型创建）
+results = train_bert_mlm(config)
 
-    # 反向传播
-    loss.backward()
-    optimizer.step()
+# 或者使用命令行脚本
+# python run_pretrain.py --dataset qm9test --method feuler --epochs 100
 ```
+
+**实际训练流程（内部）：**
+1. 创建`UnifiedDataInterface`并加载数据
+2. 通过`udi.get_training_data_flat(method)`获取序列数据
+3. 获取词表：`vocab_manager = udi.get_vocab(method)`
+4. 创建统一模型：`build_task_model(config, udi, method, force_task_type='mlm')`
+5. 执行MLM训练循环
 
 #### 4.2 微调流水线
 
@@ -459,3 +487,16 @@ TokenizerGraph项目采用模块化设计，通过清晰的层次分离实现了
 4. **可重现性：** 单一配置源和确定性算法确保实验可重现
 
 这种设计使得项目既适合快速原型开发，也能支持大规模生产部署。
+
+---
+
+**文档版本**：v2.0  
+**最后更新**：2025-10-30  
+**更新说明**：
+- ✅ 已对照代码验证所有接口和方法签名
+- ✅ 更新了UDI方法列表，与实际实现一致
+- ✅ 修正了序列化方法名（graph_seq → feuler）
+- ✅ 更新了预训练流程，使用实际接口
+- ✅ 验证了BPE引擎接口和配置参数
+
+**维护者注意**：发现任何与代码不符的地方，请立即修正或删除相关内容。
