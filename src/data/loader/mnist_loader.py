@@ -1,6 +1,8 @@
 """MNIST superpixel graph data loader.
+MNIST超像素图数据加载器。
 
 Maps 3-dim node features and 1-dim edge features to compact token sequences.
+将3维节点特征和1维边特征映射为紧凑的token序列。
 """
 
 import os

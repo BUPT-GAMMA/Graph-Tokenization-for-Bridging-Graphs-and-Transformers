@@ -1,4 +1,5 @@
-"""ZINC data loader. Reads preprocessed ZINC dataset with multi-task labels and multiple SMILES formats."""
+"""ZINC data loader. Reads preprocessed ZINC dataset with multi-task labels and multiple SMILES formats.
+ZINC数据加载器。读取预处理的ZINC数据集，支持多任务标签和多种SMILES格式。"""
 
 import time
 import numpy as np

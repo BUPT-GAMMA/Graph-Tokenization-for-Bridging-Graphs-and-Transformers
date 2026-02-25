@@ -1,8 +1,10 @@
 """
 Repeat-run statistics aggregation.
+多次运行统计聚合。
 
 Aggregates results from multiple repeated experiment runs and computes
 statistical summaries (mean, variance, std, etc.).
+聚合多次重复实验的结果，计算统计摘要（均值、方差、标准差等）。
 """
 
 from __future__ import annotations

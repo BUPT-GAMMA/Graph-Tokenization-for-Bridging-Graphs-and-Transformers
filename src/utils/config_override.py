@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """
 Config override system.
+配置覆盖系统。
 
 Supports: basic CLI args, JSON full override, and common shortcut args.
+支持：基本CLI参数、JSON全量覆盖和常用快捷参数。
 """
 
 from __future__ import annotations

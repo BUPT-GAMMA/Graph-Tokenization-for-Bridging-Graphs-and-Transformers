@@ -1,5 +1,6 @@
 """
 Info display utilities - print config and model info at key stages.
+信息展示工具 - 在关键阶段打印配置和模型信息。
 """
 from typing import Dict, Optional
 

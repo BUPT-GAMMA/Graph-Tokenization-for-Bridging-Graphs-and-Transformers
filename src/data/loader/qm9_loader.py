@@ -1,4 +1,5 @@
-"""QM9 data loader. Reads preprocessed QM9 dataset with multi-task labels and multiple SMILES formats."""
+"""QM9 data loader. Reads preprocessed QM9 dataset with multi-task labels and multiple SMILES formats.
+QM9数据加载器。读取预处理的QM9数据集，支持多任务标签和多种SMILES格式。"""
 
  
 import time

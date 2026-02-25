@@ -1,9 +1,11 @@
 """MNIST-RAW grid-graph data loader.
+MNIST-RAW网格图数据加载器。
 
 Converts raw MNIST 28x28 grayscale images into regular grid graphs:
-- Nodes: one per pixel, feature is the discrete pixel value (0-255).
+将原始MNIST 28x28灰度图像转换为规则网格图：
+- Nodes: one per pixel, feature is the discrete pixel value (0-255). / 节点：每像素一个，特征为离散像素值(0-255)。
 - Edges: 4-connected (up/down/left/right) undirected, stored as directed pairs;
-  edge feature is constant 1.
+  edge feature is constant 1. / 边：4连通无向，边特征为常数1。
 """
 
 from __future__ import annotations

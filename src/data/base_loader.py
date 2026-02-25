@@ -1,4 +1,5 @@
-"""Base class for all dataset loaders. Provides a unified interface and shared logic."""
+"""Base class for all dataset loaders. Provides a unified interface and shared logic.
+所有数据集加载器的基类。提供统一接口和共享逻辑。"""
 
 import os
 import json

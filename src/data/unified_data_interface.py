@@ -1,10 +1,11 @@
 """Unified Data Interface.
+统一数据接口。
 
-Design principles:
-- Single data file + index-based splits.
-- Provides a unified read interface for upper layers (serialization / BPE / training).
-- Serialization and BPE cache management are internal details; data building must be triggered explicitly.
-- Simplified API: two core methods get_sequences() and get_sequences_by_splits().
+Design principles / 设计原则:
+- Single data file + index-based splits. / 单数据文件 + 基于索引的分割。
+- Provides a unified read interface for upper layers (serialization / BPE / training). / 为上层提供统一读取接口。
+- Serialization and BPE cache management are internal details; data building must be triggered explicitly. / 序列化和BPE缓存管理为内部细节，数据构建需显式触发。
+- Simplified API: two core methods get_sequences() and get_sequences_by_splits(). / 简化API：两个核心方法。
 """
 
 from __future__ import annotations

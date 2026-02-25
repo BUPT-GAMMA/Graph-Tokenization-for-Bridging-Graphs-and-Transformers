@@ -1,4 +1,5 @@
-"""Data layer - unified graph dataset interface."""
+"""Data layer - unified graph dataset interface.
+数据层 - 统一图数据集接口。"""
 
 # from .qm9_loader import QM9Loader  # avoid forcing DGL import at package level
 
