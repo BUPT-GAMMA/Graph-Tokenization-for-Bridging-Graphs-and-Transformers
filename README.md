@@ -1,40 +1,43 @@
-# TokenizerGraph 项目文档
+# TokenizerGraph
 
-> **最后更新**: 2025-10-30  
-> **项目状态**: 论文投稿完成，代码整理中
-
-## 快速开始
-
-### 核心文档
-
-1. **[详细技术文档](TokenizerGraph_Detailed_Documentation.md)** - 完整的技术架构和使用指南
-2. **[配置管理指南](docs/guides/config_guide.md)** - 配置文件结构和使用
-3. **[实验指南](docs/guides/experiment_guide.md)** - 实验设计和执行规范
-4. **[编码规范](docs/guides/coding_standards.md)** - 代码风格和规范
-
-### 模块文档
-
-- **数据层**: [`src/data/README.md`](../src/data/README.md)
-- **序列化算法**: [`src/algorithms/serializer/README.md`](../src/algorithms/serializer/README.md)
-- **BPE压缩**: [`src/algorithms/compression/README.md`](../src/algorithms/compression/README.md)
+将图结构数据序列化为 token 序列，并通过 BPE 压缩与 Transformer 编码器（BERT/GTE）进行图级预训练与微调。
 
 ## 项目结构
 
 ```
 tokenizerGraph/
-├── config.py                    # 统一配置管理
-├── run_pretrain.py             # 预训练入口
-├── run_finetune.py             # 微调入口
-├── prepare_data_new.py          # 数据预处理
+├── config.py                        # 统一配置管理
+├── config/default_config.yml        # 默认配置文件
+├── prepare_data_new.py              # 数据预处理（序列化 + BPE）
+├── run_pretrain.py                  # 预训练入口
+├── run_finetune.py                  # 微调入口
+├── batch_pretrain_simple.py         # 批量预训练（多数据集/方法/GPU）
+├── batch_finetune_simple.py         # 批量微调
+├── aggregate_results.py             # 结果聚合
 ├── src/
-│   ├── data/                   # 数据层
-│   ├── algorithms/             # 算法层（序列化、BPE）
-│   ├── models/                 # 模型层（BERT、GTE）
-│   └── training/               # 训练层
-└── docs/                       # 文档中心
+│   ├── algorithms/
+│   │   ├── serializer/              # 图序列化算法（Euler、DFS、BFS、Topo等）
+│   │   └── compression/             # BPE 压缩引擎（Python + C++ 后端）
+│   ├── data/                        # 数据加载与预处理
+│   │   └── loader/                  # 各数据集加载器
+│   ├── models/                      # 模型定义
+│   │   ├── bert/                    # BERT 编码器
+│   │   ├── gte/                     # GTE 编码器
+│   │   └── unified_encoder.py       # 统一编码器接口
+│   ├── training/                    # 训练流程
+│   └── utils/                       # 工具函数
+├── gte_model/                       # GTE 预训练模型配置
+├── final/                           # 论文实验脚本与绘图代码
+└── docs/                            # 文档
 ```
 
-## 使用流程
+## 快速开始
+
+### 环境准备
+
+```bash
+pip install -e .
+```
 
 ### 1. 数据预处理
 
@@ -65,30 +68,38 @@ python run_finetune.py \
     --target_property homo
 ```
 
-## 文档维护状态
+### 4. 批量实验
 
-| 文档 | 状态 | 最后更新 |
-|------|------|---------|
-| 详细技术文档 | ✅ 已更新 | 2025-10-30 |
-| 数据层文档 | ✅ 已更新 | 2025-10-30 |
-| 序列化文档 | ✅ 已更新 | 2025-10-30 |
-| BPE文档 | ✅ 已验证 | 2025-10-30 |
-| 配置指南 | ✅ 保留 | - |
-| 实验指南 | ✅ 保留 | - |
+```bash
+python batch_pretrain_simple.py \
+    --datasets qm9,zinc \
+    --methods feuler,eulerian,cpp \
+    --bpe_scenarios all,raw \
+    --gpus 0,1
 
-## 代码整理状态
+python batch_finetune_simple.py \
+    --datasets qm9,zinc \
+    --methods feuler,eulerian,cpp \
+    --bpe_scenarios all,raw \
+    --gpus 0,1
+```
 
-- ✅ 核心文档已更新并验证
-- ✅ 未使用代码扫描完成（见 [`docs/unused_code_scan.md`](docs/unused_code_scan.md)）
-- ✅ 文档结构已重构（统一命名和位置）
-- ⏳ 代码注释更新（待完成）
+## 复现论文实验
 
-## 相关资源
+论文中各实验的运行脚本位于 `final/` 目录：
 
-- **未使用代码扫描**: [`docs/unused_code_scan.md`](docs/unused_code_scan.md)
-- **项目状态（归档）**: [`docs/archive/current_project_status.md`](docs/archive/current_project_status.md)
+- **主实验**: `final/exp1_main/run/` — 预训练与微调脚本
+- **效率分析**: `final/exp1_speed/` — 序列化速度、token 长度、训练效率
+- **多重采样对比**: `final/exp2_mult_seralize_comp/` — 多重序列化效果对比
+- **BPE 词表可视化**: `final/exp4_bpe_vocab_visual/` — 词表结构分析与可视化
 
----
+## 文档
 
-**维护者**: 发现文档错误请立即修正
+- **[配置指南](docs/guides/config_guide.md)** — 配置文件结构与参数说明
+- **[实验指南](docs/guides/experiment_guide.md)** — 实验设计与执行流程
+- **[BPE 使用指南](docs/bpe/BPE_USAGE_GUIDE.md)** — BPE 压缩引擎使用方法
 
+## 分支说明
+
+- **`release`** — 最小复现版本，仅包含论文实验所需的代码与文档
+- **`dev`** — 完整开发版本，保留所有原始工具脚本与文档

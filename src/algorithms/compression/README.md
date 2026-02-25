@@ -1,5 +1,8 @@
 # BPE 引擎（训练 + 编码）使用说明与性能摘要
 
+> 重要：本目录内旧实现 `main_bpe.py` 已归档为 `main_bpe_ARCHIVED.py`（仅历史参考，不再维护）。
+> 统一推荐通过 `bpe_engine.py` 的 `BPEEngine` 使用 BPE 训练与编码接口。
+
 本目录提供统一的 BPE 引擎 `BPEEngine`，涵盖：
 - 训练后端：C++ 原生（minBPE 逻辑）、Python（标准优化版）
 - 编码后端：C++/pybind11（推荐）、Python（兼容）
@@ -63,6 +66,7 @@ python benchmark_bpe_new_vs_old.py \
 - C++ 训练后端与 minBPE 参考实现语义等价：训练规则顺序与编码结果对拍一致。
 - Python `StandardBPECompressor` 为“标准 BPE 优化实现”，采用维护频率表的增量策略，语义与 minBPE 可能不同，仅用于对照/兼容。
 - 上层接口统一：无论选择何种后端，`train` → `build_encoder` → `encode/batch_encode` 的调用方式完全一致。
+- 归档说明：旧文件 `main_bpe.py` 已迁移为 `main_bpe_ARCHIVED.py`，请勿在新代码中直接依赖；统一通过 `BPEEngine` 访问训练/编码接口。
 
 ## 五、注意事项
 - 线程：默认 `OMP_NUM_THREADS=1`、`MKL_NUM_THREADS=1`，避免嵌套并行影响尾延迟。

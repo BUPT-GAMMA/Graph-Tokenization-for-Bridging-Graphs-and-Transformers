@@ -91,4 +91,5 @@ def create_encoder_with_preset(
     config = get_preset_config(model_name)
     if config_overrides:
         config.update(config_overrides)
-    return create_encoder(model_name, config, vocab_manager)
+    from .unified_encoder import create_encoder_from_config
+    return create_encoder_from_config(model_name, config, vocab_manager)

@@ -1,7 +1,45 @@
 # BERT训练Pipeline - 开发者文档
 
-> **⚠️ 重要提示**: 本文档描述的是BERT模块的独立使用方式（历史版本）。  
-> 当前项目中，BERT已通过统一模型系统集成，实际使用请参考：
+> 统一接口更新（当前推荐的集成方式）
+>
+> - 编码器创建：
+>   - 便捷接口（推荐调用侧使用）：
+>     ```python
+>     from src.models.unified_encoder import create_encoder_from_config
+>     encoder = create_encoder_from_config(model_name, encoder_config_dict, vocab_manager)
+>     ```
+>   - 纯参数接口（组件无感知 config，用于跨项目复用）：
+>     ```python
+>     from src.models.unified_encoder import create_encoder
+>     encoder = create_encoder(model_name,
+>                              vocab_size=..., pad_token_id=...,
+>                              hidden_size=..., num_hidden_layers=...,
+>                              num_attention_heads=..., intermediate_size=...,
+>                              hidden_dropout_prob=..., attention_probs_dropout_prob=...,
+>                              max_position_embeddings=..., layer_norm_eps=...,
+>                              type_vocab_size=..., initializer_range=...,
+>                              reset_weights=...,
+>                              # GTE 仅当 model_name 含 'gte' 时需要：
+>                              torch_dtype='float32', unpad_inputs=False, use_memory_efficient_attention=False)
+>     ```
+>   - 说明：BERT 分支不读取 optimization；GTE 分支强制需要 `optimization` 字段（仅在便捷接口中）。
+>
+> - 词表管理：
+>   - 便捷接口（推荐调用侧使用）：
+>     ```python
+>     from src.models.bert.vocab_manager import VocabManager
+>     vocab_manager = VocabManager.from_config(config)  # 从统一配置提取所需字段
+>     ```
+>   - 纯参数构造（组件无感知 config）：
+>     ```python
+>     VocabManager(pad_token=..., unk_token=..., mask_token=..., cls_token=..., sep_token=...,
+>                  node_start_token=..., node_end_token=..., component_sep_token=...,
+>                  pad_token_id=..., unk_token_id=..., mask_token_id=..., cls_token_id=...,
+>                  sep_token_id=..., node_start_token_id=..., node_end_token_id=...,
+>                  component_sep_token_id=...)
+>     ```
+>
+> **⚠️ 历史说明**: 下文为早期独立使用文档；当前项目已通过统一模型系统集成，实际使用请参考：
 > - [`../../training/pretrain_pipeline.py`](../../training/pretrain_pipeline.py) - 预训练流程
 > - [`../../training/finetune_pipeline.py`](../../training/finetune_pipeline.py) - 微调流程
 > - [`../unified_encoder.py`](../unified_encoder.py) - 统一编码器接口

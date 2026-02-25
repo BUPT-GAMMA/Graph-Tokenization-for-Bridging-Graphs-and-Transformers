@@ -75,7 +75,8 @@ def build_task_model(
     # === 第1阶段：创建完整模型 ===
     # 创建编码器
     encoder_config = _build_encoder_config(config, encoder_type, task_type)
-    encoder = create_encoder(encoder_type, encoder_config, vocab_manager)
+    from src.models.unified_encoder import create_encoder_from_config
+    encoder = create_encoder_from_config(encoder_type, encoder_config, vocab_manager)
     dtype=encoder_config.get('optimization', {}).get('torch_dtype', torch.float32)
     dtype=parse_torch_dtype(dtype)
     

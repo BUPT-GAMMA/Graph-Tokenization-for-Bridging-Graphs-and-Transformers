@@ -11,7 +11,7 @@ from typing import Tuple, Optional, Dict
 import torch
 
 from src.models.universal_model import UniversalModel
-from src.models.unified_encoder import create_encoder
+from src.models.unified_encoder import create_encoder_from_config
 from src.training.task_handler import TaskHandler, create_task_handler
 
 
@@ -39,7 +39,7 @@ def create_universal_model(
     # 1. 创建编码器
     encoder_type = config.encoder.type
     encoder_config = _build_encoder_config(config, encoder_type, task_type)  # 🆕 传递task_type
-    encoder = create_encoder(encoder_type, encoder_config, vocab_manager)
+    encoder = create_encoder_from_config(encoder_type, encoder_config, vocab_manager)
     print(f"🔧 创建编码器: {encoder_type} ({encoder.get_hidden_size()}维)")
     
     # 2. 确定输出维度
