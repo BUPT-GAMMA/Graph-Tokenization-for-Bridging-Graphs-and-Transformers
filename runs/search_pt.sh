@@ -1,0 +1,15 @@
+python hyperopt/scripts/large_batch_search.py --stage pretrain --pretrain_trials 100
+python hyperopt/scripts/large_batch_search.py --stage pretrain --pretrain_trials 100
+python hyperopt/scripts/large_batch_search.py --stage pretrain --pretrain_trials 100
+python hyperopt/scripts/large_batch_search.py --stage pretrain --pretrain_trials 100
+python hyperopt/scripts/large_batch_search.py --stage pretrain --pretrain_trials 100
+python hyperopt/scripts/large_batch_search.py --stage pretrain --pretrain_trials 100
+python hyperopt/scripts/large_batch_search.py --stage pretrain --pretrain_trials 100
+python hyperopt/scripts/large_batch_search.py --stage pretrain --pretrain_trials 100
+python hyperopt/scripts/large_batch_search.py --stage pretrain --pretrain_trials 100
+python hyperopt/scripts/large_batch_search.py --stage pretrain --pretrain_trials 100
+python hyperopt/scripts/large_batch_search.py --stage pretrain --pretrain_trials 100
+python hyperopt/scripts/large_batch_search.py --stage pretrain --pretrain_trials 100
+python hyperopt/scripts/large_batch_search.py --stage pretrain --pretrain_trials 100
+python hyperopt/scripts/large_batch_search.py --stage pretrain --pretrain_trials 100
+python hyperopt/scripts/large_batch_search.py --stage pretrain --pretrain_trials 100
