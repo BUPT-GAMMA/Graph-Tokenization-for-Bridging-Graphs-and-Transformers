@@ -12,55 +12,70 @@ from collections import Counter
 import torch
 import warnings
 import numpy as np
-from config import ProjectConfig
 
 class VocabManager:
     """词表管理器，从token ID序列构建和管理词表"""
     
-    def __init__(self, config: ProjectConfig):
+    def __init__(self,
+                 pad_token: str,
+                 unk_token: str,
+                 mask_token: str,
+                 cls_token: str,
+                 sep_token: str,
+                 node_start_token: str,
+                 node_end_token: str,
+                 component_sep_token: str,
+                 pad_token_id: int,
+                 unk_token_id: int,
+                 mask_token_id: int,
+                 cls_token_id: int,
+                 sep_token_id: int,
+                 node_start_token_id: int,
+                 node_end_token_id: int,
+                 component_sep_token_id: int):
         """
-        Args:
-            config: 项目配置，用于获取标准化的特殊token
+        纯参数化构造，不依赖任何配置对象。所有参数必须显式传递。
         """
-        # 使用config中的标准化特殊token
+        # 特殊token字符串
+        self.pad_token = pad_token
+        self.unk_token = unk_token
+        self.mask_token = mask_token
+        self.cls_token = cls_token
+        self.sep_token = sep_token
+        self.node_start_token = node_start_token
+        self.node_end_token = node_end_token
+        self.component_sep_token = component_sep_token
+
+        # 特殊token集合（保持现有顺序约定）
         self.special_tokens = [
-            config.pad_token,
-            config.unk_token,
-            config.mask_token,
-            config.cls_token,
-            config.sep_token,
-            config.node_start_token,
-            config.node_end_token,
-            config.component_sep_token
+            self.pad_token,
+            self.unk_token,
+            self.mask_token,
+            self.cls_token,
+            self.sep_token,
+            self.node_start_token,
+            self.node_end_token,
+            self.component_sep_token
         ]
-        
-        # 使用config中的标准化ID
-        self.pad_token_id = config.pad_token_id
-        self.unk_token_id = config.unk_token_id
-        self.cls_token_id = config.cls_token_id
-        self.sep_token_id = config.sep_token_id
-        self.mask_token_id = config.mask_token_id
-        self.node_start_token_id = config.node_start_token_id
-        self.node_end_token_id = config.node_end_token_id
-        self.component_sep_token_id = config.component_sep_token_id
-        
-        # token字符串属性
-        self.pad_token = config.pad_token
-        self.unk_token = config.unk_token
-        self.cls_token = config.cls_token
-        self.sep_token = config.sep_token
-        self.mask_token = config.mask_token
-        self.node_start_token = config.node_start_token
-        self.node_end_token = config.node_end_token
-        self.component_sep_token = config.component_sep_token
+
+        # 特殊token对应ID
+        self.pad_token_id = int(pad_token_id)
+        self.unk_token_id = int(unk_token_id)
+        self.cls_token_id = int(cls_token_id)
+        self.sep_token_id = int(sep_token_id)
+        self.mask_token_id = int(mask_token_id)
+        self.node_start_token_id = int(node_start_token_id)
+        self.node_end_token_id = int(node_end_token_id)
+        self.component_sep_token_id = int(component_sep_token_id)
+
         # 词表相关
         self.token_to_id: Dict[int, int] = {}  # 原始token_id -> 新的vocab_id
         self.id_to_token: Dict[int, int] = {}  # 新的vocab_id -> 原始token_id
         self.vocab_size = 0
-        
+
         # 预留特殊token位置
         self._reserve_special_tokens()
-        
+
         # 统计信息
         self.token_counts: Counter = Counter()
         self._built = False
@@ -325,7 +340,7 @@ class VocabManager:
         print(f"词表已保存到: {save_path}")
     
     @classmethod
-    def load_vocab(cls, load_path: str, config: ProjectConfig) -> 'VocabManager':
+    def load_vocab(cls, load_path: str, config) -> 'VocabManager':
         """从文件加载词表"""
         if load_path.endswith('.json'):
             with open(load_path, 'r', encoding='utf-8') as f:
@@ -334,8 +349,8 @@ class VocabManager:
             with open(load_path, 'rb') as f:
                 vocab_data = pickle.load(f)
         
-        # 创建实例
-        instance = cls(config)
+        # 创建实例（通过便利接口从config提取参数）
+        instance = cls.from_config(config)
         
         # 恢复状态
         instance.token_to_id = {int(k): v for k, v in vocab_data['token_to_id'].items()}
@@ -352,9 +367,19 @@ class VocabManager:
             print("✅ 词表缓存命中")
         return instance
 
+    @classmethod
+    def from_config(cls, config) -> 'VocabManager':
+        """
+        便利接口：从 ProjectConfig 创建 VocabManager。
+        注意：这是捷径方法，核心构造函数不依赖 config。
+        复制到子项目后仅需调整此方法以适配新的配置结构。
+        """
+        params = _extract_from_config(config)
+        return cls(**params)
+
 
 def build_vocab_from_sequences(token_sequences: List[List[int]], 
-                              config: ProjectConfig,
+                              config,
                               min_freq: int = 1,
                               max_vocab_size: Optional[int] = None) -> VocabManager:
     """从token序列构建词表的便捷函数
@@ -370,8 +395,35 @@ def build_vocab_from_sequences(token_sequences: List[List[int]],
     """
     print("开始从token序列构建词表...")
     
-    vocab_manager = VocabManager(config)
+    vocab_manager = VocabManager.from_config(config)
     vocab_manager.add_token_sequences(token_sequences)
     vocab_manager.build_vocab(min_freq, max_vocab_size)
     
     return vocab_manager 
+
+
+# 便利函数：从统一配置对象创建 VocabManager（允许导入 config）
+def _extract_from_config(config):
+    """内部工具：从config中提取构造 VocabManager 所需字段。缺失即抛出异常。"""
+    # 强制要求所有字段存在，避免隐式fallback
+    return dict(
+        pad_token=config.pad_token,
+        unk_token=config.unk_token,
+        mask_token=config.mask_token,
+        cls_token=config.cls_token,
+        sep_token=config.sep_token,
+        node_start_token=config.node_start_token,
+        node_end_token=config.node_end_token,
+        component_sep_token=config.component_sep_token,
+        pad_token_id=config.pad_token_id,
+        unk_token_id=config.unk_token_id,
+        mask_token_id=config.mask_token_id,
+        cls_token_id=config.cls_token_id,
+        sep_token_id=config.sep_token_id,
+        node_start_token_id=config.node_start_token_id,
+        node_end_token_id=config.node_end_token_id,
+        component_sep_token_id=config.component_sep_token_id,
+    )
+
+
+ 
