@@ -4,10 +4,10 @@ from typing import Dict, List, Tuple, Optional
 import numpy as np
 
 try:
-    from . import _cpp_bpe  # 已编译的 pybind11 模块
+    from . import _cpp_bpe  # compiled pybind11 module
 except Exception as e:  # noqa: E722
     raise ImportError(
-        "未找到 _cpp_bpe 扩展，请先构建 C++ 后端（见 README/文档构建说明）。"
+        "_cpp_bpe extension not found. Build the C++ backend first (see README)."
     ) from e
 
 
@@ -18,7 +18,7 @@ class CppBPEBackend:
 
     @classmethod
     def from_bpe_model(cls, model) -> "CppBPEBackend":
-        # 优先使用模型派生结构（若有）
+        # Prefer model-derived structure if available
         if hasattr(model, "_minbpe_pair_to_rank") and hasattr(model, "_minbpe_pair_to_newid"):
             pair_to_rank = model._minbpe_pair_to_rank
             pair_to_newid = model._minbpe_pair_to_newid
@@ -34,7 +34,7 @@ class CppBPEBackend:
             rights.append(int(r))
             ranks.append(int(rk))
             new_ids.append(int(pair_to_newid[(l, r)]))
-        # 转为 int32 以匹配 C++ 实现的数据宽度
+        # Convert to int32 to match C++ data width
         enc = _cpp_bpe.MinBPEEncoder(
             np.asarray(lefts, dtype=np.int32).tolist(),
             np.asarray(rights, dtype=np.int32).tolist(),
@@ -55,7 +55,7 @@ class CppBPEBackend:
     ) -> "CppBPEBackend":
         if pair_to_rank is None or pair_to_newid is None:
             if merge_rules is None:
-                raise ValueError("需要提供 pair_to_rank/pair_to_newid 或 merge_rules 以构建 codebook")
+                raise ValueError("Provide pair_to_rank/pair_to_newid or merge_rules to build codebook")
             pair_to_rank = {}
             pair_to_newid = {}
             for idx, (l, r, new_id) in enumerate(merge_rules):
@@ -78,9 +78,9 @@ class CppBPEBackend:
     # -------- Training (minBPE) --------
     @staticmethod
     def train_minbpe_cpp(token_sequences: List[List[int]], num_merges: int, min_frequency: int) -> Dict:
-        """使用 C++ 原生实现进行 minBPE 训练，返回与 Python 引擎一致的统计字典。"""
+        """Train minBPE using C++ native implementation."""
         results = _cpp_bpe.train_minbpe(token_sequences, int(num_merges), int(min_frequency))
-        # 归一化返回结构为 Python 侧惯用 dict
+        # Normalize return structure
         merge_rules_py: List[Tuple[int, int, int]] = []
         for t in results["merge_rules"]:
             l, r, nid = int(t[0]), int(t[1]), int(t[2])
@@ -95,20 +95,20 @@ class CppBPEBackend:
 
     def encode(self, seq: List[int]) -> List[int]:
         if not isinstance(seq, (list, tuple)):
-            raise TypeError("encode 需要 List[int]")
+            raise TypeError("encode requires List[int]")
         arr = np.asarray(seq, dtype=np.int32)
         return [int(x) for x in self._encoder.encode(arr.tolist())]
 
     def encode_topk(self, seq: List[int], topk: int) -> List[int]:
         if not isinstance(seq, (list, tuple)):
-            raise TypeError("encode_topk 需要 List[int]")
+            raise TypeError("encode_topk requires List[int]")
         arr = np.asarray(seq, dtype=np.int32)
         return [int(x) for x in self._encoder.encode_with_limit(arr.tolist(), int(topk))]
 
     def batch_encode(self, seqs: List[List[int]]) -> List[List[int]]:
         if not isinstance(seqs, (list, tuple)):
-            raise TypeError("batch_encode 需要 List[List[int]]")
-        # 优先走 ragged 接口以减少 Python 循环与对象分配
+            raise TypeError("batch_encode requires List[List[int]]")
+        # Use ragged interface to minimize Python loop overhead
         offsets = [0]
         flat = []
         for s in seqs:
@@ -125,15 +125,15 @@ class CppBPEBackend:
 
     def batch_encode_topk(self, seqs: List[List[int]], topk: int) -> List[List[int]]:
         if not isinstance(seqs, (list, tuple)):
-            raise TypeError("batch_encode_topk 需要 List[List[int]]")
-        # 使用 C++ 的批量限幅接口，避免 Python 循环
+            raise TypeError("batch_encode_topk requires List[List[int]]")
+        # Use C++ batch limit interface
         arrs: List[List[int]] = []
         for s in seqs:
             arrs.append(np.asarray(s, dtype=np.int32).tolist())
         outs = self._encoder.batch_encode_with_limit(arrs, int(topk))
         return [[int(x) for x in out] for out in outs]
 
-    # 调试/验证用：返回 (encoded, ranks_applied)
+    # Debug/verification: returns (encoded, ranks_applied)
     def encode_with_limit_trace(self, seq: List[int], rank_limit: int) -> Tuple[List[int], List[int]]:
         arr = np.asarray(seq, dtype=np.int32)
         out, ranks = self._encoder.encode_with_limit_trace(arr.tolist(), int(rank_limit))

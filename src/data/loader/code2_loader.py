@@ -17,12 +17,10 @@ logger = get_logger(__name__)
 
 
 class CODE2Loader(BaseDataLoader):
-    """ogbg-code2 图到序列数据集（OGB）。
+    """ogbg-code2 graph-to-sequence dataset (OGB).
 
-    预处理约定：
-    - 节点两维离散特征分别作为两个节点token输出；两者需域不相交，因此第二维加大偏置。
-    - 数据集中无边特征，边token统一为0（偶数域）。
-    - 写入规范键：`node_token_ids: [N, Dn]`、`edge_token_ids: [E, 1]`，并同步 `feat`。
+    Two-channel discrete node features with disjoint domains (second channel offset).
+    No edge features; edge tokens are uniformly 0 (even domain).
     """
 
     def __init__(self, config: ProjectConfig, dataset_name: str = "code2", target_property: Optional[str] = None):
@@ -32,21 +30,21 @@ class CODE2Loader(BaseDataLoader):
         self._node_attr_cache: Dict[int, Dict[int, List[int]]] = {}
         self._edge_attr_cache: Dict[int, Dict[int, int]] = {}
         self._normalized_name = "code2"
-        # 大偏置，确保两个节点token域不重叠，且仍保持奇数域
+        # Large bias to ensure two node token domains do not overlap
         self._second_channel_bias = 10_000_000
         self.load_data()
 
     def _load_processed_data(self) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
-        logger.info(f"📂 读取 CODE2 预处理目录: {self.data_dir}")
+        logger.info(f"Loading CODE2 preprocessed data from: {self.data_dir}")
         train_index_file = self.data_dir / "train_index.json"
         test_index_file = self.data_dir / "test_index.json"
         val_index_file = self.data_dir / "val_index.json"
         for f in (train_index_file, test_index_file, val_index_file):
             if not f.exists():
-                raise FileNotFoundError("索引文件不存在，请先运行预处理脚本")
+                raise FileNotFoundError("Index files not found; run preprocessing first")
         data_file = self.data_dir / "data.pkl"
         if not data_file.exists():
-            raise FileNotFoundError(f"统一数据文件不存在: {data_file}")
+            raise FileNotFoundError(f"Data file not found: {data_file}")
         if self._all_data is None:
             with open(data_file, "rb") as f:
                 raw_data: List[Tuple[dgl.DGLGraph, Any]] = pickle.load(f)
@@ -57,7 +55,7 @@ class CODE2Loader(BaseDataLoader):
                     "dgl_graph": graph,
                     "num_nodes": int(graph.num_nodes()),
                     "num_edges": int(graph.num_edges()),
-                    "properties": {"label": label_obj},  # code2 是序列标签
+                    "properties": {"label": label_obj},  # code2 uses sequence labels
                     "dataset_name": self.dataset_name,
                     "data_type": "program_graph",
                 }
@@ -104,7 +102,7 @@ class CODE2Loader(BaseDataLoader):
         for sample in processed_data:
             g: dgl.DGLGraph = sample["dgl_graph"]
             gid = id(g)
-            # 已在预处理阶段写回标准键；此处仅构建缓存。
+            # Standard keys written during preprocessing; build cache only.
             self._node_attr_cache[gid] = {int(i): g.ndata['node_token_ids'][i].long().tolist() for i in range(g.num_nodes())}
             self._edge_attr_cache[gid] = {int(i): int(g.edata['edge_type_id'][i].item()) for i in range(g.num_edges())}
         self._cache_built = True
@@ -116,7 +114,7 @@ class CODE2Loader(BaseDataLoader):
         return 0
 
     def get_node_attribute(self, graph: dgl.DGLGraph, node_id: int) -> int:
-        # 返回主通道类型（第一通道还原前的索引）
+        # Return primary channel type (index before restoration)
         tok = graph.ndata["node_token_ids"][int(node_id)]
         return int(((int(tok[0].item())) - 1) // 2)
 
@@ -138,7 +136,7 @@ class CODE2Loader(BaseDataLoader):
         return int(name)
 
     def get_node_token(self, graph: dgl.DGLGraph, node_id: int, ntype: str = None) -> List[int]:
-        # 返回两通道 token
+        # Return dual-channel tokens from original 2D node attributes
         t = graph.ndata["node_token_ids"][int(node_id)].long()
         if t.dim() == 0:
             return [int(t.item())]

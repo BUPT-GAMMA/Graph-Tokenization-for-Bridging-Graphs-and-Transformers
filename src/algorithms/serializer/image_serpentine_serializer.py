@@ -5,12 +5,7 @@ from .base_serializer import BaseGraphSerializer, SerializationResult, GlobalIDM
 
 
 class ImageSerpentineSerializer(BaseGraphSerializer):
-    """
-    图像蛇形扫描序列化器：
-    - 偶数行从左到右，奇数行从右到左（行号从 0 开始）
-    - 仅节点像素 token，禁用边 token
-    - 需 image_shape=(H,W,C) 且 N==H*W
-    """
+    """Image serpentine (boustrophedon) scan serializer."""
 
     def __init__(self):
         super().__init__()
@@ -24,10 +19,10 @@ class ImageSerpentineSerializer(BaseGraphSerializer):
         dgl_graph = self._validate_graph_data(graph_data)
         shape = graph_data.get('image_shape', None)
         if shape is None:
-            raise ValueError("缺少 image_shape (H,W,C)")
+            raise ValueError("Missing image_shape (H,W,C)")
         H, W, C = shape
         if dgl_graph.num_nodes() != H * W:
-            raise ValueError(f"节点数与 H*W 不一致: N={dgl_graph.num_nodes()}, H*W={H*W}")
+            raise ValueError(f"Node count mismatch: N={dgl_graph.num_nodes()}, H*W={H*W}")
 
         node_path: List[int] = []
         for r in range(H):

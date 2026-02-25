@@ -1,8 +1,7 @@
 """
-可视化辅助工具
-===============
+Visualization helpers.
 
-提供中文字体支持、图表美化等可视化相关的辅助函数
+CJK font setup, plot styling, and chart generation utilities.
 """
 
 import matplotlib.pyplot as plt
@@ -10,40 +9,39 @@ import matplotlib as mpl
 import warnings
 
 def set_chinese_font():
-    """设置中文字体支持"""
+    """Set up CJK font support for matplotlib."""
     
-    # 尝试使用常见的中文字体
+    # Try common CJK fonts
     cjk_fonts = ['Noto Sans CJK SC', 'Noto Serif CJK SC', 'WenQuanYi Zen Hei', 'WenQuanYi Micro Hei']
     
     for font in plt.rcParams['font.sans-serif']:
         if any(cjk in font for cjk in ['Noto', 'CJK', 'WenQuanYi']):
-            print(f"✅ 使用现有中文字体: {font}")
+            print(f"Using CJK font: {font}")
             break
     else:
-        # 如果没有找到合适的字体，使用回退选项
+        # Fallback: prepend CJK font list
         plt.rcParams['font.sans-serif'] = cjk_fonts + plt.rcParams['font.sans-serif']
-        print("📝 使用系统默认中文字体列表")
+        print("Using system default CJK font list")
     
-    plt.rcParams['axes.unicode_minus'] = False  # 用来正常显示负号
+    plt.rcParams['axes.unicode_minus'] = False  # Fix minus sign rendering
     
-    # 尝试特殊解决方案：使用Agg后端（更稳定）
+    # Use Agg backend for stability
     try:
         plt.switch_backend('Agg')
-        print("🖼️  使用Agg后端进行图片渲染")
+        print("Using Agg backend for rendering")
     except Exception as e:
-        print(f"⚠️  后端切换失败，使用默认后端: {e}")
+        print(f"Backend switch failed, using default: {e}")
     
-    # 忽略字体警告
+    # Suppress font warnings
     warnings.filterwarnings('ignore', category=UserWarning, module='matplotlib')
     
 set_chinese_font()
 
 def setup_plot_style():
-    """设置图表样式"""
-    # 设置中文字体
+    """Configure plot style."""
     set_chinese_font()
     
-    # 设置图表样式
+    # Plot style defaults
     plt.rcParams['figure.figsize'] = (12, 8)
     plt.rcParams['font.size'] = 10
     plt.rcParams['axes.titlesize'] = 14
@@ -53,19 +51,19 @@ def setup_plot_style():
     plt.rcParams['legend.fontsize'] = 10
     plt.rcParams['grid.alpha'] = 0.3
     
-    print("🎨 图表样式配置完成")
+    print("Plot style configured")
 
 def create_performance_comparison_plot(results, output_file='performance_comparison.png'):
     """
-    创建性能对比图表
+    Create performance comparison charts.
     
     Args:
-        results: 算法性能结果字典
-        output_file: 输出文件路径
+        results: Algorithm performance results dict
+        output_file: Output file path
     """
     setup_plot_style()
     
-    # 提取数据
+    # Extract data
     methods = []
     compression_ratios = []
     tokens_saved = []
@@ -90,53 +88,53 @@ def create_performance_comparison_plot(results, output_file='performance_compari
                 original_lengths.append(0)
                 compressed_lengths.append(0)
     
-    # 创建四子图
+    # Create 4-panel figure
     fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 12))
-    fig.suptitle('分子图序列化算法性能对比', fontsize=16, y=0.95)
+    fig.suptitle('Serialization Algorithm Performance Comparison', fontsize=16, y=0.95)
     
-    # 子图1: 压缩率对比
+    # Panel 1: Compression ratio
     bars1 = ax1.bar(methods, compression_ratios, color='skyblue', alpha=0.7)
-    ax1.set_title('BPE压缩率对比 (越低越好)')
-    ax1.set_ylabel('压缩率')
+    ax1.set_title('BPE Compression Ratio (lower is better)')
+    ax1.set_ylabel('Compression Ratio')
     ax1.tick_params(axis='x', rotation=45)
     ax1.grid(True, alpha=0.3)
     
-    # 添加数值标签
+    # Add value labels
     for bar, ratio in zip(bars1, compression_ratios):
         height = bar.get_height()
         ax1.text(bar.get_x() + bar.get_width()/2., height + 0.005,
                  f'{ratio:.3f}', ha='center', va='bottom')
     
-    # 子图2: 节省tokens对比
+    # Panel 2: Tokens saved
     bars2 = ax2.bar(methods, tokens_saved, color='lightgreen', alpha=0.7)
-    ax2.set_title('节省Tokens数量对比 (越高越好)')
-    ax2.set_ylabel('节省Tokens数')
+    ax2.set_title('Tokens Saved (higher is better)')
+    ax2.set_ylabel('Tokens Saved')
     ax2.tick_params(axis='x', rotation=45)
     ax2.grid(True, alpha=0.3)
     
-    # 添加数值标签
+    # Add value labels
     for bar, saved in zip(bars2, tokens_saved):
         height = bar.get_height()
         ax2.text(bar.get_x() + bar.get_width()/2., height + 100,
                  f'{saved:,}', ha='center', va='bottom')
     
-    # 子图3: 压缩前后长度对比
+    # Panel 3: Pre/post compression length
     x = range(len(methods))
     width = 0.35
     
     bars3a = ax3.bar([i - width/2 for i in x], original_lengths, width, 
-                     label='压缩前', color='lightcoral', alpha=0.7)
+                     label='Before BPE', color='lightcoral', alpha=0.7)
     bars3b = ax3.bar([i + width/2 for i in x], compressed_lengths, width,
-                     label='压缩后', color='darkred', alpha=0.7)
+                     label='After BPE', color='darkred', alpha=0.7)
     
-    ax3.set_title('压缩前后长度对比')
-    ax3.set_ylabel('Token数量')
+    ax3.set_title('Length Before/After Compression')
+    ax3.set_ylabel('Token Count')
     ax3.set_xticks(x)
     ax3.set_xticklabels(methods, rotation=45)
     ax3.legend()
     ax3.grid(True, alpha=0.3)
     
-    # 添加数值标签
+    # Add value labels
     for i, (orig, comp) in enumerate(zip(original_lengths, compressed_lengths)):
         if orig > 0:
             ax3.text(i - width/2, orig + orig*0.02, f'{orig:,}', 
@@ -145,14 +143,14 @@ def create_performance_comparison_plot(results, output_file='performance_compari
             ax3.text(i + width/2, comp + comp*0.02, f'{comp:,}', 
                     ha='center', va='bottom', fontsize=8)
     
-    # 子图4: 序列多样性对比
+    # Panel 4: Sequence diversity
     bars4 = ax4.bar(methods, diversities, color='gold', alpha=0.7)
-    ax4.set_title('序列多样性对比 (越高越好)')
-    ax4.set_ylabel('多样性系数')
+    ax4.set_title('Sequence Diversity (higher is better)')
+    ax4.set_ylabel('Diversity Score')
     ax4.tick_params(axis='x', rotation=45)
     ax4.grid(True, alpha=0.3)
     
-    # 添加数值标签
+    # Add value labels
     for bar, diversity in zip(bars4, diversities):
         height = bar.get_height()
         ax4.text(bar.get_x() + bar.get_width()/2., height + 0.01,
@@ -163,14 +161,14 @@ def create_performance_comparison_plot(results, output_file='performance_compari
                 facecolor='white', edgecolor='none')
     plt.close()
     
-    print(f"📊 性能对比图表已保存: {output_file}")
+    print(f"Performance comparison chart saved: {output_file}")
     return output_file
 
 def create_comprehensive_analysis_plot(results, output_file='comprehensive_analysis.png'):
-    """创建综合分析图表"""
+    """Create comprehensive analysis charts."""
     setup_plot_style()
     
-    # 提取所有算法数据
+    # Extract data for all algorithms
     all_algorithms = []
     
     for method_name, method_results in results.items():
@@ -190,42 +188,42 @@ def create_comprehensive_analysis_plot(results, output_file='comprehensive_analy
             
             all_algorithms.append(data_point)
     
-    # 创建散点图
+    # Create scatter plots
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
-    fig.suptitle('分子图序列化算法综合分析', fontsize=16)
+    fig.suptitle('Serialization Algorithm Analysis', fontsize=16)
     
-    # 左图: 压缩率 vs 序列多样性
+    # Left: Compression ratio vs diversity
     x1 = [d['diversity'] for d in all_algorithms]
     y1 = [d['compression_ratio'] for d in all_algorithms]
     names1 = [d['name'] for d in all_algorithms]
     
     scatter = ax1.scatter(x1, y1, s=100, alpha=0.7, color='blue')
     
-    # 添加标签
+    # Add labels
     for i, name in enumerate(names1):
         ax1.annotate(name, (x1[i], y1[i]), xytext=(5, 5), 
                    textcoords='offset points', fontsize=9)
     
-    ax1.set_xlabel('序列多样性')
-    ax1.set_ylabel('压缩率 (越低越好)')
-    ax1.set_title('压缩率 vs 多样性分析')
+    ax1.set_xlabel('Sequence Diversity')
+    ax1.set_ylabel('Compression Ratio (lower is better)')
+    ax1.set_title('Compression Ratio vs Diversity')
     ax1.grid(True, alpha=0.3)
     
-    # 右图: 序列长度 vs 节省tokens
+    # Right: Sequence length vs tokens saved
     x2 = [d['sequence_length'] for d in all_algorithms]
     y2 = [d['tokens_saved'] for d in all_algorithms]
     names2 = [d['name'] for d in all_algorithms]
     
     scatter = ax2.scatter(x2, y2, s=100, alpha=0.7, color='green')
     
-    # 添加标签
+    # Add labels
     for i, name in enumerate(names2):
         ax2.annotate(name, (x2[i], y2[i]), xytext=(5, 5), 
                    textcoords='offset points', fontsize=9)
     
-    ax2.set_xlabel('平均序列长度')
-    ax2.set_ylabel('节省Tokens数')
-    ax2.set_title('序列长度 vs 压缩效果分析')
+    ax2.set_xlabel('Average Sequence Length')
+    ax2.set_ylabel('Tokens Saved')
+    ax2.set_title('Sequence Length vs Compression Effect')
     ax2.grid(True, alpha=0.3)
     
     plt.tight_layout()
@@ -233,5 +231,5 @@ def create_comprehensive_analysis_plot(results, output_file='comprehensive_analy
                 facecolor='white', edgecolor='none')
     plt.close()
     
-    print(f"🔍 综合分析图表已保存: {output_file}")
+    print(f"Analysis chart saved: {output_file}")
     return output_file 

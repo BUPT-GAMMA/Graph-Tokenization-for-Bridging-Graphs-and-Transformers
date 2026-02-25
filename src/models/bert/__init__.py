@@ -1,11 +1,19 @@
 """
-BERT训练Pipeline - Token ID序列支持
+BERT training pipeline — Token ID sequence support.
+BERT 训练 Pipeline - Token ID 序列支持
 
-这是一个支持Token ID序列输入的BERT训练系统，包含：
-- 词表管理: 从Token ID序列自动构建词表
-- MLM预训练: Masked Language Modeling预训练
-- 回归任务: 序列级连续数值预测
-- 完整pipeline: 从数据到模型的端到端流程
+A BERT training system that takes token ID sequences as input:
+支持 Token ID 序列输入的 BERT 训练系统，包含：
+- Vocabulary management: auto-build vocab from token ID sequences / 词表管理
+- MLM pre-training: Masked Language Modeling / MLM 预训练
+- Regression tasks: sequence-level continuous prediction / 回归任务
+- Full pipeline: end-to-end from data to model / 完整 pipeline
+
+BERT 训练系统支持以下功能：
+- 词表管理：自动从 Token ID 序列构建词表
+- MLM 预训练：Masked Language Modeling
+- 回归任务：序列级连续预测
+- 完整 pipeline：从数据到模型的端到端支持
 """
 
 from .vocab_manager import VocabManager, build_vocab_from_sequences
@@ -19,15 +27,16 @@ __version__ = "1.0.0"
 __author__ = "Custom BERT Team"
 
 __all__ = [
-    # 词表管理
+    # Vocabulary management / 词表管理
     "VocabManager", "build_vocab_from_sequences",
     
-    # 配置
+    # Configuration / 配置
     "BertConfig",
     
-    # 数据处理  
+    # Data processing / 数据处理
     "MLMDataset",
     "create_mlm_dataloader",
     
-    # 注意：BertMLM已迁移到 src.models.universal_model.UniversalModel
+    # Note: BertMLM has been migrated to src.models.universal_model.UniversalModel
+    # 注意：BertMLM 已迁移到 src.models.universal_model.UniversalModel
 ] 

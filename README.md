@@ -1,105 +1,140 @@
 # TokenizerGraph
 
-将图结构数据序列化为 token 序列，并通过 BPE 压缩与 Transformer 编码器（BERT/GTE）进行图级预训练与微调。
+[[中文文档 / Chinese README]](README_zh.md)
 
-## 项目结构
+> **Branches:** This is the **`release`** branch — clean code for reproducing paper experiments.
+> For the full development version (utility scripts, benchmarks, internal docs), switch to the **[`dev` branch](../../tree/dev)**.
+
+TokenizerGraph is a framework for molecular property prediction through graph serialization. It converts molecular graphs into token sequences, applies BPE compression to discover substructure patterns, and uses Transformer encoders (BERT or GTE) for pre-training and fine-tuning on downstream tasks.
+
+## Overview
+
+The core idea is straightforward: serialize a molecular graph into a linear token sequence, then treat it as a "sentence" that a language model can learn from. Different serialization strategies (Eulerian paths, DFS, BFS, etc.) capture different structural aspects of the graph. BPE compression then merges frequent token pairs into higher-level tokens, effectively learning common substructures.
+
+```
+Raw Molecules → Graph Construction → Serialization → BPE Compression → Transformer → Predictions
+```
+
+## Project Structure
 
 ```
 tokenizerGraph/
-├── config.py                        # 统一配置管理
-├── config/default_config.yml        # 默认配置文件
-├── prepare_data_new.py              # 数据预处理（序列化 + BPE）
-├── run_pretrain.py                  # 预训练入口
-├── run_finetune.py                  # 微调入口
-├── batch_pretrain_simple.py         # 批量预训练（多数据集/方法/GPU）
-├── batch_finetune_simple.py         # 批量微调
-├── aggregate_results.py             # 结果聚合
+├── prepare_data_new.py         # Data preprocessing: serialization + BPE training + vocab
+├── run_pretrain.py             # Pre-training entry point (MLM)
+├── run_finetune.py             # Fine-tuning entry point (regression/classification)
+├── batch_pretrain_simple.py    # Batch pre-training across datasets/methods/GPUs
+├── batch_finetune_simple.py    # Batch fine-tuning
+├── aggregate_results.py        # Collect and tabulate experiment results
+├── config.py                   # Centralized configuration management
+├── config/default_config.yml   # Default config values
 ├── src/
 │   ├── algorithms/
-│   │   ├── serializer/              # 图序列化算法（Euler、DFS、BFS、Topo等）
-│   │   └── compression/             # BPE 压缩引擎（Python + C++ 后端）
-│   ├── data/                        # 数据加载与预处理
-│   │   └── loader/                  # 各数据集加载器
-│   ├── models/                      # 模型定义
-│   │   ├── bert/                    # BERT 编码器
-│   │   ├── gte/                     # GTE 编码器
-│   │   └── unified_encoder.py       # 统一编码器接口
-│   ├── training/                    # 训练流程
-│   └── utils/                       # 工具函数
-├── gte_model/                       # GTE 预训练模型配置
-├── final/                           # 论文实验脚本与绘图代码
-└── docs/                            # 文档
+│   │   ├── serializer/         # Graph serialization (Euler, DFS, BFS, Topo, SMILES, ...)
+│   │   └── compression/        # BPE engine (C++ / Numba / Python backends)
+│   ├── data/                   # Data loading and preprocessing
+│   │   └── loader/             # Per-dataset loaders
+│   ├── models/                 # Model definitions
+│   │   ├── bert/               # BERT encoder
+│   │   ├── gte/                # GTE encoder (Alibaba-NLP/gte-multilingual-base)
+│   │   └── unified_encoder.py  # Unified encoder interface
+│   ├── training/               # Training pipelines and utilities
+│   └── utils/                  # Logging, metrics, visualization
+├── gte_model/                  # Local GTE model config (for offline use)
+├── final/                      # Paper experiment scripts and plotting code
+└── docs/                       # Documentation
 ```
 
-## 快速开始
-
-### 环境准备
+## Installation
 
 ```bash
+git clone <repository_url>
+cd TokenizerGraph
+
+# Install in development mode
 pip install -e .
+
+# Build the C++ BPE backend (optional but recommended for speed)
+python setup.py build_ext --inplace
 ```
 
-### 1. 数据预处理
+Key dependencies: `torch`, `dgl`, `networkx`, `rdkit`, `transformers`, `pybind11`, `pandas`.
+
+## Usage
+
+### 1. Data Preparation
+
+Serialize molecular graphs and train a BPE tokenizer:
 
 ```bash
 python prepare_data_new.py \
-    --dataset qm9test \
-    --method feuler \
-    --bpe_num_merges 2000
+    --datasets qm9test \
+    --methods feuler \
+    --bpe_merges 2000
 ```
 
-### 2. 预训练
+This loads the dataset, serializes all graphs with the chosen method, trains a BPE model on the resulting sequences, and builds a vocabulary. All artifacts are cached for reuse.
+
+### 2. Pre-training
+
+Pre-train a Transformer encoder with Masked Language Modeling (MLM):
 
 ```bash
 python run_pretrain.py \
     --dataset qm9test \
     --method feuler \
+    --experiment_group my_experiment \
     --epochs 100 \
     --batch_size 256
 ```
 
-### 3. 微调
+### 3. Fine-tuning
+
+Fine-tune the pre-trained model on a downstream property prediction task:
 
 ```bash
 python run_finetune.py \
     --dataset qm9test \
     --method feuler \
-    --task regression \
-    --target_property homo
+    --experiment_group my_experiment \
+    --target_property homo \
+    --epochs 200 \
+    --batch_size 64
 ```
 
-### 4. 批量实验
+### 4. Batch Experiments
+
+Run experiments across multiple datasets, serialization methods, and GPUs in parallel:
 
 ```bash
 python batch_pretrain_simple.py \
-    --datasets qm9,zinc \
+    --datasets qm9,zinc,mutagenicity \
     --methods feuler,eulerian,cpp \
     --bpe_scenarios all,raw \
     --gpus 0,1
 
 python batch_finetune_simple.py \
-    --datasets qm9,zinc \
+    --datasets qm9,zinc,mutagenicity \
     --methods feuler,eulerian,cpp \
     --bpe_scenarios all,raw \
     --gpus 0,1
 ```
 
-## 复现论文实验
+## Reproducing Paper Experiments
 
-论文中各实验的运行脚本位于 `final/` 目录：
+Scripts for all paper experiments are in the `final/` directory:
 
-- **主实验**: `final/exp1_main/run/` — 预训练与微调脚本
-- **效率分析**: `final/exp1_speed/` — 序列化速度、token 长度、训练效率
-- **多重采样对比**: `final/exp2_mult_seralize_comp/` — 多重序列化效果对比
-- **BPE 词表可视化**: `final/exp4_bpe_vocab_visual/` — 词表结构分析与可视化
+- **Main experiments** — `final/exp1_main/run/`: pre-training and fine-tuning commands
+- **Efficiency analysis** — `final/exp1_speed/`: serialization speed, token length stats, training throughput
+- **Multi-sampling comparison** — `final/exp2_mult_seralize_comp/`: effect of multiple serialization samples
+- **BPE vocabulary visualization** — `final/exp4_bpe_vocab_visual/`: codebook inspection and visualization
 
-## 文档
+## Documentation
 
-- **[配置指南](docs/guides/config_guide.md)** — 配置文件结构与参数说明
-- **[实验指南](docs/guides/experiment_guide.md)** — 实验设计与执行流程
-- **[BPE 使用指南](docs/bpe/BPE_USAGE_GUIDE.md)** — BPE 压缩引擎使用方法
+- [Configuration Guide](docs/guides/config_guide.md) — config file structure and parameters
+- [Experiment Guide](docs/guides/experiment_guide.md) — how to design and run experiments
+- [BPE Usage Guide](docs/bpe/BPE_USAGE_GUIDE.md) — BPE engine API and usage
 
-## 分支说明
+## Branches
 
-- **`release`** — 最小复现版本，仅包含论文实验所需的代码与文档
-- **`dev`** — 完整开发版本，保留所有原始工具脚本与文档
+- **`release`** — Clean version with only the code needed to reproduce paper experiments.
+- **`dev`** — Full development version with all utility scripts, benchmarks, and internal documentation.

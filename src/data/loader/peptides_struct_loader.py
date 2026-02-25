@@ -19,35 +19,28 @@ logger = get_logger(__name__)
 
 
 def reconstruct_dgl_graph_from_lightweight(graph_data: Dict[str, Any]) -> Tuple[dgl.DGLGraph, Any]:
-    """从轻量级数据重构DGL图"""
-    # 重构图结构
+    """Reconstruct a DGL graph from lightweight data."""
+    # Reconstruct graph structure
     src, dst = graph_data['edges']
     g = dgl.graph((src, dst), num_nodes=graph_data['num_nodes'])
     
-    # 恢复特征（预处理已确保这些字段存在）
+    # Restore features (preprocessing guarantees these fields)
     g.ndata['x'] = torch.from_numpy(graph_data['node_features'])
     g.edata['edge_attr'] = torch.from_numpy(graph_data['edge_features'])
     
-    # 恢复Token IDs（预处理已确保这些字段存在）
+    # Restore token IDs
     g.ndata['node_token_ids'] = torch.from_numpy(graph_data['node_token_ids'])
     g.edata['edge_token_ids'] = torch.from_numpy(graph_data['edge_token_ids'])
     
-    # 恢复类型IDs（预处理已确保这些字段存在）
+    # Restore type IDs
     g.ndata['node_type_id'] = torch.from_numpy(graph_data['node_type_ids'])
     g.edata['edge_type_id'] = torch.from_numpy(graph_data['edge_type_ids'])
     
-    return g, None  # 标签单独处理
+    return g, None  # labels handled separately
 
 
 class PeptidesStructLoader(BaseDataLoader):
-    """Peptides-struct 图回归数据集（LRGB）。
-    
-    预处理约定：
-    - 从PyTorch Geometric的LRGBDataset加载Peptides-struct数据集
-    - 多标签回归任务（11个结构性属性）
-    - 节点特征：原子类型等
-    - 边特征：键类型等
-    """
+    """Peptides-struct graph regression dataset (LRGB). Multi-target (11 structural properties)."""
 
     def __init__(self, config: ProjectConfig, dataset_name: str = "peptides_struct", target_property: Optional[str] = None):
         super().__init__(dataset_name, config, target_property)
@@ -59,17 +52,17 @@ class PeptidesStructLoader(BaseDataLoader):
         self.load_data()
 
     def _load_processed_data(self) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
-        logger.info(f"📂 读取 Peptides-struct 预处理目录: {self.data_dir}")
+        logger.info(f"Loading Peptides-struct preprocessed data from: {self.data_dir}")
         train_index_file = self.data_dir / "train_index.json"
         test_index_file = self.data_dir / "test_index.json"
         val_index_file = self.data_dir / "val_index.json"
         for f in (train_index_file, test_index_file, val_index_file):
             if not f.exists():
-                raise FileNotFoundError("索引文件不存在，请先运行预处理脚本")
-        # 读取预处理的轻量级压缩格式
+                raise FileNotFoundError("Index files not found; run preprocessing first")
+        # Read lightweight compressed format
         data_file = self.data_dir / "data.pkl.gz"
         if not data_file.exists():
-            raise FileNotFoundError(f"Peptides-struct数据文件不存在: {data_file}")
+            raise FileNotFoundError(f"Peptides-struct data file not found: {data_file}")
         
         if self._all_data is None:
             with gzip.open(data_file, "rb") as f:
@@ -77,19 +70,19 @@ class PeptidesStructLoader(BaseDataLoader):
             
             all_data: List[Dict[str, Any]] = []
             for i, (graph_data, label_obj) in enumerate(raw_data):
-                # 重构DGL图
+                # Reconstruct DGL graph
                 graph, _ = reconstruct_dgl_graph_from_lightweight(graph_data)
                 
-                # 标签格式：预处理输出为shape=(11,)的numpy数组
-                assert isinstance(label_obj, np.ndarray) and label_obj.shape == (11,), f"Peptides-struct标签格式错误: {type(label_obj)}, shape={getattr(label_obj, 'shape', 'no-shape')}"
-                labels = label_obj.tolist()  # 转换为11维列表
+                # Labels: shape=(11,) numpy array from preprocessing
+                assert isinstance(label_obj, np.ndarray) and label_obj.shape == (11,), f"Bad label format: {type(label_obj)}, shape={getattr(label_obj, 'shape', 'no-shape')}"
+                labels = label_obj.tolist()
                 
                 sample = {
                     "id": f"{self._normalized_name}_{i}",
                     "dgl_graph": graph,
                     "num_nodes": int(graph.num_nodes()),
                     "num_edges": int(graph.num_edges()),
-                    "properties": {"labels": labels},  # 11维回归目标
+                    "properties": {"labels": labels},  # 11-dim regression targets
                     "dataset_name": self.dataset_name,
                     "data_type": "peptide_graph",
                 }
@@ -111,8 +104,8 @@ class PeptidesStructLoader(BaseDataLoader):
         return train_data, val_data, test_data
 
     def _extract_labels(self, data: List[Dict[str, Any]]) -> List[Any]:
-        """提取11维回归目标"""
-        return [s["properties"]["labels"] for s in data]  # 直接访问，预处理已确保格式正确
+        """Extract 11-dim regression targets."""
+        return [s["properties"]["labels"] for s in data]
 
     def _get_data_metadata(self) -> Dict[str, Any]:
         if self._train_data is None:
@@ -136,7 +129,7 @@ class PeptidesStructLoader(BaseDataLoader):
         return "multi_target_regression"
 
     def get_num_classes(self) -> int:
-        return 11  # 11个回归目标
+        return 11
 
     def get_default_target_property(self) -> Optional[str]:
         return "labels"
@@ -151,15 +144,13 @@ class PeptidesStructLoader(BaseDataLoader):
         return res
 
     def _build_attribute_cache(self, processed_data: List[Dict[str, Any]]):
-        """构建属性缓存"""
+        """Build attribute cache."""
         for sample in processed_data:
             g: dgl.DGLGraph = sample["dgl_graph"]
             gid = id(g)
             
-            # 预处理已确保这些字段存在，直接使用
             self._node_attr_cache[gid] = {int(i): int(v) for i, v in enumerate(g.ndata["node_type_id"].tolist())}
             self._edge_attr_cache[gid] = {int(i): int(v) for i, v in enumerate(g.edata["edge_type_id"].tolist())}
-        
         self._cache_built = True
 
     def get_node_attribute(self, graph: dgl.DGLGraph, node_id: int) -> int:
@@ -183,7 +174,7 @@ class PeptidesStructLoader(BaseDataLoader):
         return str(type_id)
 
     def get_most_frequent_edge_type(self) -> str:
-        return "1"  # 默认最频繁边类型
+        return "1"
 
     def get_edge_type_id_by_name(self, name: str) -> int:
         try:
@@ -220,16 +211,16 @@ class PeptidesStructLoader(BaseDataLoader):
         return graph.edata["edge_type_id"]
 
     def get_graph_node_token_ids(self, graph: dgl.DGLGraph) -> torch.Tensor:
-        return graph.ndata["node_token_ids"].long()  # 确保数据类型为long
+        return graph.ndata["node_token_ids"].long()
 
     def get_graph_edge_token_ids(self, graph: dgl.DGLGraph) -> torch.Tensor:
-        return graph.edata["edge_token_ids"].long()  # 确保数据类型为long
+        return graph.edata["edge_token_ids"].long()
 
     def get_graph_src_dst(self, graph: dgl.DGLGraph) -> Tuple[torch.Tensor, torch.Tensor]:
         return graph.edges()
 
     def get_token_map(self) -> Dict[Tuple[str, int], int]:
-        """从token映射文件读取映射关系"""
+        """Read token mappings from file."""
         token_mapping_file = self.data_dir / "token_mappings.json"
         
         with open(token_mapping_file, 'r') as f:
@@ -237,14 +228,14 @@ class PeptidesStructLoader(BaseDataLoader):
         
         token_map = {}
         
-        # 节点tokens（从特征组合映射中反推）
+        # Node tokens (reverse-map from feature combo)
         for combo_str, token in mappings["node_combo_to_token"].items():
-            type_id = (token - 1) // 2  # 从token反推type_id
+            type_id = (token - 1) // 2
             token_map[("node", type_id)] = token
         
-        # 边tokens（从特征组合映射中反推）
+        # Edge tokens (reverse-map from feature combo)
         for combo_str, token in mappings["edge_combo_to_token"].items():
-            type_id = token // 2  # 从token反推type_id
+            type_id = token // 2
             token_map[("edge", type_id)] = token
         
         return token_map

@@ -1,18 +1,8 @@
 #!/usr/bin/env python3
 """
-🚀 简洁配置覆盖系统
-==================
+Config override system.
 
-设计原则：
-- 基础参数：dataset, method, experiment_name, experiment_group, device
-- JSON完整覆盖：除基础参数外，所有配置都通过JSON一次性覆盖
-- 常用参数：如果没有JSON，提供少量常用参数的快捷设置
-
-特性:
-- 📝 JSON完整配置覆盖
-- 🎯 基础参数 + 常用参数
-- 🔄 自动类型转换
-- 🎨 简洁实用
+Supports: basic CLI args, JSON full override, and common shortcut args.
 """
 
 from __future__ import annotations
@@ -24,75 +14,75 @@ from config import ProjectConfig
 
 
 def add_basic_args(parser: argparse.ArgumentParser) -> None:
-    """添加基础必需参数（这些参数不会被JSON覆盖）"""
+    """Add basic required args (not overridden by JSON)."""
     
-    parser.add_argument("--dataset", type=str, required=True, help="数据集名称")
-    parser.add_argument("--method", type=str, required=True, help="序列化方法")
-    parser.add_argument("--experiment_group", type=str, help="实验分组")
-    parser.add_argument("--experiment_name", type=str, help="实验名称")
-    parser.add_argument("--device", type=str, help="设备 (cuda:0, cpu, auto)")
-    parser.add_argument("--log_style", type=str, choices=["online", "offline"], help="日志样式：online=使用tqdm；offline=每个epoch按10%输出摘要")
+    parser.add_argument("--dataset", type=str, required=True, help="Dataset name")
+    parser.add_argument("--method", type=str, required=True, help="Serialization method")
+    parser.add_argument("--experiment_group", type=str, help="Experiment group")
+    parser.add_argument("--experiment_name", type=str, help="Experiment name")
+    parser.add_argument("--device", type=str, help="Device (cuda:0, cpu, auto)")
+    parser.add_argument("--log_style", type=str, choices=["online", "offline"], help="Log style: online=tqdm; offline=summary per 10%% epoch")
 
-    # 🆕 重复运行参数
-    parser.add_argument("--repeat_runs", type=int, default=1, help="重复运行次数，默认1次（不重复）")
+    # Repeat runs
+    parser.add_argument("--repeat_runs", type=int, default=1, help="Number of repeat runs (default: 1)")
 
 
 def add_common_args(parser: argparse.ArgumentParser) -> None:
-    """添加常用参数（仅在没有JSON覆盖时使用）"""
+    """Add common args (used when no JSON override is provided)."""
     
-    # BPE压缩参数
-    bpe_group = parser.add_argument_group('BPE压缩配置')
+    # BPE compression args
+    bpe_group = parser.add_argument_group('BPE compression')
     # bpe_group.add_argument("--bpe_num_merges", type=int, help="BPE合并次数，0表示不使用BPE")
     # bpe_group.add_argument("--bpe_encode_backend", type=str, choices=["python", "cpp"], 
     #                       default="cpp", help="BPE编码后端")
     bpe_group.add_argument("--bpe_encode_rank_mode", type=str, 
                           choices=["none", "all", "topk", "random", "gaussian"], default="none",
-                          help="BPE编码排序模式")
-    bpe_group.add_argument("--bpe_encode_rank_k", type=int, help="BPE编码Top-K参数")
+                          help="BPE encode rank mode")
+    bpe_group.add_argument("--bpe_encode_rank_k", type=int, help="BPE encode top-K parameter")
     # bpe_group.add_argument("--bpe_encode_rank_min", type=int, help="BPE编码随机范围最小值")
     # bpe_group.add_argument("--bpe_encode_rank_max", type=int, help="BPE编码随机范围最大值")
-    bpe_group.add_argument("--bpe_encode_rank_dist", type=str, help="BPE编码随机分布类型")
+    bpe_group.add_argument("--bpe_encode_rank_dist", type=str, help="BPE encode random distribution type")
     bpe_group.add_argument("--bpe_eval_mode", type=str, 
-                          choices=["all", "topk"], help="BPE评估模式")
-    bpe_group.add_argument("--bpe_eval_topk", type=int, help="BPE评估Top-K参数")
+                          choices=["all", "topk"], help="BPE eval mode")
+    bpe_group.add_argument("--bpe_eval_topk", type=int, help="BPE eval top-K parameter")
     
-    # BERT架构
+    # BERT architecture
     # arch_group = parser.add_argument_group('BERT架构')
     # arch_group.add_argument("--hidden_size", type=int, help="隐藏层大小")
     # arch_group.add_argument("--num_layers", type=int, help="层数")
     # arch_group.add_argument("--num_heads", type=int, help="注意力头数")
     
-    # 训练参数 (根据脚本自动映射到预训练或微调)
-    train_group = parser.add_argument_group('训练参数')
-    train_group.add_argument("--epochs", type=int, help="训练轮数")
-    train_group.add_argument("--batch_size", type=int, help="批次大小")
-    train_group.add_argument("--learning_rate", "--lr", type=float, help="学习率")
+    # Training args (auto-mapped to pretrain or finetune depending on script)
+    train_group = parser.add_argument_group('Training')
+    train_group.add_argument("--epochs", type=int, help="Training epochs")
+    train_group.add_argument("--batch_size", type=int, help="Batch size")
+    train_group.add_argument("--learning_rate", "--lr", type=float, help="Learning rate")
     
-    # 任务参数
-    task_group = parser.add_argument_group('任务参数')
+    # Task args
+    task_group = parser.add_argument_group('Task')
 
-    task_group.add_argument("--target_property", type=str, help="回归目标属性")
+    task_group.add_argument("--target_property", type=str, help="Regression target property")
     
-    # 编码器参数（简化：仅接收 bert/gte）
-    encoder_group = parser.add_argument_group('编码器参数')
-    encoder_group.add_argument("--encoder", type=str, choices=["bert", "gte"], help="编码器类型（bert 或 gte）")
+    # Encoder args
+    encoder_group = parser.add_argument_group('Encoder')
+    encoder_group.add_argument("--encoder", type=str, choices=["bert", "gte"], help="Encoder type (bert or gte)")
 
 
 def add_json_override_args(parser: argparse.ArgumentParser) -> None:
-    """添加JSON配置覆盖参数"""
+    """Add JSON config override args."""
     
-    json_group = parser.add_argument_group('JSON配置覆盖')
+    json_group = parser.add_argument_group('JSON config override')
     json_group.add_argument("--config_json", type=str, 
-                           help="JSON配置覆盖 (JSON字符串或文件路径)")
+                           help="JSON config override (JSON string or file path)")
     json_group.add_argument("--show_config", action="store_true",
-                           help="显示最终配置内容")
+                           help="Show final config and exit")
 
 
 def apply_args_to_config(config: ProjectConfig, args: argparse.Namespace, *, common_to: str = "pretrain") -> None:
-    """应用命令行参数到配置对象"""
+    """Apply CLI args to config object."""
     import json as _json_internal
     
-    # 预读取 JSON（若提供），用于后续判断覆盖优先级（JSON > 常用CLI）
+    # Pre-read JSON (if provided) to check override precedence (JSON > common CLI)
     json_dict_for_presence = None
     if hasattr(args, 'config_json') and args.config_json:
         try:
@@ -102,7 +92,7 @@ def apply_args_to_config(config: ProjectConfig, args: argparse.Namespace, *, com
                 with open(args.config_json, 'r', encoding='utf-8') as _fh:
                     json_dict_for_presence = _json_internal.load(_fh)
         except Exception:
-            json_dict_for_presence = None  # 解析失败则放弃 presence 保护
+            json_dict_for_presence = None  # parse failed, skip presence check
 
     def _json_has_path(d: dict | None, dotted: str) -> bool:
         if not isinstance(d, dict):
@@ -114,7 +104,7 @@ def apply_args_to_config(config: ProjectConfig, args: argparse.Namespace, *, com
             cur = cur[key]
         return True
 
-    # === 1. 基础参数（总是生效） ===
+    # === 1. Basic args (always apply) ===
     if args.dataset:
         config.dataset.name = args.dataset
         print(f"🎯 dataset.name = {args.dataset}")
@@ -138,12 +128,12 @@ def apply_args_to_config(config: ProjectConfig, args: argparse.Namespace, *, com
         config.system.log_style = args.log_style
         print(f"🎯 system.log_style = {args.log_style}")
 
-    # 🆕 处理重复运行参数
+    # Repeat runs
     if hasattr(args, 'repeat_runs') and args.repeat_runs is not None:
         config.repeat_runs = args.repeat_runs
         print(f"🎯 repeat_runs = {args.repeat_runs}")
     
-    # BPE参数
+    # BPE args
     if hasattr(args, 'bpe_num_merges') and args.bpe_num_merges is not None:
         config.serialization.bpe.num_merges = args.bpe_num_merges
         print(f"🎯 serialization.bpe.num_merges = {args.bpe_num_merges}")
@@ -166,15 +156,15 @@ def apply_args_to_config(config: ProjectConfig, args: argparse.Namespace, *, com
             setattr(current, keys[-1], value)
             print(f"🎯 {config_path} = {value}")
     
-    # === 2. JSON配置覆盖（优先级最高，但仅覆盖其声明的字段） ===
+    # === 2. JSON config override (highest priority) ===
     if hasattr(args, 'config_json') and args.config_json:
-        print("📝 应用JSON配置覆盖...")
+        print("Applying JSON config override...")
         apply_json_config(config, args.config_json)
     
-    # === 3. 常用参数覆盖（当提供JSON时，仅覆盖JSON未声明的字段） ===
-    print("🔧 应用常用参数覆盖...")
+    # === 3. Common arg overrides (only for fields not declared in JSON) ===
+    print("Applying common arg overrides...")
     
-    # BERT架构参数
+    # BERT architecture args
     if hasattr(args, 'hidden_size') and args.hidden_size:
         config.bert.architecture.hidden_size = args.hidden_size
         print(f"🎯 bert.architecture.hidden_size = {args.hidden_size}")
@@ -187,7 +177,7 @@ def apply_args_to_config(config: ProjectConfig, args: argparse.Namespace, *, com
         config.bert.architecture.num_attention_heads = args.num_heads
         print(f"🎯 bert.architecture.num_attention_heads = {args.num_heads}")
     
-    # 🆕 简化的训练参数处理
+    # Training param handling
     if hasattr(args, 'epochs') and args.epochs:
         if common_to == "finetune":
             config.bert.finetuning.epochs = args.epochs
@@ -226,7 +216,7 @@ def apply_args_to_config(config: ProjectConfig, args: argparse.Namespace, *, com
     if hasattr(args, 'max_len_policy') and args.max_len_policy:
         config.bert.architecture.max_len_policy = args.max_len_policy
         print(f"🎯 bert.architecture.max_len_policy = {args.max_len_policy}")
-    # 任务参数
+    # Task args
     if hasattr(args, 'task') and args.task:
         config.task.type = args.task
         print(f"🎯 task.type = {args.task}")
@@ -235,44 +225,40 @@ def apply_args_to_config(config: ProjectConfig, args: argparse.Namespace, *, com
         config.task.target_property = args.target_property
         print(f"🎯 task.target_property = {args.target_property}")
     
-    # 🆕 编码器参数（--encoder）
+    # Encoder arg (--encoder)
     if hasattr(args, 'encoder') and args.encoder:
         config.encoder.type = args.encoder
         print(f"🎯 encoder.type = {args.encoder}")
     
-# 删除冗余的finetune_*参数处理，统一使用--epochs等通用参数
+# Redundant finetune_* params removed; unified --epochs etc. used instead
 
 
 def apply_json_config(config: ProjectConfig, json_input: str) -> None:
-    """应用JSON配置覆盖"""
+    """Apply JSON config override (string or file path)."""
     try:
-        # 判断是文件路径还是JSON字符串
         if json_input.strip().startswith('{'):
-            # JSON字符串
             config_dict = json.loads(json_input)
-            print("📝 应用JSON字符串配置")
+            print("Applied JSON string config")
         else:
-            # 文件路径
             with open(json_input, 'r', encoding='utf-8') as f:
                 config_dict = json.load(f)
-            print(f"📝 应用JSON文件配置: {json_input}")
+            print(f"Applied JSON file config: {json_input}")
         
-        # 递归覆盖配置
         recursive_override(config, config_dict)
         
     except json.JSONDecodeError as e:
-        print(f"❌ JSON解析失败: {e}")
+        print(f"JSON parse error: {e}")
         raise
     except FileNotFoundError:
-        print(f"❌ 配置文件不存在: {json_input}")
+        print(f"Config file not found: {json_input}")
         raise
     except Exception as e:
-        print(f"❌ JSON配置覆盖失败: {e}")
+        print(f"JSON config override failed: {e}")
         raise
 
 
 def recursive_override(config_obj: Any, override_dict: Dict[str, Any], path: str = "") -> None:
-    """递归覆盖配置对象"""
+    """Recursively override config object fields."""
     for key, value in override_dict.items():
         current_path = f"{path}.{key}" if path else key
         
@@ -280,56 +266,52 @@ def recursive_override(config_obj: Any, override_dict: Dict[str, Any], path: str
             current_attr = getattr(config_obj, key)
             
             if isinstance(value, dict) and hasattr(current_attr, '__dict__'):
-                # 嵌套对象，递归处理
                 recursive_override(current_attr, value, current_path)
             else:
-                # 简单值，直接设置
                 setattr(config_obj, key, value)
-                print(f"🎯 {current_path} = {value}")
+                print(f"  {current_path} = {value}")
         else:
-            print(f"⚠️ 跳过不存在的配置: {current_path}")
+            print(f"  [warn] skipping unknown config: {current_path}")
 
 
 def create_experiment_name(config: ProjectConfig) -> None:
-    """如果没有指定实验名称，自动生成一个"""
+    """Auto-generate experiment name if not specified."""
     if not config.experiment_name:
         config.experiment_name = f"{config.dataset.name}-{config.serialization.method}"
-        print(f"🏷️ 自动生成实验名称: {config.experiment_name}")
+        print(f"Auto-generated experiment name: {config.experiment_name}")
 
 
 def print_config_summary(config: ProjectConfig) -> None:
-    """打印配置摘要"""
+    """Print config summary."""
     show_full_config(config)
 
 
 
 def show_full_config(config: ProjectConfig) -> None:
-    """显示完整配置内容（JSON格式）"""
+    """Show full config in JSON format."""
     print("\n" + "="*60)
-    print("🔍 完整配置内容")
+    print("Full config")
     print("="*60)
     
-    # 构建主要配置字典
     config_dict = config.to_dict()
     print(json.dumps(config_dict, indent=2, ensure_ascii=False))
-    print("\n💡 可以将上述JSON内容保存到文件，然后用 --config_json 参数加载")
     print("="*60)
 
 
-# 便捷函数
+# Convenience function
 def add_all_args(parser: argparse.ArgumentParser, include_finetune: bool = True) -> None:
-    """一键添加所有参数"""
+    """Add all args at once."""
     add_basic_args(parser)
     
-    # BPE参数在预训练和微调中都需要
-    bpe_group = parser.add_argument_group('BPE压缩配置')
+    # BPE args (needed for both pretrain and finetune)
+    bpe_group = parser.add_argument_group('BPE compression')
     # bpe_group.add_argument("--bpe_num_merges", type=int, help="BPE合并次数，0表示不使用BPE")
     # bpe_group.add_argument("--bpe_encode_backend", type=str, choices=["python", "cpp"], 
     #                       default="cpp", help="BPE编码后端")
     bpe_group.add_argument("--bpe_encode_rank_mode", type=str, 
                           choices=["none", "all", "topk", "random", "gaussian"], default="all",
-                          help="BPE编码排序模式")
-    bpe_group.add_argument("--bpe_encode_rank_k", type=int, help="BPE编码Top-K参数")
+                          help="BPE encode rank mode")
+    bpe_group.add_argument("--bpe_encode_rank_k", type=int, help="BPE encode top-K parameter")
     # bpe_group.add_argument("--bpe_encode_rank_min", type=int, help="BPE编码随机范围最小值")
     # bpe_group.add_argument("--bpe_encode_rank_max", type=int, help="BPE编码随机范围最大值")
     # bpe_group.add_argument("--bpe_encode_rank_dist", type=str, help="BPE编码随机分布类型")
@@ -337,29 +319,29 @@ def add_all_args(parser: argparse.ArgumentParser, include_finetune: bool = True)
     #                       choices=["all", "topk"], help="BPE评估模式")
     # bpe_group.add_argument("--bpe_eval_topk", type=int, help="BPE评估Top-K参数")
     
-    # 通用训练参数（两阶段均可使用同名参数）
-    train_group = parser.add_argument_group('训练参数')
-    train_group.add_argument("--epochs", type=int, help="训练轮数")
-    train_group.add_argument("--batch_size", type=int, help="批次大小")
-    train_group.add_argument("--learning_rate", "--lr", type=float, help="学习率")
-    train_group.add_argument("--mult", type=int, help="多重采样次数")
-    train_group.add_argument("--pool", type=str, help="序列池化方法")
-    train_group.add_argument("--max_length", type=int, help="最大长度")
-    train_group.add_argument("--max_len_policy", type=str, help="最大长度策略")
+    # Common training args (same name for both pretrain and finetune)
+    train_group = parser.add_argument_group('Training')
+    train_group.add_argument("--epochs", type=int, help="Training epochs")
+    train_group.add_argument("--batch_size", type=int, help="Batch size")
+    train_group.add_argument("--learning_rate", "--lr", type=float, help="Learning rate")
+    train_group.add_argument("--mult", type=int, help="Multiple sampling count")
+    train_group.add_argument("--pool", type=str, help="Sequence pooling method")
+    train_group.add_argument("--max_length", type=int, help="Max sequence length")
+    train_group.add_argument("--max_len_policy", type=str, help="Max length policy")
 
-    # 预训练特有架构参数（仅在预训练脚本中会实际使用）
+    # Pretrain-only architecture args (only used in pretrain script)
     # arch_group = parser.add_argument_group('BERT架构')
     # arch_group.add_argument("--hidden_size", type=int, help="隐藏层大小")
     # arch_group.add_argument("--num_layers", type=int, help="层数")
     # arch_group.add_argument("--num_heads", type=int, help="注意力头数")
 
-    # 编码器参数 (预训练和微调都需要)
-    encoder_group = parser.add_argument_group('编码器配置')
-    encoder_group.add_argument("--encoder", type=str, choices=["bert", "gte"], help="编码器类型（bert 或 gte）")
+    # Encoder args (both pretrain and finetune)
+    encoder_group = parser.add_argument_group('Encoder')
+    encoder_group.add_argument("--encoder", type=str, choices=["bert", "gte"], help="Encoder type (bert or gte)")
     
-    # 任务参数 (仅微调需要)
+    # Task args (finetune only)
     if include_finetune:
-        task_group = parser.add_argument_group('任务配置')
-        task_group.add_argument("--target_property", type=str, help="目标属性名称")
+        task_group = parser.add_argument_group('Task')
+        task_group.add_argument("--target_property", type=str, help="Target property name")
     
     add_json_override_args(parser)

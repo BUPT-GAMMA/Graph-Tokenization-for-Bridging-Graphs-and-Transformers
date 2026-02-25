@@ -1,12 +1,10 @@
-"""
-Unified Data Interface
-======================
+"""Unified Data Interface.
 
-设计原则：
-- 单一数据文件 + 索引划分；
-- 对上层（序列化/BPE/训练）提供统一读取接口；
-- 序列化与 BPE 的缓存管理是接口内部细节，数据构建需显式调用；
-- 简化接口：两个核心方法 get_sequences() 和 get_sequences_by_splits()。
+Design principles:
+- Single data file + index-based splits.
+- Provides a unified read interface for upper layers (serialization / BPE / training).
+- Serialization and BPE cache management are internal details; data building must be triggered explicitly.
+- Simplified API: two core methods get_sequences() and get_sequences_by_splits().
 """
 
 from __future__ import annotations
@@ -27,14 +25,14 @@ from src.data.base_loader import BaseDataLoader
 from src.algorithms.serializer.serializer_factory import SerializerFactory
 from src.utils.logger import get_logger
 
-# from src.models.bert.vocab_manager import build_vocab_from_sequences  # 延迟导入避免循环依赖
+# from src.models.bert.vocab_manager import build_vocab_from_sequences  # lazy import to avoid circular deps
 logger = get_logger(__name__)
 
 @dataclass
 class UnifiedDataInterface:
     config: ProjectConfig
     dataset: str
-    # 运行期可选的预加载缓存（同一进程内复用，避免重复IO/构建）
+    # Optional preloaded cache (reused within the same process to avoid repeated IO)
     _preloaded_graphs: List[Dict[str, Any]] | None = None
     _preloaded_splits: Dict[str, List[int]] | None = None
     _loader: BaseDataLoader | None = None
@@ -44,8 +42,8 @@ class UnifiedDataInterface:
 
 
     def _load_split_indices(self) -> Dict[str, List[int]]:
-        """加载原有格式的划分索引文件"""
-        # 使用项目配置的 data_dir，确保加载真实项目数据而非当前工作目录
+        """Load split index files."""
+        # Use project config data_dir to ensure we load real project data
         data_dir = Path(self.config.data_dir) / self.dataset
         
         train_path = data_dir / "train_index.json"
@@ -54,32 +52,32 @@ class UnifiedDataInterface:
         
         splits = {}
         
-        # 加载训练集索引
+        # Load train indices
         if train_path.exists():
             with open(train_path, 'r') as f:
                 splits['train'] = json.load(f)
         else:
-            raise FileNotFoundError(f"训练集索引文件不存在: {train_path}")
+            raise FileNotFoundError(f"Train index file not found: {train_path}")
         
-        # 加载验证集索引  
+        # Load val indices
         if val_path.exists():
             with open(val_path, 'r') as f:
                 splits['val'] = json.load(f)
         else:
-            raise FileNotFoundError(f"验证集索引文件不存在: {val_path}")
+            raise FileNotFoundError(f"Val index file not found: {val_path}")
         
-        # 加载测试集索引
+        # Load test indices
         if test_path.exists():
             with open(test_path, 'r') as f:
                 splits['test'] = json.load(f)
         else:
-            raise FileNotFoundError(f"测试集索引文件不存在: {test_path}")
+            raise FileNotFoundError(f"Test index file not found: {test_path}")
         
         return splits
 
-    # ----------------------- 预加载图/索引（避免重复构建） -----------------------
+    # ----------------------- Preload graphs/indices -----------------------
     def preload_graphs(self) -> None:
-        """主动加载并缓存全量图与划分索引，供后续序列化/BPE 构建复用。"""
+        """Preload and cache all graphs and split indices for reuse."""
         loader = self.get_dataset_loader()
         graphs, _ = loader.get_all_data_with_indices()
         self._loader=loader
@@ -87,8 +85,8 @@ class UnifiedDataInterface:
         self._preloaded_splits = self._load_split_indices()
 
     def _get_serialization_cache_key(self) -> str:
-        """生成基于配置的序列化缓存键"""
-        # 从新的配置路径读取多重采样设置
+        """Generate a config-based serialization cache key."""
+        # Read multiple sampling settings from config
         ms = self.config.serialization.multiple_sampling
         use_multi = getattr(ms, 'enabled', False)
         num_realizations = getattr(ms, 'num_realizations', 1)
@@ -99,32 +97,29 @@ class UnifiedDataInterface:
             return "single"
     
     def _load_serialization_result(self, method: str) -> Dict[str, Any]:
-        """内部方法：加载序列化结果"""
+        """Load serialization result from disk."""
         base = self._resolve_processed_dir()
         cache_key = self._get_serialization_cache_key()
         result_path = base / "serialized_data" / method / cache_key / "serialized_data.pickle"
         
         if not result_path.exists():
-            raise FileNotFoundError(f"序列化结果不存在: {result_path}")
+            raise FileNotFoundError(f"Serialization result not found: {result_path}")
         
         with open(result_path, 'rb') as f:
             data = pickle.load(f)
             
-        assert 'serialization_method' in data, "序列化结果文件缺少 'serialization_method' 字段"
-        assert data['serialization_method'] == method, f"请求的序列化方法 '{method}' 与保存的方法 '{data['serialization_method']}' 不匹配"
+        assert 'serialization_method' in data, "Serialization result missing 'serialization_method' field"
+        assert data['serialization_method'] == method, f"Requested method '{method}' != saved method '{data['serialization_method']}'"
         
         return data
 
-    # ----------------------- 构建与持久化（显式触发） -----------------------
+    # ----------------------- Build & persist (explicit trigger) -----------------------
     def _extract_properties_from_graphs(self, graphs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """从原始图数据中提取属性信息（数值/短字符串），用于写入缓存。
-
-        说明：保持与 data_prepare 中的提取口径一致，避免依赖底层 data.pkl。
-        """
+        """Extract property info (numeric / short strings) from raw graphs for caching."""
         try:
-            import numpy as np  # 局部导入，避免顶层依赖
+            import numpy as np  # local import
         except Exception:
-            np = None  # 测试环境可不严格依赖
+            np = None  # not strictly required in test environments
 
         graph_structure_keys = {
             'dgl_graph', 'graph', 'edge_index', 'edge_attr', 'node_features', 'edge_features',
@@ -154,8 +149,8 @@ class UnifiedDataInterface:
         return properties
 
     def _build_and_persist_serialization(self, method: str) -> Path:
-        """在缓存缺失时，按当前配置确定性地构建序列化结果并持久化，返回结果路径。"""
-        # 获取数据
+        """Build serialization result deterministically and persist when cache is missing."""
+        # Get data
         if self._preloaded_graphs is not None:
             graphs = self._preloaded_graphs
             loader = self.get_dataset_loader()
@@ -163,12 +158,11 @@ class UnifiedDataInterface:
             loader = self.get_dataset_loader()
             graphs, _ = loader.get_all_data_with_indices()
 
-        # 初始化序列化器
+        # Initialize serializer
         serializer = SerializerFactory.create_serializer(method)
         serializer.initialize_with_dataset(loader, graphs)
 
-        # multiple 逻辑：按配置决定是否为每图产生多变体
-        # 从新的配置路径读取多重采样设置
+        # Multiple sampling: decide whether to produce multiple variants per graph
         ms = self.config.serialization.multiple_sampling
         use_multi = bool(getattr(ms, 'enabled', False))
         num_realizations = int(getattr(ms, 'num_realizations', 1))
@@ -177,49 +171,49 @@ class UnifiedDataInterface:
         graph_ids: List[int] = []
         flattened_properties: List[Dict[str, Any]] = []
 
-        # 提取属性（用于与序列对齐）
+        # Extract properties (aligned with sequences)
         properties = self._extract_properties_from_graphs(graphs)
 
         if use_multi and num_realizations > 1:
-            # 启用内部多进程并行（fork-only），并使用 CPU 核心数作为 workers
+            # Enable internal multi-process parallel (fork-only) with CPU core count as workers
             batch_results = serializer.batch_multiple_serialize(
                 graphs,
                 num_samples=num_realizations,
                 desc=f"serialize-multi-{method}",
                 parallel=True,
             )
-            # 逐图展开变体
+            # Expand variants per graph
             for gid, res in enumerate(batch_results):
                 if res is None:
-                    raise ValueError(f"序列化失败: 图 {gid} 返回空结果")
+                    raise ValueError(f"Serialization failed: graph {gid} returned None")
                 if not hasattr(res, 'token_sequences'):
-                    raise ValueError(f"序列化结果格式错误: 图 {gid} 缺少 token_sequences 属性")
+                    raise ValueError(f"Bad serialization result: graph {gid} missing token_sequences")
                 if not res.token_sequences:
-                    raise ValueError(f"序列化结果为空: 图 {gid} 的 token_sequences 为空")
+                    raise ValueError(f"Empty serialization result: graph {gid} token_sequences is empty")
                     
                 for vid, seq in enumerate(res.token_sequences):
                     sequences.append(seq)
                     graph_ids.append(gid)
-                    assert gid < len(properties), f"属性索引越界: 图 {gid} 超出属性列表长度 {len(properties)}"
+                    assert gid < len(properties), f"Property index out of range: graph {gid} >= {len(properties)}"
                     flattened_properties.append(properties[gid])
         else:
-            # 单次序列化
+            # Single serialization
             batch_results = serializer.batch_serialize(graphs, desc=f"serialize-{method}")
             for gid, res in enumerate(batch_results):
                 if res is None:
-                    raise ValueError(f"序列化失败: 图 {gid} 返回空结果")
+                    raise ValueError(f"Serialization failed: graph {gid} returned None")
                 if not hasattr(res, 'token_sequences'):
-                    raise ValueError(f"序列化结果格式错误: 图 {gid} 缺少 token_sequences 属性")
+                    raise ValueError(f"Bad serialization result: graph {gid} missing token_sequences")
                 if not res.token_sequences:
-                    raise ValueError(f"序列化结果为空: 图 {gid} 的 token_sequences 为空")
+                    raise ValueError(f"Empty serialization result: graph {gid} token_sequences is empty")
                     
                 sequences.append(res.token_sequences[0])
                 graph_ids.append(gid)
                 if gid >= len(properties):
-                    raise IndexError(f"属性索引越界: 图 {gid} 超出属性列表长度 {len(properties)}")
+                    raise IndexError(f"Property index out of range: graph {gid} >= {len(properties)}")
                 flattened_properties.append(properties[gid])
 
-        # 写入
+        # Write to disk
         cache_key = self._get_serialization_cache_key()
         out_dir = self._resolve_processed_dir() / "serialized_data" / method / cache_key
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -235,46 +229,31 @@ class UnifiedDataInterface:
 
 
 
-    # ----------------------- BPE codebook 与 Transform -----------------------
+    # ----------------------- BPE codebook & Transform -----------------------
     def get_bpe_codebook(self, method: str) -> Dict[str, Any]:
-        """读取 BPE codebook（按 single/multi_<k> 分目录管理）。"""
+        """Read BPE codebook (managed by single/multi_<k> subdirectories)."""
         cache_key = self._get_serialization_cache_key()
         model_path = self.config.model_dir / "bpe" / self.dataset / method / cache_key / "bpe_codebook.pkl"
         if not model_path.exists():
-            raise FileNotFoundError(f"BPE codebook 不存在: {model_path}")
+            raise FileNotFoundError(f"BPE codebook not found: {model_path}")
             
         with model_path.open('rb') as f:
             data = pickle.load(f)
             
-        assert isinstance(data, dict) and 'merge_rules' in data and 'vocab_size' in data, "BPE codebook 格式错误：缺少 merge_rules 或 vocab_size"
+        assert isinstance(data, dict) and 'merge_rules' in data and 'vocab_size' in data, "Bad BPE codebook format: missing merge_rules or vocab_size"
             
         return {'merge_rules': data['merge_rules'], 'vocab_size': int(data['vocab_size'])}
 
     def get_bpe_encoder(self, method: str, *, encode_backend: str = 'cpp', **engine_kwargs):
-        """读取 codebook 并返回可直接用于编码的 BPEEngine。
-
-        说明：
-        - 路径与持久化仍由 UDI 管理（按 dataset/method 分层）
-        - 此方法仅做“读取 -> 构造编码引擎”的桥接
-        - encode_backend 默认为 'cpp'，需已构建 C++ 扩展
-        """
-        from src.algorithms.compression.bpe_engine import BPEEngine  # 局部导入避免循环依赖
+        """Read codebook and return a ready-to-use BPEEngine."""
+        from src.algorithms.compression.bpe_engine import BPEEngine  # local import to avoid circular deps
         codebook = self.get_bpe_codebook(method)
         engine = BPEEngine.from_codebook_dict(codebook, encode_backend=encode_backend, **engine_kwargs)
         engine.build_encoder()
         return engine
     
     def save_bpe_codebook(self, method: str, merge_rules: List, vocab_size: int) -> Path:
-        """保存 BPE codebook（按 single/multi_<k> 分目录）。
-        
-        Args:
-            method: 序列化方法名
-            merge_rules: BPE 合并规则列表
-            vocab_size: 词汇表大小
-            
-        Returns:
-            保存的文件路径
-        """
+        """Save BPE codebook (by single/multi_<k> subdirectory)."""
         cache_key = self._get_serialization_cache_key()
         model_path = self.config.model_dir / "bpe" / self.dataset / method / cache_key / "bpe_codebook.pkl"
         model_path.parent.mkdir(parents=True, exist_ok=True)
@@ -291,30 +270,19 @@ class UnifiedDataInterface:
 
 
 
-    # ----------------------- 核心序列读取接口 -----------------------
+    # ----------------------- Core sequence read interface -----------------------
     def get_sequences(self, method: str) -> Tuple[List[Tuple[int, List[int]]], List[Dict[str, Any]]]:
-        """
-        获取所有序列数据和标签
-        
-        Args:
-            method: 序列化方法名
-            
-        Returns:
-            Tuple[List[Tuple[int, List[int]]], List[Dict[str, Any]]]:
-                - 第一个元素: [(图ID, 序列), ...] 列表
-                - 第二个元素: [标签属性字典, ...] 列表
-        """
         serialized = self._load_serialization_result(method)
         
-        assert 'sequences' in serialized, "序列化结果缺少必需字段 'sequences'"
+        assert 'sequences' in serialized, "Serialization result missing required field 'sequences'"
         sequences = serialized['sequences']
-        assert sequences, "序列化序列为空"
+        assert sequences, "Serialized sequences are empty"
         
-        assert 'graph_ids' in serialized, "序列化结果缺少必需字段 'graph_ids'"
+        assert 'graph_ids' in serialized, "Serialization result missing required field 'graph_ids'"
         graph_ids = serialized['graph_ids']
             
-        # 无条件从 DataLoader 依据 graph_id 获取属性，保证标签与当前数据集一致
-        # 忽略序列化结果中的 properties 字段
+        # Always fetch properties from DataLoader by graph_id for label consistency
+        # Ignore the properties field in serialization result
         loader = self.get_dataset_loader()
         all_graphs = self.get_graphs()
         properties: List[Dict[str, Any]] = []
@@ -326,10 +294,10 @@ class UnifiedDataInterface:
                 else:
                     properties.append({})
             except Exception:
-                print(f"数据加载时异常:从序列化的数据中，无法通过gid找到其在原本数据集中的对应label。无效的图ID: {gid}")
-                raise ValueError(f"无效的图ID: {gid}")
+                print(f"Data loading error: cannot find label for graph ID {gid} in original dataset.")
+                raise ValueError(f"Invalid graph ID: {gid}")
             
-        # 组装返回格式：图ID在前
+        # Assemble return format: graph ID first
         sequences_with_ids = [(gid, seq) for seq, gid in zip(sequences, graph_ids)]
         
         return sequences_with_ids, properties
@@ -339,23 +307,13 @@ class UnifiedDataInterface:
         List[Tuple[int, List[int]]], List[Dict[str, Any]],  # val  
         List[Tuple[int, List[int]]], List[Dict[str, Any]]   # test
     ]:
-        """
-        按训练/验证/测试划分获取序列数据
-        
-        Args:
-            method: 序列化方法名
-            
-        Returns:
-            Tuple of 6 elements:
-                (train_sequences, train_labels, val_sequences, val_labels, test_sequences, test_labels)
-        """
-        # 获取全部数据
+        # Get all data
         all_sequences, all_labels = self.get_sequences(method)
         
-        # 获取划分索引
+        # Get split indices
         split_indices = self._load_split_indices()
         
-        # 构建图ID到索引的映射
+        # Build graph_id -> index mapping
         graph_id_to_indices = {}
         for idx, (graph_id, seq) in enumerate(all_sequences):
             if graph_id not in graph_id_to_indices:
@@ -364,7 +322,7 @@ class UnifiedDataInterface:
         
         def extract_split_data(split_name: str):
             if split_name not in split_indices:
-                raise ValueError(f"无效的划分名称: {split_name}")
+                raise ValueError(f"Invalid split name: {split_name}")
             
             split_graph_ids = set(split_indices[split_name])
             split_sequences = []
@@ -392,10 +350,8 @@ class UnifiedDataInterface:
         Tuple[List[Tuple[int, List[int]]], List[Dict[str, Any]]],  # val (seqs_with_id, props)
         Tuple[List[Tuple[int, List[int]]], List[Dict[str, Any]]],  # test (seqs_with_id, props)
     ]:
-        """
-        获取下游任务所需数据，为所有划分返回带graph_id的序列和完整的属性字典。
-        """
-        # get_sequences_by_splits 返回6个值，需要重新组织
+        """Get data for downstream tasks: return sequences with graph_ids and full property dicts for all splits."""
+        # get_sequences_by_splits returns 6 values; reorganize
         train_seqs, train_props, val_seqs, val_props, test_seqs, test_props = self.get_sequences_by_splits(method)
         train_data = (train_seqs, train_props)
         val_data = (val_seqs, val_props)
@@ -408,16 +364,14 @@ class UnifiedDataInterface:
     ) -> Tuple[
         List[List[int]], List[List[int]], List[List[int]]  # train, val, test sequences (flattened)
     ]:
-        """
-        获取扁平化的训练序列数据，专门用于预训练等不需要graph_id的场景。
-        """
+        """Get flattened training sequences (without graph_ids), for pretraining."""
         (
             (train_seqs_with_id, _),
             (val_seqs_with_id, _),
             (test_seqs_with_id, _),
         ) = self.get_training_data(method)
 
-        # 提取纯序列，丢弃graph_id
+        # Extract sequences only, discard graph_id
         train_sequences = [seq for _, seq in train_seqs_with_id]
         val_sequences = [seq for _, seq in val_seqs_with_id]
         test_sequences = [seq for _, seq in test_seqs_with_id]
@@ -432,16 +386,14 @@ class UnifiedDataInterface:
         Tuple[List[List[int]], List[int]],  # val (sequences, graph_ids)
         Tuple[List[List[int]], List[int]],  # test (sequences, graph_ids)
     ]:
-        """
-        获取扁平化的训练序列数据，包含graph_ids，用于预训练图级采样。
-        """
+        """Get flattened training sequences with graph_ids, for graph-level sampling."""
         (
             (train_seqs_with_id, _),
             (val_seqs_with_id, _),
             (test_seqs_with_id, _),
         ) = self.get_training_data(method)
 
-        # 提取序列和graph_id
+        # Extract sequences and graph_ids
         train_sequences = [seq for _, seq in train_seqs_with_id]
         train_gids = [gid for gid, _ in train_seqs_with_id]
 
@@ -454,63 +406,49 @@ class UnifiedDataInterface:
         return (train_sequences, train_gids), (val_sequences, val_gids), (test_sequences, test_gids)
 
     def _resolve_target_property(self, requested_target_property: str | None) -> str | None:
-        """
-        [内部] 解析并确定最终要使用的target_property。
-        """
+        """Resolve and determine the final target_property to use."""
         metadata = self.get_downstream_metadata()
         if 'downstream_label_keys' not in metadata:
-            raise ValueError("数据集元数据缺少 'downstream_label_keys' 字段")
+            raise ValueError("Dataset metadata missing 'downstream_label_keys' field")
         available_labels = metadata['downstream_label_keys']
         
         if requested_target_property:
             if requested_target_property not in available_labels:
                 raise ValueError(
-                    f"请求的 target_property '{requested_target_property}' 不在可用属性列表中: {available_labels}"
+                    f"Requested target_property '{requested_target_property}' not in available labels: {available_labels}"
                 )
             return requested_target_property
         
-        # 用户未指定，开始自动推断
+        # User did not specify; auto-resolve
         if not available_labels:
-            # 对于像ZINC这样的数据集，可能没有显式的键，但有单一值，所以不会进入这个分支好
-            # 这种隐式约定需要在数据加载器层处理，这里假设如果没有key就返回None
             return None
             
         if len(available_labels) == 1:
-            # ！！！如果只有一个可用标签，自动选择它
-            # 如果只有一个可用标签，自动选择它
+            # Single available label: auto-select
             return available_labels[0]
         
-        # 有多个标签，尝试使用默认值
-        default_property = metadata.get('default_target_property')  # 这个字段可以是可选的
+        # Multiple labels: try default
+        default_property = metadata.get('default_target_property')
         if default_property and default_property in available_labels:
             return default_property
             
-        # 无法解决歧义
+        # Cannot resolve ambiguity
         raise ValueError(
-            f"数据集 '{self.dataset}' 有多个可用属性 {available_labels}，且无默认值。"
-            f"请通过 target_property 参数明确指定一个。"
+            f"Dataset '{self.dataset}' has multiple available properties {available_labels} with no default. "
+            f"Please specify one via target_property."
         )
 
     def _extract_labels_from_properties(self, properties: List[Dict[str, Any]], target_property: str) -> List[Any]:
-        """
-        [内部] 从属性字典列表中提取指定的目标标签。
-        
-        Args:
-            properties: 属性字典列表
-            target_property: 目标属性名，必须提供
-        
-        Returns:
-            提取出的标签列表
-        """
+        """Extract specified target labels from a list of property dicts."""
         labels = []
         for prop in properties:
             if target_property not in prop:
-                raise ValueError(f"指定的target_property '{target_property}' 不在属性字典 {prop} 中。")
+                raise ValueError(f"target_property '{target_property}' not found in property dict {prop}")
             labels.append(prop[target_property])
         return labels
 
 
-    # ----------------------- 状态查询/报告 与 注册接口 -----------------------
+    # ----------------------- Status query & registration -----------------------
     def has_serialized(self, method: str) -> bool:
         base = self._resolve_processed_dir()
         cache_key = self._get_serialization_cache_key()
@@ -524,29 +462,20 @@ class UnifiedDataInterface:
         return (vocab_dir / "vocab.json").exists()
 
     def get_vocab(self, method: str):
-        """读取与数据集绑定的词表。缺失直接报错。
-        
-        注意：词表与数据集绑定，包含原始token + BPE合并token + 特殊token的完整词表。
-        无论运行时是否使用BPE，都从同一个完整词表中读取。
-        """
+        """Read the vocab bound to this dataset. Raises if missing."""
         base = self._resolve_processed_dir()
         cache_key = self._get_serialization_cache_key()
-        # 读取完整词表（包含所有原始token和BPE合并token），按 single/multi_<k> 分目录
+        # Read full vocab (raw + BPE merge tokens), by single/multi_<k> subdirectory
         vocab_path = base / "vocab" / method / "bpe" / cache_key / "vocab.json"
         if not vocab_path.exists():
-            raise FileNotFoundError(f"词表不存在: {vocab_path}")
-        from src.models.bert.vocab_manager import VocabManager  # 局部导入避免循环依赖
+            raise FileNotFoundError(f"Vocab not found: {vocab_path}")
+        from src.models.bert.vocab_manager import VocabManager  # local import to avoid circular deps
         return VocabManager.load_vocab(str(vocab_path), self.config)
 
     def register_vocab(self, vocab_manager, method: str) -> Path:
-        """注册（落盘）词表到数据集的 processed 目录。
-
-        注意：始终注册到完整词表位置，包含原始token + BPE合并token + 特殊token。
-        
-        返回保存路径。
-        """
+        """Register (persist) vocab to the dataset's processed directory."""
         base = self._resolve_processed_dir()
-        # 注册到完整词表位置（包含所有token类型），按 single/multi_<k> 分目录
+        # Register to full vocab location, by single/multi_<k> subdirectory
         cache_key = self._get_serialization_cache_key()
         out_dir = base / "vocab" / method / "bpe" / cache_key
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -561,10 +490,7 @@ class UnifiedDataInterface:
         properties: List[Dict[str, Any]] | None,
         split_indices: Dict[str, List[int]] | None,
     ) -> Path:
-        """注册（落盘）外部提供的序列化结果。
-
-        说明：split_indices 参数目前不单独落盘（索引文件位于 data_dir/<dataset>/ 下）。
-        """
+        """Register (persist) externally provided serialization results."""
         cache_key = self._get_serialization_cache_key()
         out_dir = self._resolve_processed_dir() / "serialized_data" / method / cache_key
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -578,11 +504,11 @@ class UnifiedDataInterface:
         return out_path
 
     def prepare_serialization(self, method: str) -> Path:
-        """显式构建并持久化序列化结果（供顶层准备器使用）。"""
+        """Explicitly build and persist serialization results."""
         return self._build_and_persist_serialization(method)
 
     def get_graphs(self) -> List[Dict[str, Any]]:
-        # 读取图与属性（通过 loader），不在此方法内做切分
+        # Read graphs and properties (via loader); no splitting here
         if self._preloaded_graphs is not None:
             return self._preloaded_graphs
         loader = get_dataloader(self.dataset, self.config)
@@ -595,7 +521,7 @@ class UnifiedDataInterface:
 
 
 
-    # 2) 纯内存端到端处理：已弃用（遵循“无隐式回退/不在 UDI 内构建”的规范）
+    # 2) In-memory end-to-end processing: deprecated (no implicit fallback / no building inside UDI)
 
 
 
@@ -604,24 +530,11 @@ class UnifiedDataInterface:
     def get_split_indices(
         self,
     ) -> Dict[str, List[int]]:
-        """
-        获取数据集划分索引。
-        
-        Args:
-            
-        Returns:
-            包含 'train', 'val', 'test' 索引列表的字典
-        """
-        # 直接加载原有的三个索引文件
+        """Return train/val/test split index dict."""
         return self._load_split_indices()
 
     def get_dataset_loader(self) -> BaseDataLoader:
-        """
-        获取数据集加载器实例（仅供序列化器等内部组件使用）。
-        
-        Returns:
-            BaseDataLoader 实例
-        """
+        """Get dataset loader instance (for internal use by serializers etc.)."""
         if self._loader is not None:
             return self._loader
         else:
@@ -633,37 +546,27 @@ class UnifiedDataInterface:
         return loader.get_num_classes()
     
     def get_dataset_task_type(self) -> str:
-        """获取数据集任务类型"""
+        """Get dataset task type."""
         loader = self.get_dataset_loader()
         return loader.get_dataset_task_type()
 
     def get_loss_config(self) -> Optional[Dict[str, Any]]:
-        """获取损失配置，支持超参覆盖"""
-        # 1. 检查配置文件是否有覆盖
+        """Get loss config, with hyperparameter override support."""
+        # 1. Check for config override
         if hasattr(self.config, 'task') and hasattr(self.config.task, 'loss_config') and self.config.task.loss_config:
-            # 超参搜索覆盖
+            # Hyperparameter search override
             return self.config.task.loss_config
 
-        # 2. 返回数据集默认配置
+        # 2. Return dataset default config
         loader = self.get_dataset_loader()
         return loader.get_loss_config()
 
     def get_class_weights(self) -> Optional[torch.Tensor]:
-        """获取类别权重（代理DataLoader的方法）"""
+        """Get class weights (proxy to DataLoader)."""
         loader = self.get_dataset_loader()
         return loader.get_class_weights()
 
     def create_loss_function(self, task_type: str, num_classes: int) -> nn.Module:
-        """
-        根据配置创建损失函数
-
-        Args:
-            task_type: 任务类型
-            num_classes: 类别数
-
-        Returns:
-            损失函数实例
-        """
         loss_config = self.get_loss_config()
 
         if task_type == "mlm":
@@ -682,10 +585,9 @@ class UnifiedDataInterface:
         elif task_type == "multi_label_classification":
             return nn.BCEWithLogitsLoss()
         else:
-            raise ValueError(f"不支持的任务类型: {task_type}")
+            raise ValueError(f"Unsupported task type: {task_type}")
 
     def _create_focal_loss(self, config: Dict[str, Any]) -> nn.Module:
-        """创建Focal Loss（PyTorch原生实现）"""
         gamma = config.get('gamma', 2.0)
         alpha = config.get('alpha', 1.0)
 
@@ -704,18 +606,17 @@ class UnifiedDataInterface:
         return FocalLoss(gamma=gamma, alpha=alpha)
 
     def _create_weighted_loss(self, config: Dict[str, Any], num_classes: int) -> nn.Module:
-        """创建加权交叉熵损失"""
         auto_weights = config.get('auto_weights', True)
 
         if auto_weights:
-            # 从DataLoader获取自动计算的权重
+            # Get auto-computed weights from DataLoader
             weights = self.get_class_weights()
             if weights is None:
-                # 如果无法获取权重，使用均匀权重
-                logger.warning("⚠️  无法计算类别权重，使用均匀权重")
+                # Fall back to uniform weights
+                logger.warning("Cannot compute class weights; using uniform weights")
                 weights = torch.ones(num_classes)
         else:
-            # 使用自定义权重
+            # Use custom weights
             custom_weights = config.get('weights')
             if custom_weights is not None:
                 weights = torch.tensor(custom_weights, dtype=torch.float)
@@ -725,12 +626,7 @@ class UnifiedDataInterface:
         return nn.CrossEntropyLoss(weight=weights)
     
     def create_empty_dataset_loader(self) -> BaseDataLoader:
-        """
-        创建“空”的数据集加载器实例：
-        - 实际返回数据层中的 loader 实例；
-        - 不触发任何数据加载/预处理动作；
-        - 上层可使用该实例的元信息/约定方法。
-        """
+        """Create an 'empty' dataset loader instance (for metadata/convention methods only)."""
         return get_dataloader(self.dataset, self.config)
 
 
@@ -741,28 +637,20 @@ class UnifiedDataInterface:
 
 
 
-    # ----------------------- 下游任务元信息与空DataLoader -----------------------
+    # ----------------------- Downstream task metadata -----------------------
     def get_downstream_metadata(self) -> Dict[str, Any]:
-        """
-        返回与下游任务相关的只读元信息：
-        - label_keys
-        - num_classes（若分类）
-        - default_target_property（若回归）
-        - dataset_name 等
-        说明：不同数据集在对应 loader 内部硬编码其下游任务约定，UDI 汇总暴露。
-        注意：label_shapes 在当前训练/评估管线中未使用，故不再强制要求。
-        """
+        """Return read-only metadata for downstream tasks (label keys, num_classes, etc.)."""
         loader = self.get_dataset_loader()
         meta: Dict[str, Any] = {
             'dataset': self.dataset,
         }
-        # 直接假设所有loader都实现了这些方法，如未实现应在各自loader中补全
+        # Assume all loaders implement these methods
         for attr in [
             'get_downstream_label_keys',
             'get_num_classes',
             'get_default_target_property',
             'get_dataset_task_type',
         ]:
-            # 基类已提供默认实现，子类可覆盖；此处直接调用
+            # Base class provides defaults; subclasses may override
             meta[attr.replace('get_', '')] = getattr(loader, attr)()
         return meta

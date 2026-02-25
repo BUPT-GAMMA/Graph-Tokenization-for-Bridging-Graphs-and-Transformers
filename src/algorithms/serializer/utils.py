@@ -1,8 +1,5 @@
-"""
-图算法工具函数
-
-提供图的创建、验证、分析等工具函数
-"""
+"""Graph algorithm utilities.
+图算法工具集。"""
 
 import numpy as np
 import networkx as nx
@@ -12,18 +9,11 @@ import random
 
 
 class GraphUtils:
-    """图算法工具类"""
+    """Graph algorithm utility class."""
         
     @staticmethod
     def is_connected(adj_matrix: np.ndarray) -> bool:
-        """检查图是否连通
-        
-        Args:
-            adj_matrix: 邻接矩阵
-            
-        Returns:
-            是否连通
-        """
+        """Check if graph is connected."""
         n = adj_matrix.shape[0]
         if n <= 1:
             return True
@@ -45,29 +35,22 @@ class GraphUtils:
         
     @staticmethod
     def has_hamilton_cycle_necessary_condition(adj_matrix: np.ndarray) -> bool:
-        """检查哈密顿回路的必要条件
-        
-        Args:
-            adj_matrix: 邻接矩阵
-            
-        Returns:
-            是否满足必要条件
-        """
+        """Check necessary conditions for Hamiltonian cycle."""
         n = adj_matrix.shape[0]
         
-        # 图必须连通
+        # Graph must be connected
         if not GraphUtils.is_connected(adj_matrix):
             return False
             
-        # Dirac定理：如果每个顶点的度数至少为n/2，则存在哈密顿回路
+        # Dirac's theorem: if every vertex has degree >= n/2, Hamiltonian cycle exists
         degrees = np.sum(adj_matrix > 0, axis=1)
         if all(degree >= n // 2 for degree in degrees):
             return True
             
-        # Ore定理：对于任意两个不相邻的顶点，它们的度数之和至少为n
+        # Ore's theorem: for any two non-adjacent vertices, degree sum >= n
         for i in range(n):
             for j in range(i + 1, n):
-                if adj_matrix[i][j] == 0:  # 不相邻
+                if adj_matrix[i][j] == 0:
                     if degrees[i] + degrees[j] < n:
                         return False
                         
@@ -75,15 +58,7 @@ class GraphUtils:
         
     @staticmethod
     def calculate_path_weight(path: List[int], adj_matrix: np.ndarray) -> float:
-        """计算路径权重
-        
-        Args:
-            path: 路径
-            adj_matrix: 邻接矩阵
-            
-        Returns:
-            路径总权重
-        """
+        """Compute total path weight."""
         if not path or len(path) < 2:
             return 0.0
             
@@ -91,33 +66,25 @@ class GraphUtils:
         for i in range(len(path) - 1):
             u, v = path[i], path[i + 1]
             if adj_matrix[u][v] == 0:
-                return float('inf')  # 路径不存在
+                return float('inf')  # edge does not exist
             total_weight += adj_matrix[u][v]
             
         return total_weight
         
     @staticmethod
     def is_valid_hamilton_path(path: List[int], adj_matrix: np.ndarray) -> bool:
-        """验证是否为有效的哈密顿路径
-        
-        Args:
-            path: 路径
-            adj_matrix: 邻接矩阵
-            
-        Returns:
-            是否为有效的哈密顿路径
-        """
+        """Validate Hamiltonian path."""
         n = adj_matrix.shape[0]
         
-        # 检查路径长度
+        # Check path length
         if len(path) != n:
             return False
             
-        # 检查是否访问了所有节点且无重复
+        # All nodes visited exactly once
         if len(set(path)) != n or max(path) >= n or min(path) < 0:
             return False
             
-        # 检查边是否存在
+        # Check edges exist
         for i in range(len(path) - 1):
             u, v = path[i], path[i + 1]
             if adj_matrix[u][v] == 0:
@@ -127,27 +94,19 @@ class GraphUtils:
         
     @staticmethod
     def is_valid_hamilton_cycle(cycle: List[int], adj_matrix: np.ndarray) -> bool:
-        """验证是否为有效的哈密顿回路
-        
-        Args:
-            cycle: 回路
-            adj_matrix: 邻接矩阵
-            
-        Returns:
-            是否为有效的哈密顿回路
-        """
+        """Validate Hamiltonian cycle."""
         if not cycle:
             return False
             
-        # 如果最后一个节点与第一个节点相同，去掉最后一个
+        # Strip trailing duplicate of first node
         if len(cycle) > 1 and cycle[0] == cycle[-1]:
             cycle = cycle[:-1]
             
-        # 验证为哈密顿路径
+        # Validate as Hamiltonian path
         if not GraphUtils.is_valid_hamilton_path(cycle, adj_matrix):
             return False
             
-        # 检查最后一个节点到第一个节点的边
+        # Check closing edge
         if adj_matrix[cycle[-1]][cycle[0]] == 0:
             return False
             
@@ -155,16 +114,9 @@ class GraphUtils:
         
     @staticmethod
     def graph_statistics(adj_matrix: np.ndarray) -> Dict:
-        """计算图的统计信息
-        
-        Args:
-            adj_matrix: 邻接矩阵
-            
-        Returns:
-            统计信息字典
-        """
+        """Compute graph statistics."""
         n = adj_matrix.shape[0]
-        edges = np.sum(adj_matrix > 0) // 2  # 无向图
+        edges = np.sum(adj_matrix > 0) // 2  # undirected
         degrees = np.sum(adj_matrix > 0, axis=1)
         
         stats = {
@@ -178,7 +130,7 @@ class GraphUtils:
             'degree_sequence': sorted(degrees, reverse=True)
         }
         
-        # 计算权重统计(如果是加权图)
+        # Weight stats (if weighted)
         weights = adj_matrix[adj_matrix > 0]
         if len(weights) > 0 and not np.allclose(weights, 1.0):
             stats['weighted'] = True

@@ -18,7 +18,11 @@ paper/
 # ==========================================
 # 数据 / 缓存 / 模型权重
 # ==========================================
-/data/
+/data/*
+!/data/DATASET_STATS.md
+!/data/*/
+/data/*/
+!/data/*/README.md
 /dataset/
 /local/
 /cache

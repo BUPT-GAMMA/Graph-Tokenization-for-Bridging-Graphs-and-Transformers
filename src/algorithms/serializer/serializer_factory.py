@@ -1,6 +1,5 @@
-"""
-序列化器工厂
-"""
+"""Serializer factory.
+序列化器工厂。"""
 
 from typing import Dict, Any
 from .base_serializer import BaseGraphSerializer
@@ -17,20 +16,11 @@ from .image_serpentine_serializer import ImageSerpentineSerializer
 from .image_diag_zigzag_serializer import ImageDiagZigzagSerializer
 
 class SerializerFactory:
-    """序列化器工厂类"""
+    """Serializer factory class."""
     
     @staticmethod
     def create_serializer(serializer_type: str, **kwargs) -> BaseGraphSerializer:
-        """
-        创建序列化器
-        
-        Args:
-            serializer_type: 序列化器类型
-            **kwargs: 序列化器参数
-            
-        Returns:
-            BaseGraphSerializer: 序列化器实例
-        """
+        """Create a serializer by type name."""
         if serializer_type == "smiles":
             return SMILESSerializer()
         elif serializer_type == "smiles_1":
@@ -86,18 +76,18 @@ class SerializerFactory:
         elif serializer_type == "image_diag_zigzag":
             return ImageDiagZigzagSerializer()
         else:
-            raise ValueError(f"未知序列化器类型: {serializer_type}")
+            raise ValueError(f"Unknown serializer type: {serializer_type}")
     
     @staticmethod
     def get_available_serializers() -> list:
-        """获取可用的序列化器类型"""
+        """Get available serializer types."""
         return [
             "smiles", "smiles_1", "smiles_2", "smiles_3", "smiles_4",
             "dfs", "bfs", "eulerian", "topo", "feuler", "cpp", "fcpp",
         ]
     @staticmethod
     def get_image_serializers() -> list:
-        """获取可用的图像序列化器类型"""
+        """Get available image serializer types."""
         return [
             "image_row_major", "image_serpentine", "image_diag_zigzag"
         ]

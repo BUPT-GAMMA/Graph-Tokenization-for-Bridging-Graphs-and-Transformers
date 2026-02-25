@@ -5,12 +5,7 @@ from .base_serializer import BaseGraphSerializer, SerializationResult, GlobalIDM
 
 
 class ImageDiagZigzagSerializer(BaseGraphSerializer):
-    """
-    图像斜对角 Zigzag 扫描序列化器（JPEG 风格）：
-    - 对角层 s = r + c，从 0 到 H+W-2；偶层自上而下，奇层自下而上（或反之）
-    - 仅节点像素 token，禁用边 token
-    - 需 image_shape=(H,W,C) 且 N==H*W
-    """
+    """Image diagonal zigzag scan serializer (JPEG-style)."""
 
     def __init__(self):
         super().__init__()
@@ -24,10 +19,10 @@ class ImageDiagZigzagSerializer(BaseGraphSerializer):
         dgl_graph = self._validate_graph_data(graph_data)
         shape = graph_data.get('image_shape', None)
         if shape is None:
-            raise ValueError("缺少 image_shape (H,W,C)")
+            raise ValueError("Missing image_shape (H,W,C)")
         H, W, C = shape
         if dgl_graph.num_nodes() != H * W:
-            raise ValueError(f"节点数与 H*W 不一致: N={dgl_graph.num_nodes()}, H*W={H*W}")
+            raise ValueError(f"Node count mismatch: N={dgl_graph.num_nodes()}, H*W={H*W}")
 
         node_path: List[int] = []
         max_s = H + W - 2
@@ -35,10 +30,10 @@ class ImageDiagZigzagSerializer(BaseGraphSerializer):
             r_min = max(0, s - (W - 1))
             r_max = min(H - 1, s)
             if (s % 2) == 0:
-                # 偶数层：r 从 r_max 到 r_min 递减
+                # Even diagonal: r descending
                 r_iter = range(r_max, r_min - 1, -1)
             else:
-                # 奇数层：r 从 r_min 到 r_max 递增
+                # Odd diagonal: r ascending
                 r_iter = range(r_min, r_max + 1)
             for r in r_iter:
                 c = s - r

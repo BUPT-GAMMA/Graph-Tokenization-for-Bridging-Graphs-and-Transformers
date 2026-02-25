@@ -10,14 +10,12 @@ if TYPE_CHECKING:
 
 
 class BPETokenTransform:
-    """
-    在线 BPE 编码 Transform。
+    """Online BPE encoding transform.
 
-    用法：
-      - 在 DataLoader worker 内构造（从 codebook 重建编码端）
-      - 支持 encode_rank_mode: all|topk|random|gaussian
-      - random/gaussian 在未提供 min/max 时使用 [0, len(merge_rules)] 的默认区间
-      - 批内仅采样一次 k（通过 BPEEngine 的 batch_encode 调用内部逻辑）
+    - Constructed inside DataLoader workers (rebuilds encoder from codebook).
+    - Supports encode_rank_mode: all|topk|random|gaussian.
+    - random/gaussian default to [0, len(merge_rules)] when min/max not provided.
+    - Samples k once per batch (via BPEEngine.batch_encode internal logic).
     """
 
     def __init__(
@@ -31,12 +29,12 @@ class BPETokenTransform:
         encode_rank_min: Optional[int] = None,
         encode_rank_max: Optional[int] = None,
         encode_rank_dist: Optional[str] = None,
-        # 评估模式配置
+        # Eval mode config
         eval_mode: Optional[str] = None,
         eval_topk: Optional[int] = None,
     ) -> None:
         self._engine = BPEEngine(
-            train_backend="python",  # 不训练，仅编码
+            train_backend="python",  # encode only, no training
             encode_backend=encode_backend,
             encode_rank_mode=encode_rank_mode,
             encode_rank_k=encode_rank_k,
@@ -48,23 +46,23 @@ class BPETokenTransform:
         self._engine.vocab_size = int(vocab_size)
         self._engine.build_encoder()
         
-        # 评估模式配置
+        # Eval mode config
         self._eval_mode = eval_mode
         self._eval_topk = eval_topk
-        self._is_training = True  # 默认处于训练模式
+        self._is_training = True  # default to training mode
 
     def train(self, mode: bool = True) -> None:
-        """设置训练/评估模式"""
+        """Set training/eval mode."""
         self._is_training = mode
         
     def eval(self) -> None:
-        """设置为评估模式（确定性编码）"""
+        """Set eval mode (deterministic encoding)."""
         self.train(False)
     
     def _get_current_engine(self) -> BPEEngine:
-        """根据当前模式获取相应的编码引擎"""
+        """Return the appropriate encoding engine for the current mode."""
         if not self._is_training and self._eval_mode is not None:
-            # 评估模式：使用确定性编码
+            # Eval mode: deterministic encoding
             eval_engine = BPEEngine(
                 train_backend="python",
                 encode_backend=self._engine.encode_backend,
@@ -79,7 +77,7 @@ class BPETokenTransform:
             eval_engine.build_encoder()
             return eval_engine
         else:
-            # 训练模式：使用原始配置的编码
+            # Training mode: use original config
             return self._engine
 
     def encode(self, seq: List[int]) -> List[int]:
@@ -96,11 +94,11 @@ _g_bpe_transform: BPETokenTransform | None = None
 
 
 def make_worker_init_fn(codebook: dict, engine_kwargs: dict):
-    """构建 DataLoader worker_init_fn：在 worker 内重建 BPE Transform。
+    """Build DataLoader worker_init_fn that reconstructs BPE Transform in each worker.
 
-    参数：
-      - codebook: {'merge_rules': List[Tuple[int,int,int]], 'vocab_size': int}
-      - engine_kwargs: 与 BPETokenTransform 构造的编码相关 kwargs（encode_backend/mode 等）
+    Args:
+        codebook: {'merge_rules': [...], 'vocab_size': int}
+        engine_kwargs: encoding kwargs for BPETokenTransform (encode_backend, mode, etc.)
     """
 
     def _init_worker(_):
@@ -115,9 +113,9 @@ def make_worker_init_fn(codebook: dict, engine_kwargs: dict):
 
 
 def bpe_batch_encode_in_worker(seqs: list[list[int]]) -> list[list[int]]:
-    """在 worker 中执行批量编码（依赖 make_worker_init_fn 预先初始化）。"""
+    """Batch-encode in worker (requires make_worker_init_fn to be set)."""
     if _g_bpe_transform is None:
-        raise RuntimeError("BPE Transform 未初始化：请在 DataLoader 中设置 worker_init_fn")
+        raise RuntimeError("BPE Transform not initialized; set worker_init_fn in DataLoader")
     return _g_bpe_transform.batch_encode(seqs)
 
 
@@ -128,29 +126,28 @@ def create_bpe_transform_from_udi(
     config: "ProjectConfig",
     method: str
 ) -> BPETokenTransform:
-    """
-    从UDI和配置创建BPE Transform
-    
+    """Create a BPE Transform from UDI and config.
+
     Args:
-        udi: 统一数据接口实例
-        config: 项目配置
-        method: 序列化方法名
-        
+        udi: unified data interface instance
+        config: project config
+        method: serialization method name
+
     Returns:
-        BPE Transform实例（总是创建，根据mode控制行为）
+        BPETokenTransform instance (always created; mode controls behavior).
     """
     
-    print("🔧 创建BPE Transform...")
+    print("Creating BPE Transform...")
     
     try:
-        # 从UDI获取BPE codebook（即使是none模式也需要基础词表信息）
+        # Get BPE codebook from UDI
         codebook = udi.get_bpe_codebook(method=method)
-        print(f"✅ 获取BPE codebook成功: {codebook['vocab_size']} tokens, {len(codebook['merge_rules'])} merge rules")
+        print(f"BPE codebook loaded: {codebook['vocab_size']} tokens, {len(codebook['merge_rules'])} merge rules")
         
-        # 从配置获取BPE参数
+        # Get BPE params from config
         bpe_config = config.serialization.bpe
         
-        # 创建BPE Transform（统一创建，mode控制行为）
+        # Create BPE Transform
         transform = BPETokenTransform(
             merge_rules=codebook['merge_rules'],
             vocab_size=codebook['vocab_size'],
@@ -164,19 +161,19 @@ def create_bpe_transform_from_udi(
             eval_topk=bpe_config.eval_topk,
         )
         
-        print("✅ BPE Transform创建成功")
-        print(f"   编码后端: {bpe_config.encode_backend}")
-        print(f"   排序模式: {bpe_config.encode_rank_mode}")
+        print("BPE Transform created successfully")
+        print(f"   Backend: {bpe_config.encode_backend}")
+        print(f"   Rank mode: {bpe_config.encode_rank_mode}")
         if bpe_config.encode_rank_mode == "none":
-            print("   模式: 无BPE压缩（0次合并）")
+            print("   Mode: no BPE compression (0 merges)")
         elif bpe_config.encode_rank_k:
             print(f"   Top-K: {bpe_config.encode_rank_k}")
         
         return transform
         
     except Exception as e:
-        print(f"❌ BPE Transform创建失败: {e}")
-        print("💡 请确保已构建BPE codebook")
+        print(f"Failed to create BPE Transform: {e}")
+        print("Ensure BPE codebook has been built")
         raise
 
 
@@ -187,30 +184,28 @@ def create_bpe_worker_init_fn_from_udi(
     *,
     split: str = "train",
 ):
-    """
-    从UDI和配置创建DataLoader的worker_init_fn
-    
+    """Create DataLoader worker_init_fn from UDI and config.
+
     Args:
-        udi: 统一数据接口实例
-        config: 项目配置
-        method: 序列化方法名
-        
+        udi: unified data interface instance
+        config: project config
+        method: serialization method name
+
     Returns:
-        worker_init_fn函数，总是返回有效的函数（统一创建，mode控制行为）
+        worker_init_fn (always valid; mode controls behavior).
     """
     
     try:
-        # 获取codebook（统一获取，不管什么mode）
+        # Get codebook
         codebook = udi.get_bpe_codebook(method=method)
         
-        # 构建engine参数（统一构建，mode参数控制实际行为）
+        # Build engine kwargs
         bpe_config = config.serialization.bpe
         engine_config = bpe_config.engine
-        # 训练/评估拆分：
-        # - 训练：按训练配置（允许随机/采样）
-        # - 验证/测试：优先使用 eval_mode/eval_topk；若未设置且训练为 random/gaussian，则映射为 topk(k=期望值)；
-        #           训练为 none/all/topk 时，沿用训练的确定性模式与参数。
-        # 可选增强（未实现）：MC-eval（测试时多次随机BPE采样取平均预测）。
+        # Train/eval split:
+        # - Train: use training config (allows random/sampling)
+        # - Val/test: prefer eval_mode/eval_topk; if unset and train is random/gaussian,
+        #   map to topk(k=expected_value); for none/all/topk, reuse training settings.
         if str(split).lower() in {"val", "eval", "test"}:
             eval_mode = getattr(bpe_config, 'eval_mode', None)
             eval_topk = getattr(bpe_config, 'eval_topk', None)
@@ -219,19 +214,19 @@ def create_bpe_worker_init_fn_from_udi(
                 encode_rank_k = eval_topk
             else:
                 train_mode = str(engine_config.encode_rank_mode).lower()
-                # 默认映射规则
+                # Default mapping rules
                 if train_mode in {"random", "gaussian"}:
                     encode_rank_mode = "topk"
-                    # 期望值计算
+                    # Compute expected value
                     k_val = engine_config.encode_rank_k
                     k_min = engine_config.encode_rank_min
                     k_max = engine_config.encode_rank_max
                     if train_mode == "gaussian":
-                        # 高斯：使用 encode_rank_k 作为均值；若缺失则回退到 max
+                        # Gaussian: use encode_rank_k as mean; fallback to max
                         if k_val is None:
                             k_val = k_max
                     else:  # random
-                        # 随机：优先使用 (min+max)/2；否则回退到 k 或 max
+                        # Random: prefer (min+max)/2; fallback to k or max
                         if (k_min is not None) and (k_max is not None):
                             try:
                                 k_val = int(round((int(k_min) + int(k_max)) / 2))
@@ -239,12 +234,12 @@ def create_bpe_worker_init_fn_from_udi(
                                 k_val = k_val if k_val is not None else k_max
                         else:
                             k_val = k_val if k_val is not None else k_max
-                    # 裁剪到[min,max]区间（若提供）
+                    # Clip to [min, max] if provided
                     if (k_min is not None) and (k_max is not None) and (k_val is not None):
                         k_val = max(int(k_min), min(int(k_max), int(k_val)))
                     encode_rank_k = int(k_val) if k_val is not None else None
                 else:
-                    # none/all/topk：沿用训练设置
+                    # none/all/topk: reuse training settings
                     encode_rank_mode = engine_config.encode_rank_mode
                     encode_rank_k = engine_config.encode_rank_k
         else:
@@ -252,38 +247,30 @@ def create_bpe_worker_init_fn_from_udi(
             encode_rank_k = engine_config.encode_rank_k
         engine_kwargs = {
             'encode_backend': engine_config.encode_backend,
-            'encode_rank_mode': encode_rank_mode,  # 评估时切到确定性模式
+            'encode_rank_mode': encode_rank_mode,
             'encode_rank_k': encode_rank_k,
             'encode_rank_min': engine_config.encode_rank_min,
             'encode_rank_max': engine_config.encode_rank_max,
             'encode_rank_dist': engine_config.encode_rank_dist,
         }
         
-        # 统一创建worker_init_fn（不管mode，都创建transform对象）
+        # Create worker_init_fn
         return make_worker_init_fn(codebook, engine_kwargs)
         
     except Exception as e:
-        print(f"❌ BPE worker_init_fn创建失败: {e}")
+        print(f"Failed to create BPE worker_init_fn: {e}")
         raise
 
 
 def get_bpe_transform_info(config: "ProjectConfig") -> dict:
-    """
-    获取BPE Transform配置信息
-    
-    Args:
-        config: 项目配置
-        
-    Returns:
-        BPE配置信息字典
-    """
+    """Return BPE transform configuration info."""
     
     bpe_config = config.serialization.bpe
     engine_config = bpe_config.engine
     
-    # 统一返回配置信息，mode控制具体行为
+    # Return config info; mode controls actual behavior
     return {
-        "mode": engine_config.encode_rank_mode,  # 核心控制参数
+        "mode": engine_config.encode_rank_mode,
         "num_merges": bpe_config.num_merges,
         "encode_backend": engine_config.encode_backend,
         "encode_rank_mode": engine_config.encode_rank_mode,

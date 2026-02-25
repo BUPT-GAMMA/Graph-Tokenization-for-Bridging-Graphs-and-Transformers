@@ -1,17 +1,11 @@
-"""
-QM9Test数据加载器
-================
-
-专门用于测试的小规模QM9数据加载器，使用10%的QM9数据。
-继承自QM9Loader，但使用qm9test目录下的数据。
-"""
+"""QM9Test data loader. A small-scale QM9 subset (10%) for testing."""
 
 import time
 import numpy as np
 from typing import Dict, Optional, Any
 import json
 
-# 必需依赖
+# Required dependencies
 
 from .qm9_loader import QM9Loader
 from config import ProjectConfig
@@ -21,34 +15,20 @@ logger = get_logger(__name__)
 
 
 class QM9TestLoader(QM9Loader):
-    """QM9Test数据加载器 - 使用10%的QM9数据"""
+    """QM9Test loader - uses 10% of QM9 data."""
     
     def __init__(self, config: ProjectConfig, target_property: Optional[str] = None):
-        """
-        初始化QM9Test加载器
-        
-        Args:
-            config: 项目配置
-            target_property: 目标属性（对于多标签数据集，None表示返回所有属性）
-        """
-        # 覆盖数据集名称，然后调用父类初始化
+        # Override dataset name, then call parent init
         self.dataset_name = "qm9test"
         super().__init__(config, self.dataset_name, target_property)
         
-        # 使用配置中的数据根目录，避免依赖当前工作目录
-        # BaseDataLoader 已将 data_dir 设为 config.data_dir/dataset_name
+        # Use config data root; BaseDataLoader sets data_dir = config.data_dir/dataset_name
         if not self.data_dir.exists():
-            raise FileNotFoundError(f"QM9Test数据集目录不存在: {self.data_dir}")
-        logger.info(f"🔧 初始化QM9Test数据加载器: {self.data_dir}")
+            raise FileNotFoundError(f"QM9Test dataset directory not found: {self.data_dir}")
+        logger.info(f"Initializing QM9Test loader: {self.data_dir}")
     
     def _get_data_metadata(self) -> Dict[str, Any]:
-        """
-        获取数据元信息
-        
-        Returns:
-            元信息字典
-        """
-        # 确保数据已加载
+        # Ensure data is loaded
         if self._train_data is None:
             self.load_data()
         
@@ -57,10 +37,10 @@ class QM9TestLoader(QM9Loader):
         if not all_data:
             return {}
         
-        # 统计信息
+        # Statistics
         num_samples = len(all_data)
         
-        # 属性统计
+        # Property statistics
         property_stats = {}
         if all_data and 'properties' in all_data[0]:
             properties = all_data[0]['properties']
@@ -76,7 +56,7 @@ class QM9TestLoader(QM9Loader):
                             'std': float(np.std(prop_values))
                         }
         
-        # 加载QM9Test特定的元数据
+        # Load QM9Test-specific metadata
         metadata_file = self.data_dir / "metadata.json"
         qm9test_metadata = {}
         if metadata_file.exists():
@@ -84,7 +64,7 @@ class QM9TestLoader(QM9Loader):
                 with open(metadata_file, 'r') as f:
                     qm9test_metadata = json.load(f)
             except Exception as e:
-                logger.warning(f"无法加载QM9Test元数据: {e}")
+                logger.warning(f"Failed to load QM9Test metadata: {e}")
         
         metadata = {
             'dataset_name': 'qm9test',
@@ -101,7 +81,7 @@ class QM9TestLoader(QM9Loader):
                 'val': self.VAL_RATIO,
                 'test': self.TEST_RATIO
             },
-            # QM9Test特定信息
+            # QM9Test-specific info
             'source_dataset': qm9test_metadata.get('source_dataset', 'qm9'),
             'test_ratio': qm9test_metadata.get('test_ratio', 0.1),
             'original_indices': qm9test_metadata.get('original_indices', []),

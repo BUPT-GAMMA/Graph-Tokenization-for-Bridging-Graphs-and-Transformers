@@ -17,7 +17,7 @@ logger = get_logger(__name__)
 
 
 class COILDELLoader(BaseDataLoader):
-    """COIL-DEL 图分类数据集（TU）。"""
+    """COIL-DEL graph classification dataset (TU)."""
 
     def __init__(self, config: ProjectConfig, dataset_name: str = "coildel", target_property: Optional[str] = None):
         super().__init__(dataset_name, config, target_property)
@@ -27,20 +27,20 @@ class COILDELLoader(BaseDataLoader):
         self._edge_attr_cache: Dict[int, Dict[int, int]] = {}
         self._normalized_name = "coildel"
         self.load_data()
-        # 第二通道节点token偏置（取偶数，确保与第一通道奇数域错开且仍为奇数）
+        # Second-channel node token bias (offset to keep domains disjoint)
         self._node_second_channel_bias: int = 1000000
 
     def _load_processed_data(self) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
-        logger.info(f"📂 读取 COIL-DEL 预处理目录: {self.data_dir}")
+        logger.info(f"Loading COIL-DEL preprocessed data from: {self.data_dir}")
         train_index_file = self.data_dir / "train_index.json"
         test_index_file = self.data_dir / "test_index.json"
         val_index_file = self.data_dir / "val_index.json"
         for f in (train_index_file, test_index_file, val_index_file):
             if not f.exists():
-                raise FileNotFoundError("索引文件不存在，请先运行预处理脚本")
+                raise FileNotFoundError("Index files not found; run preprocessing first")
         data_file = self.data_dir / "data.pkl"
         if not data_file.exists():
-            raise FileNotFoundError(f"统一数据文件不存在: {data_file}")
+            raise FileNotFoundError(f"Data file not found: {data_file}")
         if self._all_data is None:
             with open(data_file, "rb") as f:
                 raw_data: List[Tuple[dgl.DGLGraph, int]] = pickle.load(f)
@@ -100,7 +100,7 @@ class COILDELLoader(BaseDataLoader):
             g: dgl.DGLGraph = sample["dgl_graph"]
             gid = id(g)
             if "node_token_ids" not in g.ndata:
-                raise AssertionError("缺少 node_token_ids，请先运行预处理生成")
+                raise AssertionError("Missing node_token_ids; run preprocessing first")
             node_token_ids = g.ndata["node_token_ids"].long()
             g.ndata["node_type_id"] = node_token_ids.view(-1)
             if "edge_token_ids" not in g.edata:
@@ -115,7 +115,7 @@ class COILDELLoader(BaseDataLoader):
         return "classification"
 
     def get_num_classes(self) -> int:
-        # COIL-DEL 为 100 类多分类任务（标签 0..99）
+        # COIL-DEL: 100-class classification (labels 0..99)
         return 100
 
     def get_node_attribute(self, graph: dgl.DGLGraph, node_id: int) -> int:
@@ -144,34 +144,34 @@ class COILDELLoader(BaseDataLoader):
 
     def get_node_token(self, graph: dgl.DGLGraph, node_id: int, ntype: str = None) -> List[int]:
         idx = int(node_id)
-        # 优先返回两维token（各自奇数域）
+        # Return two-channel tokens (each in odd domain)
         if 'node_attr' in graph.ndata and graph.ndata['node_attr'].dim() == 2 and graph.ndata['node_attr'].shape[1] >= 2:
             attrs = graph.ndata['node_attr'][idx].long()
             a = int(attrs[0].item())
             b = int(attrs[1].item())
             return [2 * a + 1, 2 * b + 1 + self._node_second_channel_bias]
-        # 回退：单通道（奇数域）
+        # Fallback: single channel (odd domain)
         # nt = int(self.get_graph_node_type_ids(graph)[idx].item())
         # return [2 * nt + 1]
-        raise NotImplementedError("COIL-DEL 数据集不支持单token")
+        raise NotImplementedError("COIL-DEL dataset does not support single token")
 
     def get_edge_token(self, graph: dgl.DGLGraph, edge_id: int, etype: str = None) -> List[int]:
         return [int(graph.edata["edge_token_ids"][int(edge_id)][0].item())]
 
     def get_node_tokens_bulk(self, graph: dgl.DGLGraph, node_ids: List[int]) -> List[List[int]]:
         ids = torch.as_tensor(node_ids, dtype=torch.long)
-        # 若存在原始两维节点属性，则返回两维token（各自映射到奇数域）
+        # Return two-channel tokens from 2D node attributes (odd domain)
         if 'node_attr' in graph.ndata and graph.ndata['node_attr'].dim() == 2 and graph.ndata['node_attr'].shape[1] >= 2:
             attrs = graph.ndata['node_attr'][ids].long()
             a = (attrs[:, 0].view(-1, 1) * 2 + 1)
             b = (attrs[:, 1].view(-1, 1) * 2 + 1) + self._node_second_channel_bias
             tok = torch.cat([a, b], dim=1)
             return tok.tolist()
-        # 回退：使用单通道type id（奇数域）
+        # Fallback: single channel type id (odd domain)
         # nt = self.get_graph_node_type_ids(graph)[ids]
         # tok = (nt.long() * 2 + 1).view(-1, 1)
         # return tok.tolist()
-        raise NotImplementedError("COIL-DEL 数据集不支持单token")
+        raise NotImplementedError("COIL-DEL dataset does not support single token")
 
     def get_edge_tokens_bulk(self, graph: dgl.DGLGraph, edge_ids: List[int]) -> List[List[int]]:
         ids = torch.as_tensor(edge_ids, dtype=torch.long)
@@ -192,16 +192,16 @@ class COILDELLoader(BaseDataLoader):
         return graph.edata["edge_type_id"]
 
     def get_graph_node_token_ids(self, graph: dgl.DGLGraph) -> torch.Tensor:
-        # 优先返回原始两维节点属性映射后的双通道token
+        # Return dual-channel tokens from 2D node attributes
         if 'node_attr' in graph.ndata and graph.ndata['node_attr'].dim() == 2 and graph.ndata['node_attr'].shape[1] >= 2:
             attrs = graph.ndata['node_attr'].long()
             a = (attrs[:, 0].view(-1, 1) * 2 + 1)
             b = (attrs[:, 1].view(-1, 1) * 2 + 1) + self._node_second_channel_bias
             return torch.cat([a, b], dim=1)
-        # 回退：单通道（奇数域）
+        # Fallback: single channel (odd domain)
         # nt = self.get_graph_node_type_ids(graph)
         # return (nt.long() * 2 + 1).view(-1, 1)
-        raise NotImplementedError("COIL-DEL 数据集不支持单token")
+        raise NotImplementedError("COIL-DEL dataset does not support single token")
 
     def get_graph_edge_token_ids(self, graph: dgl.DGLGraph) -> torch.Tensor:
         et = self.get_graph_edge_type_ids(graph)

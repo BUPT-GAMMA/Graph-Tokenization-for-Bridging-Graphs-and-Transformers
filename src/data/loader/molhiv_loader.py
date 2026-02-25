@@ -17,15 +17,13 @@ logger = get_logger(__name__)
 
 
 class MOLHIVLoader(BaseDataLoader):
-    """ogbg-molhiv 图分类数据集（OGB）。
+    """ogbg-molhiv graph classification dataset (OGB).
 
-    预处理约定：
-    - 仅保留节点/边 token（以及可选的 type_id），并写入 `feat`。
-    - 节点 token：使用原子序数（atomic number）映射到奇数域（2Z+1）。
-    - 边 token：使用 ZINC 规范的键类型ID（0: NONE, 1: SINGLE, 2: DOUBLE, 3: TRIPLE, 4: AROMATIC）映射到偶数域（2E）。
+    Node tokens: atomic number mapped to odd domain (2Z+1).
+    Edge tokens: bond type ID mapped to even domain (2E).
     """
 
-    # 与 ZINC/QM9 对齐
+    # Aligned with ZINC/QM9
     BOND_TYPES = {0: 'NONE', 1: 'SINGLE', 2: 'DOUBLE', 3: 'TRIPLE', 4: 'AROMATIC'}
 
     def __init__(self, config: ProjectConfig, dataset_name: str = "molhiv", target_property: Optional[str] = None):
@@ -38,16 +36,16 @@ class MOLHIVLoader(BaseDataLoader):
         self.load_data()
 
     def _load_processed_data(self) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
-        logger.info(f"📂 读取 MOLHIV 预处理目录: {self.data_dir}")
+        logger.info(f"Loading MOLHIV preprocessed data from: {self.data_dir}")
         train_index_file = self.data_dir / "train_index.json"
         test_index_file = self.data_dir / "test_index.json"
         val_index_file = self.data_dir / "val_index.json"
         for f in (train_index_file, test_index_file, val_index_file):
             if not f.exists():
-                raise FileNotFoundError("索引文件不存在，请先运行预处理脚本")
+                raise FileNotFoundError("Index files not found; run preprocessing first")
         data_file = self.data_dir / "data.pkl"
         if not data_file.exists():
-            raise FileNotFoundError(f"统一数据文件不存在: {data_file}")
+            raise FileNotFoundError(f"Data file not found: {data_file}")
         if self._all_data is None:
             with open(data_file, "rb") as f:
                 raw_data: List[Tuple[dgl.DGLGraph, Any]] = pickle.load(f)
@@ -106,12 +104,12 @@ class MOLHIVLoader(BaseDataLoader):
         for sample in processed_data:
             g: dgl.DGLGraph = sample["dgl_graph"]
             gid = id(g)
-            # 预处理阶段已经提供 node_type_id / edge_type_id 与 token ids
+            # Preprocessing provides node_type_id / edge_type_id and token ids
             if "node_type_id" not in g.ndata:
                 if "node_token_ids" in g.ndata:
                     g.ndata["node_type_id"] = (g.ndata["node_token_ids"].view(-1) - 1) // 2
                 else:
-                    raise AssertionError("缺少 node_type_id，请先运行预处理生成")
+                    raise AssertionError("Missing node_type_id; run preprocessing first")
             if "edge_type_id" not in g.edata:
                 if "edge_token_ids" in g.edata:
                     g.edata["edge_type_id"] = (g.edata["edge_token_ids"].view(-1)) // 2
@@ -128,21 +126,13 @@ class MOLHIVLoader(BaseDataLoader):
         return 2
 
     def get_loss_config(self) -> Optional[Dict[str, Any]]:
-        """
-        molhiv数据集的专用损失配置
-
-        基于实验结果，使用标准交叉熵作为默认配置
-        Focal Loss和Weighted CE在测试中未能提升AUC性能
-        """
-        # 测试结果：Focal Loss和Weighted CE未能提升AUC指标
-        # 因此使用标准交叉熵作为默认配置
-
-        # 标准交叉熵 (默认配置)
+        """Loss config for molhiv. Standard CE by default (Focal/Weighted CE did not improve AUC)."""
+        # Standard cross-entropy (default)
         return {
             'method': 'standard'
         }
 
-        # 备选方案：Focal Loss (测试中未见AUC提升)
+        # Alternative: Focal Loss (no AUC improvement in testing)
         # return {
         #     'method': 'focal',
         #     'gamma': 2.5,
@@ -150,7 +140,7 @@ class MOLHIVLoader(BaseDataLoader):
         #     'auto_weights': False
         # }
 
-        # 备选方案：加权交叉熵 (测试中未见AUC提升)
+        # Alternative: Weighted CE (no AUC improvement in testing)
         # return {
         #     'method': 'weighted',
         #     'auto_weights': True
@@ -222,11 +212,11 @@ class MOLHIVLoader(BaseDataLoader):
 
     def get_token_map(self) -> Dict[Tuple[str, int], int]:
         token_map = {}
-        # 原子：奇数域
+        # Atoms: odd domain
         for atomic_num in range(1, 119):
             odd_token = 2 * atomic_num + 1
             token_map[("atom", atomic_num)] = odd_token
-        # 键：偶数域
+        # Bonds: even domain
         for bond_type_id, _name in self.BOND_TYPES.items():
             even_token = 2 * int(bond_type_id)
             token_map[("bond", int(bond_type_id))] = even_token
