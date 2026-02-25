@@ -122,3 +122,9 @@ create_summary_visualization.py
 detailed_visualization_analysis.py
 gte_exploration_results.csv
 key_findings_summary.png
+
+# ==========================================
+# 临时review文档 / 子项目（release分支排除）
+# ==========================================
+_docs_to_review/
+bpe_for_images/

@@ -1,4 +1,5 @@
-"""QM9Test data loader. A small-scale QM9 subset (10%) for testing."""
+"""QM9Test data loader. A small-scale QM9 subset (10%) for testing.
+QM9Test数据加载器。小规模QM9子集（10%），用于测试。"""
 
 import time
 import numpy as np

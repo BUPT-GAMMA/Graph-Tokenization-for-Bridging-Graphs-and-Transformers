@@ -1,7 +1,9 @@
 """
 Visualization helpers.
+可视化辅助工具。
 
 CJK font setup, plot styling, and chart generation utilities.
+CJK字体设置、绘图样式和图表生成工具。
 """
 
 import matplotlib.pyplot as plt

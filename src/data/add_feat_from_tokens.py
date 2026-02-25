@@ -2,12 +2,13 @@
 """
 Write token IDs into standard feature keys (g.ndata['feat'] / g.edata['feat'])
 for all (or specified) datasets and re-save data.pkl.
+将token ID写入标准特征键并重新保存data.pkl。
 
-Rules:
+Rules / 规则:
 - Node feat = node_token_ids (fallback: node_type_id.view(-1,1); error if missing)
 - Edge feat = edge_token_ids (fallback: edge_type_id.view(-1,1); zeros if missing)
 
-Save strategy:
+Save strategy / 保存策略:
 - Default: write to data/gnn_use/<dataset>/data.pkl; copy split JSONs
 - --inplace: overwrite original data.pkl (optionally --backup for .bak)
 

@@ -1,4 +1,5 @@
-"""Unified data loader factory. Manages all dataset loaders with a single creation/access interface."""
+"""Unified data loader factory. Manages all dataset loaders with a single creation/access interface.
+统一数据加载器工厂。通过单一创建/访问接口管理所有数据集加载器。"""
 
 from typing import Dict, Type, Optional, Any, List, Tuple
 

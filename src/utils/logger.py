@@ -1,7 +1,9 @@
 """
 Unified logging module.
+统一日志模块。
 
 Centralized logging configuration and management for the project.
+项目的集中式日志配置和管理。
 """
 
 import logging

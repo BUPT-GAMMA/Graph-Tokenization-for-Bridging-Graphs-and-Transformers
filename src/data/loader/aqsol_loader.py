@@ -1,4 +1,5 @@
-"""AQSOL data loader. Reads preprocessed AQSOL dataset with multi-task labels and multiple SMILES formats."""
+"""AQSOL data loader. Reads preprocessed AQSOL dataset with multi-task labels and multiple SMILES formats.
+AQSOL数据加载器。读取预处理的AQSOL数据集，支持多任务标签和多种SMILES格式。"""
 
 import json
 import time

@@ -1,5 +1,6 @@
 """
 Frequency-guided Chinese Postman Problem serializer (NetworkX-based).
+频率引导的中国邮递员问题序列化器（基于NetworkX）。
 """
 
 from typing import Dict, Any, List, Tuple
