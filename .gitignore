@@ -124,7 +124,12 @@ gte_exploration_results.csv
 key_findings_summary.png
 
 # ==========================================
-# 临时review文档 / 子项目（release分支排除）
+# bpe_for_images 子项目（保留代码，排除数据/输出/缓存）
 # ==========================================
-_docs_to_review/
-bpe_for_images/
+bpe_for_images/**/mnist_data/
+bpe_for_images/checkpoints/
+bpe_for_images/results/
+bpe_for_images/__pycache__/
+bpe_for_images/**/__pycache__/
+bpe_for_images/bpe/build/
+bpe_for_images/bpe/*.so
