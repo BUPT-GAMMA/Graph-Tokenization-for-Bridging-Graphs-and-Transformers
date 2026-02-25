@@ -14,7 +14,8 @@ import warnings
 import numpy as np
 
 class VocabManager:
-    """词表管理器，从token ID序列构建和管理词表"""
+    """Vocabulary manager — builds and manages vocab from token ID sequences.
+    词表管理器，从token ID序列构建和管理词表。"""
     
     def __init__(self,
                  pad_token: str,
@@ -33,10 +34,10 @@ class VocabManager:
                  node_start_token_id: int,
                  node_end_token_id: int,
                  component_sep_token_id: int):
-        """
+        """Pure parameterized constructor, no dependency on config objects. All params must be explicit.
         纯参数化构造，不依赖任何配置对象。所有参数必须显式传递。
         """
-        # 特殊token字符串
+        # Special token strings / 特殊token字符串
         self.pad_token = pad_token
         self.unk_token = unk_token
         self.mask_token = mask_token
@@ -46,7 +47,7 @@ class VocabManager:
         self.node_end_token = node_end_token
         self.component_sep_token = component_sep_token
 
-        # 特殊token集合（保持现有顺序约定）
+        # Special token set (preserve existing order convention) / 特殊token集合
         self.special_tokens = [
             self.pad_token,
             self.unk_token,
@@ -58,7 +59,7 @@ class VocabManager:
             self.component_sep_token
         ]
 
-        # 特殊token对应ID
+        # Special token IDs / 特殊token对应ID
         self.pad_token_id = int(pad_token_id)
         self.unk_token_id = int(unk_token_id)
         self.cls_token_id = int(cls_token_id)
@@ -68,21 +69,22 @@ class VocabManager:
         self.node_end_token_id = int(node_end_token_id)
         self.component_sep_token_id = int(component_sep_token_id)
 
-        # 词表相关
-        self.token_to_id: Dict[int, int] = {}  # 原始token_id -> 新的vocab_id
-        self.id_to_token: Dict[int, int] = {}  # 新的vocab_id -> 原始token_id
+        # Vocabulary mappings / 词表相关
+        self.token_to_id: Dict[int, int] = {}  # original token_id -> new vocab_id / 原始token_id -> 新的vocab_id
+        self.id_to_token: Dict[int, int] = {}  # new vocab_id -> original token_id / 新的vocab_id -> 原始token_id
         self.vocab_size = 0
 
-        # 预留特殊token位置
+        # Reserve special token positions / 预留特殊token位置
         self._reserve_special_tokens()
 
-        # 统计信息
+        # Statistics / 统计信息
         self.token_counts: Counter = Counter()
         self._built = False
     
     def _reserve_special_tokens(self):
-        """为特殊token预留位置"""
-        # 使用标准化的特殊token ID映射
+        """Reserve positions for special tokens.
+        为特殊token预留位置。"""
+        # Use standardized special token ID mapping / 使用标准化的特殊token ID映射
         special_id_map = {
             self.pad_token: self.pad_token_id,
             self.unk_token: self.unk_token_id,
@@ -103,10 +105,11 @@ class VocabManager:
         self.vocab_size = len(self.special_tokens)
     
     def add_token_sequences(self, token_sequences: List[List[int]]):
-        """添加token序列到词表统计中
+        """Add token sequences to vocabulary statistics.
+        添加token序列到词表统计中。
         
         Args:
-            token_sequences: token ID序列列表 [[1,50,8909,...],[...],...]
+            token_sequences: List of token ID sequences / token ID序列列表 [[1,50,8909,...],[...],...]
         """
         for sequence in token_sequences:
             for token_id in sequence:
@@ -115,15 +118,16 @@ class VocabManager:
                     self.token_counts[int(token_id)] += 1
     
     def build_vocab(self, min_freq: int = 1, max_vocab_size: Optional[int] = None):
-        """构建最终词表
+        """Build final vocabulary.
+        构建最终词表。
         
         Args:
-            min_freq: 最小词频，低于此频率的token会被标记为UNK
-            max_vocab_size: 最大词表大小（包含特殊token）
+            min_freq: Minimum frequency; tokens below this are mapped to UNK / 最小词频
+            max_vocab_size: Maximum vocab size (including special tokens) / 最大词表大小
         """
         print(f"开始构建词表，统计到 {len(self.token_counts)} 个不同的token...")
         
-        # 统计词频分布
+        # Compute frequency distribution / 统计词频分布
         freq_distribution = {}
         for count in self.token_counts.values():
             freq_distribution[count] = freq_distribution.get(count, 0) + 1
@@ -133,11 +137,11 @@ class VocabManager:
         print(f"   最高频率: {max(self.token_counts.values()) if self.token_counts else 0}")
         print(f"   最低频率: {min(self.token_counts.values()) if self.token_counts else 0}")
         
-        # 过滤低频token
+        # Filter low-frequency tokens / 过滤低频token
         filtered_tokens = {token: count for token, count in self.token_counts.items() 
                           if count >= min_freq}
         
-        # 详细的过滤统计
+        # Detailed filter statistics / 详细的过滤统计
         filtered_out_count = len(self.token_counts) - len(filtered_tokens)
         print(f"过滤低频token后剩余 {len(filtered_tokens)} 个token (min_freq={min_freq})")
         if filtered_out_count > 0:
@@ -149,17 +153,17 @@ class VocabManager:
             else:
                 print(f"   被过滤的tokens示例(前20个): {sorted(filtered_out_tokens)[:20]}")
         
-        # 按频率排序
+        # Sort by frequency / 按频率排序
         sorted_tokens = sorted(filtered_tokens.items(), key=lambda x: x[1], reverse=True)
         
-        # 限制词表大小
+        # Limit vocab size / 限制词表大小
         if max_vocab_size is not None:
             available_size = max_vocab_size - len(self.special_tokens)
             if len(sorted_tokens) > available_size:
                 sorted_tokens = sorted_tokens[:available_size]
                 print(f"限制词表大小到 {max_vocab_size}，保留高频token {len(sorted_tokens)} 个")
         
-        # 构建映射关系
+        # Build mappings / 构建映射关系
         current_id = len(self.special_tokens)  # 从特殊token之后开始
         
         for original_token_id, count in sorted_tokens:
@@ -174,7 +178,7 @@ class VocabManager:
         print(f"词表构建完成！最终词表大小: {self.vocab_size}")
         print(f"特殊token: {len(self.special_tokens)}, 普通token: {self.vocab_size - len(self.special_tokens)}")
         
-        # 添加词表覆盖率统计
+        # Vocabulary coverage statistics / 词表覆盖率统计
         total_tokens_in_data = sum(self.token_counts.values())
         covered_tokens = sum(count for token, count in self.token_counts.items() 
                            if token in self.token_to_id)
@@ -182,7 +186,8 @@ class VocabManager:
         print(f"📈 词表覆盖率: {coverage_rate:.4f} ({covered_tokens}/{total_tokens_in_data})")
     
     def convert_token_to_id(self, token_id: int) -> int:
-        """将原始token ID转换为词表中的ID"""
+        """Convert original token ID to vocabulary ID.
+        将原始token ID转换为词表中的ID。"""
         if not self._built:
             raise ValueError("词表尚未构建，请先调用 build_vocab()")
         
@@ -203,7 +208,8 @@ class VocabManager:
             return self.unk_token_id  # 未知token
     
     def convert_id_to_token(self, vocab_id: int) -> int:
-        """将词表ID转换为原始token ID"""
+        """Convert vocabulary ID to original token ID.
+        将词表ID转换为原始token ID。"""
         if not self._built:
             raise ValueError("词表尚未构建，请先调用 build_vocab()")
         
@@ -214,44 +220,47 @@ class VocabManager:
             return self.id_to_token[self.unk_token_id]  # 默认返回UNK对应的原始ID
     
     def convert_tokens_to_ids(self, token_ids: List[int]) -> List[int]:
-        """批量转换token ID"""
+        """Batch convert token IDs to vocabulary IDs.
+        批量转换token ID。"""
         return [self.convert_token_to_id(tid) for tid in token_ids]
     
     def convert_ids_to_tokens(self, vocab_ids: List[int]) -> List[int]:
-        """批量转换vocab ID到原始token ID"""
+        """Batch convert vocabulary IDs to original token IDs.
+        批量转换vocab ID到原始token ID。"""
         return [self.convert_id_to_token(vid) for vid in vocab_ids]
     
     def encode_sequence(self, token_sequence: List[int], 
                        add_special_tokens: bool = True,
                        max_length: Optional[int] = None) -> Dict[str, torch.Tensor]:
-        """编码单个序列
+        """Encode a single sequence.
+        编码单个序列。
         
         Args:
-            token_sequence: 原始token ID序列
-            add_special_tokens: 是否添加[CLS]和[SEP]
-            max_length: 最大长度，超过会截断，不足会填充
+            token_sequence: Original token ID sequence / 原始token ID序列
+            add_special_tokens: Whether to add [CLS] and [SEP] / 是否添加[CLS]和[SEP]
+            max_length: Max length; truncate if exceeded, pad if shorter / 最大长度
             
         Returns:
-            包含input_ids和attention_mask的字典
+            Dict with input_ids and attention_mask / 包含input_ids和attention_mask的字典
         """
         if not self._built:
             raise ValueError("词表尚未构建，请先调用 build_vocab()")
         
-        # 转换为词表ID
+        # Convert to vocab IDs / 转换为词表ID
         sequence = self.convert_tokens_to_ids(token_sequence)
         
-        # 添加特殊token
+        # Add special tokens / 添加特殊token
         if add_special_tokens:
             sequence = [self.cls_token_id] + sequence + [self.sep_token_id]
         
-        # 截断
+        # Truncation / 截断
         if max_length is not None and len(sequence) > max_length:
             sequence = sequence[:max_length-1] + [self.sep_token_id]
         
-        # 创建attention mask
+        # Create attention mask / 创建attention mask
         attention_mask = [1] * len(sequence)
         
-        # 填充
+        # Padding / 填充
         if max_length is not None:
             while len(sequence) < max_length:
                 sequence.append(self.pad_token_id)
@@ -265,7 +274,8 @@ class VocabManager:
     def encode_batch(self, token_sequences: List[List[int]], 
                     add_special_tokens: bool = True,
                     max_length: Optional[int] = None) -> Dict[str, torch.Tensor]:
-        """批量编码序列"""
+        """Batch encode sequences.
+        批量编码序列。"""
         encoded_batch = [self.encode_sequence(seq, add_special_tokens, max_length) 
                         for seq in token_sequences]
         
@@ -275,7 +285,8 @@ class VocabManager:
         }
     
     def get_vocab_info(self) -> Dict:
-        """获取词表信息"""
+        """Get vocabulary info.
+        获取词表信息。"""
         return {
             'vocab_size': self.vocab_size,
             'special_tokens': self.special_tokens,
@@ -295,11 +306,12 @@ class VocabManager:
         }
     
     def get_valid_tokens(self) -> List[int]:
-        """获取有效的token ID列表（排除特殊token）"""
+        """Get list of valid token IDs (excluding special tokens).
+        获取有效的token ID列表（排除特殊token）。"""
         if not self._built:
             raise ValueError("词表尚未构建，请先调用 build_vocab()")
         
-        # 返回所有非负整数的token ID（排除特殊token的负数ID）
+        # Return all non-negative token IDs (exclude special token negative IDs) / 返回所有非负整数的token ID
         valid_tokens = []
         for original_token_id in self.token_to_id.keys():
             if original_token_id >= 0:  # 只包含非负整数token
@@ -308,7 +320,8 @@ class VocabManager:
         return valid_tokens
     
     def save_vocab(self, save_path: str):
-        """保存词表到文件"""
+        """Save vocabulary to file.
+        保存词表到文件。"""
         if not self._built:
             raise ValueError("词表尚未构建，无法保存")
         
@@ -341,7 +354,8 @@ class VocabManager:
     
     @classmethod
     def load_vocab(cls, load_path: str, config) -> 'VocabManager':
-        """从文件加载词表"""
+        """Load vocabulary from file.
+        从文件加载词表。"""
         if load_path.endswith('.json'):
             with open(load_path, 'r', encoding='utf-8') as f:
                 vocab_data = json.load(f)
@@ -349,17 +363,17 @@ class VocabManager:
             with open(load_path, 'rb') as f:
                 vocab_data = pickle.load(f)
         
-        # 创建实例（通过便利接口从config提取参数）
+        # Create instance (extract params from config via convenience method) / 创建实例
         instance = cls.from_config(config)
         
-        # 恢复状态
+        # Restore state / 恢复状态
         instance.token_to_id = {int(k): v for k, v in vocab_data['token_to_id'].items()}
         instance.id_to_token = {int(k): v for k, v in vocab_data['id_to_token'].items()}
         instance.vocab_size = vocab_data['vocab_size']
         instance.token_counts = Counter(vocab_data['token_counts'])
         instance._built = True
         
-        # 仅首次打印详细加载信息；后续调用以简短提示为主
+        # Print detailed load info only the first time; subsequent calls use short notice / 仅首次打印详细加载信息
         if not hasattr(cls, '_loaded_once'):
             print(f"词表已从 {load_path} 加载完成，词表大小: {instance.vocab_size}")
             setattr(cls, '_loaded_once', True)
@@ -369,8 +383,10 @@ class VocabManager:
 
     @classmethod
     def from_config(cls, config) -> 'VocabManager':
-        """
+        """Convenience method: create VocabManager from ProjectConfig.
         便利接口：从 ProjectConfig 创建 VocabManager。
+
+        Note: this is a shortcut; the core constructor does not depend on config.
         注意：这是捷径方法，核心构造函数不依赖 config。
         复制到子项目后仅需调整此方法以适配新的配置结构。
         """
@@ -382,16 +398,17 @@ def build_vocab_from_sequences(token_sequences: List[List[int]],
                               config,
                               min_freq: int = 1,
                               max_vocab_size: Optional[int] = None) -> VocabManager:
-    """从token序列构建词表的便捷函数
+    """Convenience function to build vocabulary from token sequences.
+    从token序列构建词表的便捷函数。
     
     Args:
-        token_sequences: token ID序列列表
-        config: 项目配置
-        min_freq: 最小词频
-        max_vocab_size: 最大词表大小
+        token_sequences: List of token ID sequences / token ID序列列表
+        config: Project configuration / 项目配置
+        min_freq: Minimum frequency / 最小词频
+        max_vocab_size: Maximum vocabulary size / 最大词表大小
         
     Returns:
-        构建好的VocabManager实例
+        Built VocabManager instance / 构建好的VocabManager实例
     """
     print("开始从token序列构建词表...")
     
@@ -402,9 +419,10 @@ def build_vocab_from_sequences(token_sequences: List[List[int]],
     return vocab_manager 
 
 
-# 便利函数：从统一配置对象创建 VocabManager（允许导入 config）
+# Convenience: create VocabManager from unified config object / 便利函数
 def _extract_from_config(config):
-    """内部工具：从config中提取构造 VocabManager 所需字段。缺失即抛出异常。"""
+    """Internal util: extract fields needed for VocabManager from config. Raises on missing.
+    内部工具：从config中提取构造 VocabManager 所需字段。缺失即抛出异常。"""
     # 强制要求所有字段存在，避免隐式fallback
     return dict(
         pad_token=config.pad_token,

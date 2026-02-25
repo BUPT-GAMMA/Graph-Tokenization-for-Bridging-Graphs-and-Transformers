@@ -16,12 +16,14 @@ from .transforms import TokenTransform, Compose
 
 
 class NoOpTransform(TokenTransform):
-    """空操作Transform，用于确保transform pipeline总是存在"""
+    """No-op transform — ensures the transform pipeline always exists.
+    空操作Transform，用于确保transform pipeline总是存在。"""
     def __init__(self):
         super().__init__(probability=1.0)
 
     def __call__(self, token_sequence: List[int]) -> List[int]:
-        """直接返回原始序列，不做任何修改"""
+        """Return original sequence unchanged.
+        直接返回原始序列，不做任何修改。"""
         return token_sequence
 
 
@@ -29,7 +31,8 @@ logger = logging.getLogger(__name__)
 
 
 def _candidate_len_from_policy(lengths: List[int], project_config) -> int:
-    """根据配置策略返回候选长度（不含特殊token +2）。"""
+    """Return candidate length based on config policy (excluding +2 for special tokens).
+    根据配置策略返回候选长度（不含特殊token +2）。"""
     policy = project_config.bert.architecture.max_len_policy
     policy = str(policy).lower()
     if policy == 'sigma':
@@ -46,21 +49,22 @@ def _candidate_len_from_policy(lengths: List[int], project_config) -> int:
 
 
 def compute_effective_max_length(token_sequences: List[List[int]], project_config, split_name: Optional[str] = None) -> int:
-    """根据数据与配置计算有效的最大序列长度。
+    """Compute effective max sequence length from data and config.
+    根据数据与配置计算有效的最大序列长度。
 
-    规则：
-      - config.bert.architecture.max_seq_length 作为上限（硬上限）
-      - 数据侧长度优先：若 (max_len_from_data + 2) 不超过上限，则取 (max_len_from_data + 2)
-      - 若数据存在极长序列导致 (max_len_from_data + 2) 超过上限，则取配置的上限
-      - 严格检查位置嵌入：有效长度不得超过 config.bert.architecture.max_position_embeddings
+    Rules / 规则:
+      - config.bert.architecture.max_seq_length as hard upper bound / 作为上限
+      - Data-side length preferred: use (max_len_from_data + 2) if within bound / 数据侧长度优先
+      - Fallback to config upper bound if data exceeds it / 若数据超过上限，取配置上限
+      - Strict position embedding check / 严格检查位置嵌入上限
 
-    参数：
-      - token_sequences: 序列列表
-      - config: ProjectConfig 实例
-      - split_name: 可选的分割名，仅用于日志
+    Args:
+      - token_sequences: List of sequences / 序列列表
+      - project_config: ProjectConfig instance / 配置实例
+      - split_name: Optional split name for logging / 可选分割名，仅用于日志
 
-    返回：
-      - int: 有效最大长度
+    Returns:
+      - int: Effective max length / 有效最大长度
     """
     assert token_sequences, "token_sequences 不能为空"
 
@@ -97,7 +101,8 @@ def compute_effective_max_length(token_sequences: List[List[int]], project_confi
     return effective
 
 class MLMDataset(Dataset):
-    """Token ID序列的MLM数据集"""
+    """MLM dataset for token ID sequences.
+    Token ID序列的MLM数据集。"""
 
     def __init__(self, token_sequences: List[List[int]], vocab_manager: VocabManager,
                  transforms: TokenTransform, max_length: int = 512, mlm_probability: float = 0.15,
@@ -112,7 +117,7 @@ class MLMDataset(Dataset):
         self.group_by_graph = bool(group_by_graph)
         self.variant_selection = str(variant_selection).lower()
 
-        # 图级采样支持：构建gid分组
+        # Graph-level sampling: build gid grouping / 图级采样支持：构建gid分组
         if self.group_by_graph:
             from collections import OrderedDict
             gid_to_indices = OrderedDict()
@@ -122,14 +127,16 @@ class MLMDataset(Dataset):
             self._unique_gids = list(gid_to_indices.keys())
             logger.info(f"🔧 图级采样启用: {len(self._unique_gids)} 个图，变体选择策略: {self.variant_selection}")
 
-        # BPE Transform将在worker_init_fn中初始化，这里先设为None
+        # BPE Transform will be initialized in worker_init_fn, set to None here
+        # BPE Transform将在worker_init_fn中初始化
         self._bpe_transform = None
-        self._bpe_checked = False  # 标记是否已检查过BPE Transform
+        self._bpe_checked = False  # Whether BPE Transform has been checked / 标记是否已检查
 
         # print(f"MLM数据集创建完成，共 {len(token_sequences)} 个序列")
     
     def _apply_bpe_if_enabled(self, token_sequence: List[int]) -> List[int]:
-        """应用BPE编码（延迟初始化，失败时报错）"""
+        """Apply BPE encoding (lazy init, error on failure).
+        应用BPE编码（延迟初始化，失败时报错）。"""
         if not self._bpe_checked:
             try:
                 from src.data.bpe_transform import _g_bpe_transform
@@ -149,11 +156,12 @@ class MLMDataset(Dataset):
     
     def _create_mlm_mask(self, input_ids: torch.Tensor, 
                         attention_mask: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
-        """创建MLM掩码"""
+        """Create MLM mask.
+        创建MLM掩码。"""
         labels = input_ids.clone()
         probability_matrix = torch.full(labels.shape, self.mlm_probability)
         
-        # 不对特殊token和padding进行mask
+        # Don't mask special tokens and padding / 不对特殊token和padding进行mask
         special_tokens_mask = torch.zeros_like(labels, dtype=torch.bool)
         special_tokens_mask[input_ids == self.vocab_manager.cls_token_id] = True
         special_tokens_mask[input_ids == self.vocab_manager.sep_token_id] = True
@@ -164,11 +172,11 @@ class MLMDataset(Dataset):
         masked_indices = torch.bernoulli(probability_matrix).bool()
         labels[~masked_indices] = -100
         
-        # 80%的时间：替换为[MASK]
+        # 80% of the time: replace with [MASK] / 80%的时间替换为[MASK]
         indices_replaced = torch.bernoulli(torch.full(labels.shape, 0.8)).bool() & masked_indices
         input_ids[indices_replaced] = self.vocab_manager.mask_token_id
         
-        # 10%的时间：替换为随机token
+        # 10% of the time: replace with random token / 10%的时间替换为随机token
         indices_random = torch.bernoulli(torch.full(labels.shape, 0.5)).bool() & masked_indices & ~indices_replaced
         random_words = torch.randint(self.vocab_manager.vocab_size, labels.shape, dtype=torch.long)
         input_ids[indices_random] = random_words[indices_random]
@@ -187,13 +195,13 @@ class MLMDataset(Dataset):
         else:
             token_sequence = self.token_sequences[idx]
 
-        # 应用数据增强变换
+        # Apply data augmentation transforms / 应用数据增强变换
         token_sequence = self.transforms(token_sequence)
 
-        # 应用BPE编码（动态检查，避免初始化时序问题）
+        # Apply BPE encoding (dynamic check to avoid init timing issues) / 应用BPE编码
         token_sequence = self._apply_bpe_if_enabled(token_sequence)
 
-        # 使用词表管理器编码序列
+        # Encode sequence with vocab manager / 使用词表管理器编码序列
         encoded: torch.Dict[str, torch.Tensor] = self.vocab_manager.encode_sequence(
             token_sequence, add_special_tokens=True, max_length=self.max_length
         )
@@ -201,7 +209,7 @@ class MLMDataset(Dataset):
         input_ids = encoded['input_ids']
         attention_mask = encoded['attention_mask']
 
-        # 创建MLM掩码
+        # Create MLM mask / 创建MLM掩码
         masked_input_ids, labels = self._create_mlm_mask(input_ids, attention_mask)
 
         return {
@@ -219,9 +227,10 @@ def create_mlm_dataloader(token_sequences: List[List[int]], project_config, voca
                          batch_size: int = 8, max_length: int = 512,
                          mlm_probability: float = 0.15, shuffle: bool = True,
                          ) -> DataLoader:
-    """创建MLM数据加载器"""
+    """Create MLM data loader.
+    创建MLM数据加载器。"""
     
-    # 获取有效的token列表，用于数据增强
+    # Get valid token list for data augmentation / 获取有效的token列表，用于数据增强
     valid_tokens = vocab_manager.get_valid_tokens()
     transforms = create_transforms_from_config(project_config, valid_tokens, "mlm",logger=logger)
 
@@ -233,17 +242,18 @@ def create_mlm_dataloader(token_sequences: List[List[int]], project_config, voca
 
 
 class LabelNormalizer:
-    """标签标准化器"""
+    """Label normalizer.
+    标签标准化器。"""
     
     def __init__(self, method: str = 'standard'):
-        """
-        初始化标准化器
+        """Initialize normalizer.
+        初始化标准化器。
         
         Args:
-            method: 标准化方法
-                - 'standard': StandardScaler (Z-score标准化)
-                - 'minmax': MinMaxScaler (最小-最大标准化)
-                - 'robust': RobustScaler (鲁棒标准化)
+            method: Normalization method / 标准化方法
+                - 'standard': StandardScaler (Z-score)
+                - 'minmax': MinMaxScaler
+                - 'robust': RobustScaler
         """
         self.method = method
         self.scaler = None
@@ -259,28 +269,28 @@ class LabelNormalizer:
             raise ValueError(f"不支持的标准化方法: {method}")
     
     def fit(self, labels: List[float]) -> 'LabelNormalizer':
-        """
-        拟合标准化器
+        """Fit the normalizer.
+        拟合标准化器。
         
         Args:
-            labels: 原始标签列表（单目标：List[float]，多目标：List[List[float]]）
+            labels: Raw label list (single: List[float], multi: List[List[float]]) / 原始标签列表
             
         Returns:
-            self: 链式调用
+            self: For chaining / 链式调用
         """
         labels_array = np.array(labels)
         
-        # 检查是否为多目标回归
+        # Check if multi-target regression / 检查是否为多目标回归
         if labels_array.ndim == 1:
-            # 单目标回归：reshape为[N, 1]
+            # Single-target: reshape to [N, 1] / 单目标回归
             labels_array = labels_array.reshape(-1, 1)
         elif labels_array.ndim == 2:
-            # 多目标回归：保持[N, num_targets]形状
+            # Multi-target: keep [N, num_targets] shape / 多目标回归
             pass
         else:
             raise ValueError(f"标签数组维度不支持: {labels_array.ndim}")
         
-        # 检查方差是否接近0
+        # Check if variance is near zero / 检查方差是否接近0
         if np.var(labels_array) < 1e-8:
             logger.warning("Label variance near zero! Adding epsilon to avoid division by zero")
             labels_array += np.random.normal(0, 1e-6, size=labels_array.shape)
@@ -295,67 +305,69 @@ class LabelNormalizer:
         return self
     
     def transform(self, labels: List[float]) -> List[float]:
-        """
-        标准化标签
+        """Normalize labels.
+        标准化标签。
         
         Args:
-            labels: 原始标签列表（单目标：List[float]，多目标：List[List[float]]）
+            labels: Raw label list (single: List[float], multi: List[List[float]]) / 原始标签列表
             
         Returns:
-            标准化后的标签列表（保持原有格式）
+            Normalized label list (preserving original format) / 标准化后的标签列表
         """
         assert self.is_fitted, "标准化器尚未拟合，请先调用fit()方法"
         
         labels_array = np.array(labels)        
-        # 处理不同维度
+        # Handle different dimensions / 处理不同维度
         if labels_array.ndim == 1:
-            # 单目标回归：reshape为[N, 1]
+            # Single-target: reshape to [N, 1] / 单目标回归
             labels_array = labels_array.reshape(-1, 1)
             normalized_array = self.scaler.transform(labels_array)
             return normalized_array.flatten().tolist()
         elif labels_array.ndim == 2:
-            # 多目标回归：直接transform
+            # Multi-target: transform directly / 多目标回归
             normalized_array = self.scaler.transform(labels_array)
             return normalized_array.tolist()
         else:
             raise ValueError(f"标签数组维度不支持: {labels_array.ndim}")
     
     def inverse_transform(self, normalized_labels: List[float]) -> List[float]:
-        """
-        反标准化标签
+        """Inverse-normalize labels back to original space.
+        反标准化标签。
         
         Args:
-            normalized_labels: 标准化后的标签列表（单目标：List[float]，多目标：List[List[float]]）
+            normalized_labels: Normalized label list / 标准化后的标签列表
             
         Returns:
-            原始空间的标签列表（保持原有格式）
+            Labels in original space (preserving format) / 原始空间的标签列表
         """
         assert self.is_fitted, "标准化器尚未拟合，请先调用fit()方法"
         
         labels_array = np.array(normalized_labels)
         
-        # 处理不同维度
+        # Handle different dimensions / 处理不同维度
         if labels_array.ndim == 1:
-            # 单目标回归：reshape为[N, 1]
+            # Single-target: reshape to [N, 1] / 单目标回归
             labels_array = labels_array.reshape(-1, 1)
             original_array = self.scaler.inverse_transform(labels_array)
             return original_array.flatten().tolist()
         elif labels_array.ndim == 2:
-            # 多目标回归：直接transform
+            # Multi-target: inverse transform directly / 多目标回归
             original_array = self.scaler.inverse_transform(labels_array)
             return original_array.tolist()
         else:
             raise ValueError(f"标签数组维度不支持: {labels_array.ndim}")
     
     def save(self, path: str):
-        """保存标准化器"""
+        """Save normalizer.
+        保存标准化器。"""
         import pickle
         with open(path, 'wb') as f:
             pickle.dump(self.scaler, f)
         logger.info(f"💾 标准化器已保存: {path}")
     
     def load(self, path: str):
-        """加载标准化器"""
+        """Load normalizer.
+        加载标准化器。"""
         import pickle
         with open(path, 'rb') as f:
             self.scaler = pickle.load(f)
@@ -363,23 +375,24 @@ class LabelNormalizer:
         logger.info(f"📂 标准化器已加载: {path}")
 
 class NormalizedRegressionDataset:
-    """带标准化的回归数据集"""
+    """Regression dataset with label normalization.
+    带标准化的回归数据集。"""
     
     def __init__(self, token_sequences: List[List[int]], labels: List[float],
                  vocab_manager: VocabManager, transforms: TokenTransform, max_length: int = 512,
                  normalizer: LabelNormalizer = None, graph_ids: Optional[List[int]] = None,
                  group_by_graph: bool = False, variant_selection: str = "random"):
-        """
-        初始化标准化回归数据集
+        """Initialize normalized regression dataset.
+        初始化标准化回归数据集。
         
         Args:
-            token_sequences: Token序列列表
-            labels: 原始标签列表
-            vocab_manager: 词表管理器
-            max_length: 最大序列长度
-            normalizer: 标签标准化器
-            transforms: 数据增强变换
-            graph_ids: 原始图ID列表，用于评估时聚合
+            token_sequences: Token sequence list / Token序列列表
+            labels: Raw label list / 原始标签列表
+            vocab_manager: Vocabulary manager / 词表管理器
+            max_length: Max sequence length / 最大序列长度
+            normalizer: Label normalizer / 标签标准化器
+            transforms: Data augmentation transforms / 数据增强变换
+            graph_ids: Graph ID list for evaluation aggregation / 原始图ID列表
         """
         self.token_sequences = token_sequences
         self.original_labels = labels
@@ -391,17 +404,17 @@ class NormalizedRegressionDataset:
         self.group_by_graph = bool(group_by_graph)
         self.variant_selection = str(variant_selection).lower()
         
-        # 初始化时不进行标准化，避免数据泄露
+        # Don't normalize at init to avoid data leakage / 初始化时不进行标准化，避免数据泄露
         self.normalized_labels = None
         
-        # BPE Transform将在worker_init_fn中初始化，这里先设为None
+        # BPE Transform will be initialized in worker_init_fn
         self._bpe_transform = None
-        self._bpe_checked = False  # 标记是否已检查过BPE Transform
+        self._bpe_checked = False  # Whether BPE Transform has been checked
         
-        # 检查是否为多目标回归
+        # Check if multi-target regression / 检查是否为多目标回归
         self.is_multi_target = isinstance(labels[0], (list, tuple, torch.Tensor)) if len(labels) > 0 else False
 
-        # 若启用图级采样，构建 gid -> indices 的映射与图级标签
+        # If graph-level sampling enabled, build gid -> indices mapping / 若启用图级采样，构建映射
         if self.group_by_graph:
             from collections import OrderedDict
             gid_to_indices = OrderedDict()
@@ -431,7 +444,8 @@ class NormalizedRegressionDataset:
         logger.info(f"   数据增强: {type(transforms).__name__}")
     
     def _apply_bpe_if_enabled(self, token_sequence: List[int]) -> List[int]:
-        """应用BPE编码（延迟初始化，失败时报错）"""
+        """Apply BPE encoding (lazy init, error on failure).
+        应用BPE编码（延迟初始化，失败时报错）。"""
         if not self._bpe_checked:
             try:
                 from src.data.bpe_transform import _g_bpe_transform
@@ -445,7 +459,8 @@ class NormalizedRegressionDataset:
         return self._bpe_transform.encode(token_sequence)
 
     def apply_normalization(self):
-        """应用标准化（在normalizer已拟合后调用）"""
+        """Apply normalization (call after normalizer has been fitted).
+        应用标准化（在normalizer已拟合后调用）。"""
         if self.normalizer is not None and self.normalizer.is_fitted:
             self.normalized_labels = self.normalizer.transform(self.original_labels)
             # 处理多目标vs单目标的日志记录
@@ -473,10 +488,10 @@ class NormalizedRegressionDataset:
             else:
                 chosen_idx = random.choice(indices)
             token_sequence = self.token_sequences[chosen_idx]
-            # 应用数据增强与BPE
+            # Apply augmentation & BPE / 应用数据增强与BPE
             token_sequence = self.transforms(token_sequence)
             token_sequence = self._apply_bpe_if_enabled(token_sequence)
-            # 确保已应用标准化
+            # Ensure normalization applied / 确保已应用标准化
             if self.normalized_labels is None:
                 self.apply_normalization()
             normalized_label = self.normalized_labels[chosen_idx]
@@ -497,19 +512,19 @@ class NormalizedRegressionDataset:
         else:
             token_sequence = self.token_sequences[idx]
             
-            # 应用数据增强变换
+            # Apply data augmentation transforms / 应用数据增强变换
             token_sequence = self.transforms(token_sequence)
             
-            # 应用BPE编码（动态检查，避免初始化时序问题）
+            # Apply BPE encoding (dynamic check) / 应用BPE编码
             token_sequence = self._apply_bpe_if_enabled(token_sequence)
             
-            # 确保已应用标准化
+            # Ensure normalization applied / 确保已应用标准化
             if self.normalized_labels is None:
                 self.apply_normalization()
             
             normalized_label = self.normalized_labels[idx]
             
-            # 使用词表管理器编码序列
+            # Encode sequence with vocab manager / 使用词表管理器编码序列
             encoded = self.vocab_manager.encode_sequence(
                 token_sequence, add_special_tokens=True, max_length=self.max_length
             )
@@ -529,9 +544,10 @@ class NormalizedRegressionDataset:
 
 
 def create_transforms_from_config(project_config, valid_tokens, task_type: str = "mlm", vocab_manager=None,logger=None) -> TokenTransform:
-    """根据配置创建统一的transform pipeline，总是返回有效的transform"""
+    """Create unified transform pipeline from config; always returns a valid transform.
+    根据配置创建统一的transform pipeline，总是返回有效的transform。"""
     
-    # 获取指定任务的方法列表和增强配置
+    # Get method list and augmentation config for task / 获取指定任务的方法列表和增强配置
     if task_type == "mlm":
         methods = project_config.bert.pretraining.mlm_augmentation_methods
         aug_config = project_config.bert.pretraining.augmentation_config
@@ -539,10 +555,10 @@ def create_transforms_from_config(project_config, valid_tokens, task_type: str =
         methods = project_config.bert.finetuning.regression_augmentation_methods
         aug_config = project_config.bert.finetuning.augmentation_config
     
-    # 根据指定的方法创建transforms
+    # Create transforms based on specified methods / 根据指定的方法创建transforms
     transforms = []
     
-    # 添加数据增强transforms
+    # Add data augmentation transforms / 添加数据增强transforms
     if methods:
         for method in methods:
             if method == "random_deletion":
@@ -570,14 +586,14 @@ def create_transforms_from_config(project_config, valid_tokens, task_type: str =
                     mask_ratio=aug_config.sequence_masking_ratio,
                     probability=aug_config.sequence_masking_probability
                 )
-                # 设置mask token ID（从vocab_manager获取）
+                # Set mask token ID (from vocab_manager) / 设置mask token ID
                 if vocab_manager is not None and hasattr(vocab_manager, 'mask_token_id'):
                     sequence_masking.set_mask_token_id(vocab_manager.mask_token_id)
                 transforms.append(sequence_masking)
             else:
                 print(f"警告：未知的数据增强方法 '{method}'，跳过")
     
-    # 总是返回有效的transform pipeline
+    # Always return a valid transform pipeline / 总是返回有效的transform pipeline
     if transforms:
         logger.info(f"🔄 创建Transform pipeline，包含数据增强: {[type(t).__name__ for t in transforms]}")
         return Compose(transforms)
@@ -586,22 +602,23 @@ def create_transforms_from_config(project_config, valid_tokens, task_type: str =
         return NoOpTransform() 
 
 class ClassificationDataset(Dataset):
-    """分类任务数据集"""
+    """Classification task dataset.
+    分类任务数据集。"""
     
     def __init__(self, token_sequences: List[List[int]], labels: List[int],
                  vocab_manager: VocabManager, transforms: TokenTransform, max_length: int = 512,
                  graph_ids: Optional[List[int]] = None,
                  group_by_graph: bool = False, variant_selection: str = "random"):
-        """
-        初始化分类数据集
+        """Initialize classification dataset.
+        初始化分类数据集。
         
         Args:
-            token_sequences: Token序列列表
-            labels: 分类标签列表 (整数)
-            vocab_manager: 词表管理器
-            max_length: 最大序列长度
-            transforms: 数据增强变换
-            graph_ids: 原始图ID列表
+            token_sequences: Token sequence list / Token序列列表
+            labels: Classification label list (integers) / 分类标签列表
+            vocab_manager: Vocabulary manager / 词表管理器
+            max_length: Max sequence length / 最大序列长度
+            transforms: Data augmentation transforms / 数据增强变换
+            graph_ids: Graph ID list / 原始图ID列表
         """
         self.token_sequences = token_sequences
         self.labels = labels
@@ -612,13 +629,13 @@ class ClassificationDataset(Dataset):
         self.group_by_graph = bool(group_by_graph)
         self.variant_selection = str(variant_selection).lower()
         
-        # 验证数据
+        # Validate data / 验证数据
         assert len(token_sequences) == len(labels), "序列数量和标签数量不匹配"
         
-        # 检查标签类型：多标签 vs 单标签
+        # Check label type: multi-label vs single-label / 检查标签类型
         self.is_multi_label = isinstance(labels[0], (list, tuple, torch.Tensor)) if len(labels) > 0 else False
 
-        # 图级采样支持：构建gid分组与图级标签
+        # Graph-level sampling: build gid grouping and graph-level labels / 图级采样支持
         if self.group_by_graph:
             from collections import OrderedDict
             gid_to_indices = OrderedDict()
@@ -626,7 +643,7 @@ class ClassificationDataset(Dataset):
                 gid_to_indices.setdefault(int(gid), []).append(idx)
             self._gid_to_indices = gid_to_indices
             self._unique_gids = list(gid_to_indices.keys())
-            # 图级标签
+            # Graph-level labels / 图级标签
             grouped_labels = []
             for gid in self._unique_gids:
                 first_idx = gid_to_indices[gid][0]
@@ -634,14 +651,14 @@ class ClassificationDataset(Dataset):
             self._grouped_labels = grouped_labels
         
         if self.is_multi_label:
-            # 多标签分类：标签是向量
+            # Multi-label classification: labels are vectors / 多标签分类
             base_label = labels[0] if len(labels) > 0 else []
             self.num_classes = len(base_label) if base_label is not None else 1
             self.class_distribution = "多标签分类"
             print(f"多标签分类数据集创建完成，共 {len(token_sequences)} 个样本")
             print(f"标签维度: {self.num_classes}")
         else:
-            # 单标签分类：统计类别信息
+            # Single-label classification: compute class stats / 单标签分类
             if self.group_by_graph:
                 unique_labels = sorted(set(labels))
                 self.num_classes = len(unique_labels)
@@ -656,12 +673,13 @@ class ClassificationDataset(Dataset):
         
         print(f"序列长度固定为: {self.max_length}") 
         
-        # BPE Transform将在worker_init_fn中初始化，这里先设为None
+        # BPE Transform will be initialized in worker_init_fn
         self._bpe_transform = None
-        self._bpe_checked = False  # 标记是否已检查过BPE Transform
+        self._bpe_checked = False  # Whether BPE Transform has been checked
     
     def _apply_bpe_if_enabled(self, token_sequence: List[int]) -> List[int]:
-        """应用BPE编码（延迟初始化，失败时报错）"""
+        """Apply BPE encoding (lazy init, error on failure).
+        应用BPE编码（延迟初始化，失败时报错）。"""
         if not self._bpe_checked:
             try:
                 from src.data.bpe_transform import _g_bpe_transform
@@ -708,23 +726,23 @@ class ClassificationDataset(Dataset):
             token_sequence = self.token_sequences[idx]
             label = self.labels[idx]
             
-            # 应用数据增强变换
+            # Apply data augmentation transforms / 应用数据增强变换
             token_sequence = self.transforms(token_sequence)
             
-            # 应用BPE编码（动态检查，避免初始化时序问题）
+            # Apply BPE encoding (dynamic check) / 应用BPE编码
             token_sequence = self._apply_bpe_if_enabled(token_sequence)
             
-            # 使用词表管理器编码序列
+            # Encode sequence with vocab manager / 使用词表管理器编码序列
             encoded = self.vocab_manager.encode_sequence(
                 token_sequence, add_special_tokens=True, max_length=self.max_length
             )
             
-            # 根据标签类型选择合适的dtype
+            # Choose dtype based on label type / 根据标签类型选择合适的dtype
             if self.is_multi_label:
-                # 多标签分类：使用float类型
+                # Multi-label: use float / 多标签分类
                 label_tensor = torch.tensor(label, dtype=torch.float)
             else:
-                # 单标签分类：使用long类型
+                # Single-label: use long / 单标签分类
                 label_tensor = torch.tensor(label, dtype=torch.long)
             
             return {
@@ -735,12 +753,13 @@ class ClassificationDataset(Dataset):
             }
     
     def get_class_weights(self) -> torch.Tensor:
-        """计算类别权重（用于处理类别不平衡）"""
+        """Compute class weights (for handling class imbalance).
+        计算类别权重（用于处理类别不平衡）。"""
         if self.is_multi_label:
-            # 多标签分类：返回均匀权重
+            # Multi-label: return uniform weights / 多标签分类：返回均匀权重
             return torch.ones(self.num_classes)
         else:
-            # 单标签分类：计算基于频率的权重
+            # Single-label: compute frequency-based weights / 单标签分类：计算基于频率的权重
             if self.group_by_graph:
                 total_samples = len(self._grouped_labels)
             else:
@@ -757,7 +776,8 @@ def create_classification_dataloader(token_sequences: List[List[int]],
                                    batch_size: int = 8,
                                    max_length: int = 512, 
                                    shuffle: bool = True) -> torch.utils.data.DataLoader:
-    """创建分类数据加载器"""
+    """Create classification data loader.
+    创建分类数据加载器。"""
     dataset = ClassificationDataset(
         token_sequences=token_sequences,
         labels=labels,

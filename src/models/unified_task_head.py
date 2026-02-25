@@ -1,10 +1,11 @@
 """
+Unified Task Head Manager
 统一任务头管理器
-================
 
-UnifiedTaskHead - 根据任务类型构建不同结构的预测头
-- MLM任务: 简单线性层，序列级输出
-- 其他任务: 多层感知机，句子级输出
+UnifiedTaskHead — builds different prediction heads based on task type.
+根据任务类型构建不同结构的预测头。
+- MLM: simple linear layer, sequence-level output / 简单线性层，序列级输出
+- Others: MLP, sentence-level output / 多层感知机，句子级输出
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ import torch.nn.functional as F
 
 from src.utils.logger import get_logger
 
-# 创建模块级logger
+# Module-level logger / 模块级logger
 logger = get_logger(__name__)
 
 # class MLMHead(nn.Module):
@@ -46,14 +47,15 @@ logger = get_logger(__name__)
 #         return F.linear(x, W, b)                   # [B,T,V]
 
 class UnifiedTaskHead(nn.Module):
-    """统一任务头管理器 - 根据任务类型构建不同结构的预测头"""
+    """Unified task head manager — builds different prediction head structures based on task type.
+    统一任务头管理器 - 根据任务类型构建不同结构的预测头。"""
     
     def __init__(
         self, 
-        input_dim: int,     # 编码器输出维度，如512(BERT-Small)或768(BERT-Base/GTE)
-        task_type: str,     # 任务类型：'mlm', 'classification', 'regression'等
-        output_dim: int,    # 输出维度：MLM=vocab_size, 分类=num_classes, 回归=1或num_targets
-        config: Dict, # 任务头配置参数
+        input_dim: int,     # Encoder output dim, e.g. 512(BERT-Small) or 768(BERT-Base/GTE) / 编码器输出维度
+        task_type: str,     # Task type: 'mlm', 'classification', 'regression', etc. / 任务类型
+        output_dim: int,    # Output dim: MLM=vocab_size, cls=num_classes, reg=1 or num_targets / 输出维度
+        config: Dict, # Task head config params / 任务头配置参数
         embedding_weight: torch.Tensor=None,
         dtype: torch.dtype = torch.float32
     ):
@@ -67,6 +69,7 @@ class UnifiedTaskHead(nn.Module):
         
         
         if task_type == 'mlm':
+            # MLM task: simple linear projection, no complex structure needed
             # MLM任务：简单线性投影，不需要复杂结构
             # input: [batch_size, seq_len, hidden_size] → output: [batch_size, seq_len, vocab_size]
             assert embedding_weight is not None, "embedding_weight不能为空"
@@ -74,40 +77,41 @@ class UnifiedTaskHead(nn.Module):
 # self.head = MLMHead(input_dim, output_dim, embedding_weight, dtype=dtype)  # hidden_size → vocab_size
             logger.info(f"🔤 MLM任务头: Linear({input_dim} → {output_dim})")
         else:
+            # Other tasks: MLP, supports more complex feature transforms
             # 其他任务：多层感知机，支持更复杂的特征变换
             # input: [batch_size, hidden_size] → output: [batch_size, output_dim]
             self.head = self._build_configurable_head(input_dim, output_dim, config, dtype)
             logger.info(f"🎯 {task_type}任务头: MLP({input_dim} → {config['hidden_ratio']} → {config['activation']} → {config['dropout']} → {output_dim})")
         
-        # 初始化权重
+        # Initialize weights / 初始化权重
         self._init_weights()
     
     def _build_configurable_head(self, input_dim: int, output_dim: int, config: Dict, dtype: torch.dtype):
-        """
-        构建可配置的多层任务头
+        """Build a configurable multi-layer task head.
+        构建可配置的多层任务头。
         
         Args:
-            input_dim: 输入维度 [hidden_size]
-            output_dim: 输出维度 [num_classes或1]
-            config: 配置字典，包含['hidden_ratio', 'activation', 'dropout']
+            input_dim: Input dimension [hidden_size] / 输入维度
+            output_dim: Output dimension [num_classes or 1] / 输出维度
+            config: Config dict with ['hidden_ratio', 'activation', 'dropout'] / 配置字典
             
         Returns:
-            nn.Sequential: 多层感知机结构
+            nn.Sequential: MLP structure / 多层感知机结构
         """
         
-        # 解析配置参数，提供合理默认值
-        hidden_ratio = config['hidden_ratio']      # 隐藏层大小比例
-        activation = config['activation']       # 激活函数类型
-        dropout = config['dropout']               # dropout比例
+        # Parse config params with sensible defaults / 解析配置参数
+        hidden_ratio = config['hidden_ratio']      # Hidden layer size ratio / 隐藏层大小比例
+        activation = config['activation']       # Activation function type / 激活函数类型
+        dropout = config['dropout']               # Dropout ratio / dropout比例
         
         layers = []
         
-        # 第一层：输入层 → 隐藏层
+        # First layer: input -> hidden / 第一层：输入层 → 隐藏层
         hidden_dim = int(input_dim * hidden_ratio)  # 如512*0.5=256
         layers.append(nn.Linear(input_dim, hidden_dim, dtype=dtype))
-        # 线性层: [batch_size, input_dim] → [batch_size, hidden_dim]
+        # Linear: [batch_size, input_dim] → [batch_size, hidden_dim]
         
-        # 激活函数
+        # Activation function / 激活函数
         if activation == 'relu':
             layers.append(nn.ReLU())
         elif activation == 'gelu':
@@ -115,44 +119,45 @@ class UnifiedTaskHead(nn.Module):
         elif activation == 'tanh':
             layers.append(nn.Tanh())
         
-        # Dropout正则化
+        # Dropout regularization / Dropout正则化
         layers.append(nn.Dropout(dropout))
         
-        # 输出层：隐藏层 → 输出维度
+        # Output layer: hidden -> output / 输出层：隐藏层 → 输出维度
         layers.append(nn.Linear(hidden_dim, output_dim, dtype=dtype))
-        # 线性层: [batch_size, hidden_dim] → [batch_size, output_dim]
+        # Linear: [batch_size, hidden_dim] → [batch_size, output_dim]
         
         return nn.Sequential(*layers)
     
     def _init_weights(self):
-        """初始化任务头权重 - 使用标准初始化策略"""
+        """Initialize task head weights using standard initialization.
+        初始化任务头权重 - 使用标准初始化策略。"""
         for module in self.head.modules():
             if isinstance(module, nn.Linear):
-                # 权重：正态分布初始化
+                # Weights: normal distribution init / 权重：正态分布初始化
                 module.weight.data.normal_(mean=0.0, std=0.02)
                 if module.bias is not None:
                     module.bias.data.zero_()
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        前向传播 - 根据任务类型处理不同形状的输入
+        """Forward pass — handles different input shapes based on task type.
+        前向传播 - 根据任务类型处理不同形状的输入。
         
         Args:
-            x: 输入张量，形状因任务而异：
-               - MLM: [batch_size, seq_len, hidden_size] 序列级特征
-               - 其他: [batch_size, hidden_size] 句子级特征
+            x: Input tensor, shape varies by task / 输入张量，形状因任务而异：
+               - MLM: [batch_size, seq_len, hidden_size] sequence-level features / 序列级特征
+               - Others: [batch_size, hidden_size] sentence-level features / 句子级特征
                
         Returns:
-            torch.Tensor: 预测输出，形状：
-               - MLM: [batch_size, seq_len, vocab_size] 每个位置的词表预测
-               - 分类: [batch_size, num_classes] 类别logits
-               - 回归: [batch_size, 1] 或 [batch_size, num_targets] 回归值
+            torch.Tensor: Prediction output / 预测输出，形状：
+               - MLM: [batch_size, seq_len, vocab_size] per-position vocab logits / 每个位置的词表预测
+               - Classification: [batch_size, num_classes] class logits / 类别logits
+               - Regression: [batch_size, 1] or [batch_size, num_targets] / 回归值
         """
         
         if self.task_type == 'mlm':
-            # MLM输入: [batch_size, seq_len, hidden_size]
-            # MLM输出: [batch_size, seq_len, vocab_size]
-            # 对序列的每个位置进行词表预测
+            # MLM input: [batch_size, seq_len, hidden_size]
+            # MLM output: [batch_size, seq_len, vocab_size]
+            # Predict vocab distribution for each position / 对序列的每个位置进行词表预测
             if x.dim() != 3:
                 raise ValueError(f"MLM任务期望3维输入 [batch, seq_len, hidden]，实际获得{x.dim()}维: {x.shape}")
             
@@ -166,8 +171,8 @@ class UnifiedTaskHead(nn.Module):
             
             return logits
         else:
-            # 其他任务输入: [batch_size, hidden_size]
-            # 其他任务输出: [batch_size, output_dim]
+            # Other task input: [batch_size, hidden_size]
+            # Other task output: [batch_size, output_dim]
             if x.dim() != 2:
                 raise ValueError(f"{self.task_type}任务期望2维输入 [batch, hidden]，实际获得{x.dim()}维: {x.shape}")
             

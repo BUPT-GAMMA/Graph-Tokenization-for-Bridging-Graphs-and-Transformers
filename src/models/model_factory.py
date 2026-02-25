@@ -1,9 +1,9 @@
 """
+Unified Model Factory
 统一模型工厂
-============
 
-create_universal_model - 统一的模型创建接口
-支持预训练(MLM)和微调(分类/回归)的无缝切换
+create_universal_model — unified model creation interface.
+支持预训练(MLM)和微调(分类/回归)的无缝切换。
 """
 
 from __future__ import annotations
@@ -22,27 +22,27 @@ def create_universal_model(
     output_dim: int = None,   # MLM时自动设为vocab_size
     udi = None  # UnifiedDataInterface, 可选
 ) -> Tuple[UniversalModel, TaskHandler]:
-    """
+    """Unified model creation — supports all task types.
     统一模型创建 - 支持所有任务类型
     
     Args:
-        config: 项目配置
-        vocab_manager: 词表管理器
-        task_type: 任务类型 ('mlm', 'classification', 'regression', 等)
-        output_dim: 输出维度，MLM时可留空自动设置
-        udi: 统一数据接口，用于推断输出维度
+        config: Project configuration / 项目配置
+        vocab_manager: Vocabulary manager / 词表管理器
+        task_type: Task type ('mlm', 'classification', 'regression', etc.) / 任务类型
+        output_dim: Output dimension; auto-set for MLM / 输出维度，MLM时可留空自动设置
+        udi: UnifiedDataInterface for inferring output_dim / 统一数据接口，用于推断输出维度
         
     Returns:
-        (UniversalModel, TaskHandler) 元组
+        (UniversalModel, TaskHandler) tuple / 元组
     """
     
-    # 1. 创建编码器
+    # 1. Create encoder / 创建编码器
     encoder_type = config.encoder.type
     encoder_config = _build_encoder_config(config, encoder_type, task_type)  # 🆕 传递task_type
     encoder = create_encoder_from_config(encoder_type, encoder_config, vocab_manager)
     print(f"🔧 创建编码器: {encoder_type} ({encoder.get_hidden_size()}维)")
     
-    # 2. 确定输出维度
+    # 2. Determine output dimension / 确定输出维度
     if task_type == 'mlm':
         output_dim = vocab_manager.vocab_size
         print(f"🔤 MLM任务输出维度: {output_dim} (词表大小)")
@@ -52,17 +52,17 @@ def create_universal_model(
     elif output_dim is None:
         raise ValueError(f"任务类型 {task_type} 需要指定 output_dim 或提供 udi")
     
-    # 3. 创建任务处理器
+    # 3. Create task handler / 创建任务处理器
     if task_type == 'mlm':
         task_handler = create_task_handler(task_type='mlm', vocab_size=vocab_manager.vocab_size)
     else:
         task_handler = create_task_handler(udi=udi)
     print(f"📋 任务处理器: {task_type} (损失函数: {type(task_handler.loss_fn).__name__})")
     
-    # 4. 获取任务头配置
+    # 4. Get task head config / 获取任务头配置
     task_head_config = _get_task_head_config(config)
     
-    # 5. 创建统一模型
+    # 5. Create unified model / 创建统一模型
     model = UniversalModel(
         encoder=encoder,
         task_type=task_type,
@@ -76,10 +76,11 @@ def create_universal_model(
 
 
 def _build_encoder_config(config, encoder_type: str, task_type: str = None) -> Dict:
-    """构建编码器配置"""
+    """Build encoder configuration.
+    构建编码器配置。"""
     
     if encoder_type == 'bert':
-        # BERT编码器配置
+        # BERT encoder config / BERT编码器配置
         return {
             'hidden_size': config.bert.architecture.hidden_size,
             'num_hidden_layers': config.bert.architecture.num_hidden_layers,
@@ -93,7 +94,7 @@ def _build_encoder_config(config, encoder_type: str, task_type: str = None) -> D
             'initializer_range': getattr(config.bert.architecture, 'initializer_range', 0.02)
         }
     elif 'gte' in encoder_type.lower():
-        # GTE编码器配置
+        # GTE encoder config / GTE编码器配置
         gte_config = {
             'hidden_size': 768,  # GTE固定768维
             'max_seq_length': 256,  # GTE支持长序列
@@ -104,7 +105,7 @@ def _build_encoder_config(config, encoder_type: str, task_type: str = None) -> D
             }
         }
         
-        # 🆕 根据配置决定是否重新初始化权重
+        # 🆕 Decide whether to reinitialize weights based on config / 根据配置决定是否重新初始化权重
         if getattr(config, '_reinit_weights', False):
             gte_config['reinit_weights'] = True
             print(f"🔄 --reinit_weights检测到，将重新初始化GTE整个模型权重 (任务: {task_type})")
@@ -120,7 +121,8 @@ def _build_encoder_config(config, encoder_type: str, task_type: str = None) -> D
 
 
 def _get_output_dim_from_udi(udi, task_type: str) -> int:
-    """从UDI推断输出维度"""
+    """Infer output dimension from UDI.
+    从UDI推断输出维度。"""
     
     dataset_task_type = udi.get_dataset_task_type()
     
@@ -135,10 +137,11 @@ def _get_output_dim_from_udi(udi, task_type: str) -> int:
 
 
 def _get_task_head_config(config) -> Dict:
-    """获取任务头配置"""
+    """Get task head configuration.
+    获取任务头配置。"""
     
     try:
-        # 尝试从配置中获取任务头设置
+        # Try to get task head settings from config / 尝试从配置中获取任务头设置
         if hasattr(config.bert.architecture, 'task_head'):
             return {
                 'hidden_ratio': config.bert.architecture.task_head.hidden_ratio,
@@ -148,7 +151,7 @@ def _get_task_head_config(config) -> Dict:
     except AttributeError:
         pass
     
-    # 返回默认配置
+    # Return default config / 返回默认配置
     return {
         'hidden_ratio': 0.5,
         'activation': 'relu',
