@@ -297,20 +297,10 @@ def create_encoder_from_config(model_name: str, config: Dict[str, Any], vocab_ma
 
     if 'gte' in name:
         opt = config['optimization']
-        return create_encoder(
-            model_name,
+        return GTEEncoder(
+            './gte_model',
             vocab_size=vocab_size,
             pad_token_id=pad_token_id,
-            hidden_size=config['hidden_size'],
-            num_hidden_layers=config['num_hidden_layers'],
-            num_attention_heads=config['num_attention_heads'],
-            intermediate_size=config['intermediate_size'],
-            hidden_dropout_prob=config['hidden_dropout_prob'],
-            attention_probs_dropout_prob=config['attention_probs_dropout_prob'],
-            max_position_embeddings=config['max_position_embeddings'],
-            layer_norm_eps=config['layer_norm_eps'],
-            type_vocab_size=config['type_vocab_size'],
-            initializer_range=config['initializer_range'],
             reset_weights=config['reset_weights'],
             torch_dtype=str(opt['torch_dtype']),
             unpad_inputs=bool(opt['unpad_inputs']),
