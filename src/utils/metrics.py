@@ -31,7 +31,7 @@ def compute_classification_metrics(
     acc = accuracy_score(y_true, y_pred)
     prec, rec, f1, _ = precision_recall_fscore_support(y_true, y_pred, average='macro', zero_division=0)
 
-    # 默认不计算，若提供了概率分布再计算 AUC/AP，避免在多分类下误用离散标签
+    # Only compute AUC/AP when probability scores are provided
     roc_auc: Optional[float] = None
     ap: Optional[float] = None
 
@@ -39,24 +39,24 @@ def compute_classification_metrics(
         if y_score is not None:
             y_true = y_true.astype(int)
             classes = np.unique(y_true)
-            if y_score.ndim == 1:  # 形如 [N]，视作正类概率
-                # 二分类：需要正类概率
+            if y_score.ndim == 1:  # shape [N], treat as positive class probability
+                # Binary classification
                 roc_auc = float(roc_auc_score(y_true, y_score))
                 ap = float(average_precision_score(y_true, y_score))
             else:
                 num_classes = y_score.shape[1]
                 if num_classes == 2:
-                    # 二分类：使用正类列
+                    # Binary: use positive class column
                     roc_auc = float(roc_auc_score(y_true, y_score[:, 1]))
                     ap = float(average_precision_score(y_true, y_score[:, 1]))
                 elif len(classes) > 2 and num_classes > 2:
-                    # 多分类：需要 one-vs-rest 概率矩阵
+                    # Multi-class: one-vs-rest probability matrix
                     roc_auc = float(roc_auc_score(y_true, y_score, multi_class='ovr', average='macro'))
-                    # AP 多分类：对 one-hot 进行 macro 平均
+                    # AP multi-class: macro average over one-hot
                     y_true_oh = label_binarize(y_true, classes=np.arange(num_classes))
                     ap = float(average_precision_score(y_true_oh, y_score, average='macro'))
     except Exception:
-        # 任何异常下，保持 None，不中断主流程
+        # On any exception, keep None, don't interrupt main flow
         roc_auc = None
         ap = None
 
@@ -78,38 +78,36 @@ def compute_multi_label_classification_metrics(
     y_score: np.ndarray
 ) -> Dict[str, float]:
     """
-    计算多标签分类指标
+    Compute multi-label classification metrics.
     
     Args:
-        y_true: [N, num_labels] 真实标签（0或1）
-        y_score: [N, num_labels] 预测概率
+        y_true: [N, num_labels] ground truth (0 or 1)
+        y_score: [N, num_labels] predicted probabilities
         
     Returns:
-        包含经典指标的字典：ap, accuracy, precision, recall, f1
+        Dict with ap, accuracy, precision, recall, f1
     """
-    assert y_true.shape == y_score.shape, f"标签和预测形状不匹配: {y_true.shape} vs {y_score.shape}"
+    assert y_true.shape == y_score.shape, f"Label and prediction shape mismatch: {y_true.shape} vs {y_score.shape}"
     
-    # 计算每个标签的AP
+    # Per-label AP
     label_aps = []
     for i in range(y_true.shape[1]):
         try:
             ap = average_precision_score(y_true[:, i], y_score[:, i])
             label_aps.append(ap)
         except ValueError:
-            # 如果某个标签全为0或全为1，AP无法计算
+            # AP undefined when a label is all-0 or all-1
             label_aps.append(0.0)
     
-    # macro平均AP
+    # Macro-average AP
     macro_ap = float(np.mean(label_aps))
     
-    # 转换为预测标签
+    # Convert to predicted labels
     y_pred = (y_score > 0.5).astype(int)
     
-    # 计算经典指标
-    # 使用macro平均（每个标签单独计算后平均）
+    # Compute standard metrics (macro average across labels)
     precisions, recalls, f1s = [], [], []
     for i in range(y_true.shape[1]):
-        # 计算每个标签的precision, recall, f1
         prec, rec, f1, _ = precision_recall_fscore_support(
             y_true[:, i], y_pred[:, i], average='binary', zero_division=0
         )
@@ -121,7 +119,7 @@ def compute_multi_label_classification_metrics(
     macro_recall = float(np.mean(recalls))
     macro_f1 = float(np.mean(f1s))
     
-    # 准确率使用Hamming accuracy（元素级准确率）
+    # Hamming accuracy (element-wise)
     accuracy = float(np.mean(y_true == y_pred))
     
     return {
@@ -138,18 +136,18 @@ def compute_multi_target_regression_metrics(
     y_pred: np.ndarray
 ) -> Dict[str, float]:
     """
-    计算多目标回归指标
+    Compute multi-target regression metrics.
     
     Args:
-        y_true: [N, num_targets] 真实目标值
-        y_pred: [N, num_targets] 预测目标值
+        y_true: [N, num_targets] ground truth
+        y_pred: [N, num_targets] predictions
         
     Returns:
-        包含平均MAE等指标的字典
+        Dict with averaged mae, mse, rmse, r2, correlation
     """
-    assert y_true.shape == y_pred.shape, f"标签和预测形状不匹配: {y_true.shape} vs {y_pred.shape}"
+    assert y_true.shape == y_pred.shape, f"Label and prediction shape mismatch: {y_true.shape} vs {y_pred.shape}"
     
-    # 计算每个目标的MAE
+    # Per-target MAE
     target_maes = []
     target_mses = []
     for i in range(y_true.shape[1]):
@@ -158,12 +156,12 @@ def compute_multi_target_regression_metrics(
         target_maes.append(mae)
         target_mses.append(mse)
     
-    # 计算平均指标（使用标准名称）
+    # Average metrics
     mae = float(np.mean(target_maes))
     mse = float(np.mean(target_mses))
     rmse = float(np.sqrt(mse))
     
-    # 计算R2和相关系数（平均）
+    # Average R2 and correlation
     target_r2s = []
     target_corrs = []
     for i in range(y_true.shape[1]):
@@ -187,7 +185,7 @@ def compute_multi_target_regression_metrics(
 
 def add_metrics_to_writer(writer: SummaryWriter, base: str, metrics: Dict[str, float], task: str):
     if task == "regression":
-      assert 'mae' in metrics, "回归任务需要计算MAE"
+      assert 'mae' in metrics, "Regression task requires MAE"
       writer.add_scalar(f'{base}/MAE', float(metrics['mae']))
       if 'mse' in metrics:
         writer.add_scalar(f'{base}/MSE', float(metrics['mse']))
@@ -203,17 +201,17 @@ def add_metrics_to_writer(writer: SummaryWriter, base: str, metrics: Dict[str, f
       if 'ap' in metrics:
         writer.add_scalar(f'{base}/AP', float(metrics['ap']))
     elif task == "multi_label_classification":
-      assert 'ap' in metrics, "多标签分类任务需要计算AP"
+      assert 'ap' in metrics, "Multi-label classification requires AP"
       writer.add_scalar(f'{base}/AP', float(metrics['ap']))
     elif task == "multi_target_regression":
-      assert 'mae' in metrics, "多目标回归任务需要计算MAE"
+      assert 'mae' in metrics, "Multi-target regression requires MAE"
       writer.add_scalar(f'{base}/MAE', float(metrics['mae']))
       if 'mse' in metrics:
         writer.add_scalar(f'{base}/MSE', float(metrics['mse']))
       if 'r2' in metrics:
         writer.add_scalar(f'{base}/R2', float(metrics['r2']))
     else:
-        raise ValueError(f"不支持的任务类型: {task}")
+        raise ValueError(f"Unsupported task type: {task}")
 def log_wandb_metrics(wandb_logger: Any,base: str, metrics: Dict[str, float], task: str):
     if wandb_logger is None:
        return
@@ -221,7 +219,7 @@ def log_wandb_metrics(wandb_logger: Any,base: str, metrics: Dict[str, float], ta
     wb_payload = {}
     
     if task == "regression":
-      assert 'mae' in metrics, "回归任务需要计算MAE"
+      assert 'mae' in metrics, "Regression task requires MAE"
       wb_payload[f'{base}/MAE'] = float(metrics['mae'])
       if 'mse' in metrics:
         wb_payload[f'{base}/MSE'] = float(metrics['mse'])
@@ -237,15 +235,15 @@ def log_wandb_metrics(wandb_logger: Any,base: str, metrics: Dict[str, float], ta
       if 'ap' in metrics:
         wb_payload[f'{base}/AP'] = float(metrics['ap'])
     elif task == "multi_label_classification":
-      assert 'ap' in metrics, "多标签分类任务需要计算AP"
+      assert 'ap' in metrics, "Multi-label classification requires AP"
       wb_payload[f'{base}/AP'] = float(metrics['ap'])
     elif task == "multi_target_regression":
-      assert 'mae' in metrics, "多目标回归任务需要计算MAE"
+      assert 'mae' in metrics, "Multi-target regression requires MAE"
       wb_payload[f'{base}/MAE'] = float(metrics['mae'])
       if 'mse' in metrics:
         wb_payload[f'{base}/MSE'] = float(metrics['mse'])
       if 'r2' in metrics:
         wb_payload[f'{base}/R2'] = float(metrics['r2'])
     else:
-        raise ValueError(f"不支持的任务类型: {task}")
+        raise ValueError(f"Unsupported task type: {task}")
     wandb_logger.log(wb_payload)

@@ -1,26 +1,23 @@
 #!/usr/bin/env python3
 """
-单个方法 BERT 微调脚本（权威用法）
-================================
+BERT fine-tuning script (single method).
 
-本脚本是项目内“标准/唯一”的微调入口，被批量/搜索脚本复用。
+This is the standard entry point for fine-tuning, called by batch/search scripts.
 
-必须参数（命令行）:
-  --dataset DATASET   例如: qm9, qm9test, zinc, ...
-  --method  METHOD    例如: feuler, eulerian, cpp, fcpp, topo, smiles
+Required args:
+  --dataset DATASET             e.g. qm9, qm9test, zinc, ...
+  --method  METHOD              e.g. feuler, eulerian, cpp, fcpp, topo, smiles
 
-加载预训练的两种方式（择一）:
-  --pretrained_dir PATH       直接指定模型目录（包含 config.bin 与 pytorch_model.bin）
-  --pretrain_exp_name NAME    指定预训练实验名，按标准目录结构加载
+Loading pretrained model (choose one):
+  --pretrained_dir PATH         explicit model directory (with config.bin & pytorch_model.bin)
+  --pretrain_exp_name NAME      pretrain experiment name, loads from standard directory layout
 
-常用参数（命令行）:
-  --experiment_group NAME     归档分组
-  --experiment_name  NAME     微调实验名（仅影响保存路径，与加载预训练解耦）
-  --bpe_encode_rank_mode MODE BPE模式: none|all|topk|random|gaussian
+Common args:
+  --experiment_group NAME       experiment group
+  --experiment_name  NAME       finetune experiment name (only affects save path)
+  --bpe_encode_rank_mode MODE   BPE mode: none|all|topk|random|gaussian
   --epochs / --batch_size / --learning_rate / --weight_decay / --warmup_ratio / --max_grad_norm
-  --config_json JSON_OR_PATH  高级配置（JSON字符串或文件路径），用于嵌套项覆盖
-
-目标指标: 微调阶段以测试集 MAE 为唯一优化指标（脚本内部严格检查）。
+  --config_json JSON_OR_PATH    advanced config override (JSON string or file path)
 """
 
 from __future__ import annotations
@@ -34,7 +31,7 @@ from pathlib import Path
 import time
 from typing import Optional, Literal
 from clearml import Logger, Task
-# 设置项目路径
+# Project path setup
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -51,24 +48,21 @@ from src.utils.config_override import (  # noqa: E402
     show_full_config
 )
 
-# ClearML 任务初始化（支持直接运行和Agent执行）
-# 检测是否已经在任务上下文中（通过Agent执行的情况）
+# ClearML task init (supports both direct run and Agent execution)
 current_task = Task.current_task()
 if current_task is not None:
-    # 已经在任务上下文中，使用现有的任务
     task: Task = current_task
-    print(f"✅ 使用现有ClearML任务: {task.name} (ID: {task.id})")
+    print(f"Using existing ClearML task: {task.name} (ID: {task.id})")
 else:
-    # 直接运行的情况，创建新任务
     try:
         task: Task = Task.init(
             project_name="TokenizerGraph",
             task_name=f"finetune_manual_{int(time.time())}",
-            auto_connect_frameworks=True  # 确保自动捕获TensorBoard
+            auto_connect_frameworks=True
         )
-        print(f"✅ ClearML任务初始化成功: {task.name} (ID: {task.id})")
+        print(f"ClearML task initialized: {task.name} (ID: {task.id})")
     except Exception as e:
-        print(f"⚠️ ClearML初始化失败，将继续运行: {e}")
+        print(f"ClearML init failed, continuing without it: {e}")
         task: Task = None
 
 _ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
@@ -79,7 +73,7 @@ def _strip_ansi(text: str) -> str:
 
 
 class _AnsiStrippingWriter:
-    """包装标准输出/错误，移除ANSI颜色控制符，并确保UTF-8."""
+    """Wraps stdout/stderr to strip ANSI escape codes and ensure UTF-8."""
     def __init__(self, underlying):
         self._u = underlying
         self.encoding = 'utf-8'
@@ -113,7 +107,7 @@ class _AnsiStrippingWriter:
 
 
 def _ensure_utf8_streams():
-    """确保标准输出/错误为UTF-8并可替换编码。"""
+    """Ensure stdout/stderr use UTF-8 encoding."""
     os.environ.setdefault("PYTHONIOENCODING", "utf-8")
     os.environ.setdefault("LANG", "C.UTF-8")
     os.environ.setdefault("LC_ALL", "C.UTF-8")
@@ -129,12 +123,12 @@ def _ensure_utf8_streams():
             except Exception:
                 pass
 
-    # 降噪：静默TensorFlow冗余日志（与本训练流程无关）
-    os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")  # 只显示WARNING及以上
+    # Suppress TensorFlow verbose logs (irrelevant to this training pipeline)
+    os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
 
 
 def _configure_output_mode(offline: bool):
-    """根据 offline 模式配置输出：禁用颜色、去除ANSI、确保UTF-8。"""
+    """Configure output mode: disable colors, strip ANSI, ensure UTF-8."""
     _ensure_utf8_streams()
     if offline:
         os.environ["NO_COLOR"] = "1"
@@ -157,23 +151,20 @@ def run_finetuning(
     run_i: int | None = None,
 ) -> dict:
     """
-    运行BERT微调
+    Run BERT fine-tuning.
     
     Args:
-        config: 项目配置
-        task: 任务类型（可选，不指定时从数据集自动推断）
-        num_classes: 分类类别数（仅分类任务需要）
-        aggregation_mode: 测试时增强的聚合模式
+        config: Project config
+        aggregation_mode: TTA aggregation mode
         
     Returns:
-        微调结果字典
+        Fine-tuning result dict
     """
-    print("🚀 开始BERT微调...")
+    print("Starting BERT fine-tuning...")
     
-    # 运行微调
-    print("🎓 开始微调...")
+    print("Fine-tuning...")
     try:
-        # 统一架构会自动从UDI推断任务类型和维度，不需要显式传递num_classes等参数
+        # Unified architecture auto-infers task type and dimensions from UDI
         result = run_finetune(
             config,
             aggregation_mode=aggregation_mode,
@@ -183,127 +174,124 @@ def run_finetuning(
             pretrain_exp_name=pretrain_exp_name,
             run_i=run_i,
         )
-        print("✅ 微调完成!")
-        print(f"📊 最优验证损失: {result['best_val_loss']:.4f}")
+        print("Fine-tuning complete!")
+        print(f"Best val loss: {result['best_val_loss']:.4f}")
         
         return result
         
     except Exception as e:
-        print(f"❌ 微调失败: {e}")
+        print(f"Fine-tuning failed: {e}")
         raise
 
 
 def main():
-    """主函数"""
+    """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="单个方法BERT微调脚本",
+        description="BERT fine-tuning script (single method)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-使用示例:
+Examples:
+  python run_finetune.py --dataset qm9 --method feuler --pretrain_exp_name my_pretrain
         """
     )
     
-    # 添加所有参数（包含微调参数）
+    # Add all args (including finetune args)
     add_all_args(parser, include_finetune=True)
-    # 输出控制：plain_logs
-    parser.add_argument("--plain_logs", action="store_true", help="启用无颜色、无控制符的离线输出（兼容重定向/日志文件，解决乱码）")
+    parser.add_argument("--plain_logs", action="store_true", help="Enable plain text output (no color/ANSI, for log files)")
 
-    # 增加TTA聚合模式参数
+    # TTA aggregation mode
     parser.add_argument(
         "--aggregation_mode",
         type=str,
         default="learned",
         choices=["avg", "best", "learned"],
         help=(
-            "测试时增强（TTA）的聚合模式: "
-            "'avg' - 对多重采样结果取平均 (用于报告); "
-            "'best' - 选择最优结果 (用于分析上限，含标签信息，勿用于正式报告); "
-            "'learned' - 使用单独训练的加权聚合器（推荐）。"
+            "TTA aggregation mode: "
+            "'avg' - average over multiple sampling results (for reporting); "
+            "'best' - select best result (for upper bound analysis, uses labels); "
+            "'learned' - use trained weighted aggregator (recommended)."
         )
     )
-    # 仅影响保存目录命名的前后缀（不影响加载预训练所用 experiment_name）
+    # Save directory naming prefixes/suffixes (don't affect pretrained model loading)
     parser.add_argument("--save_name_prefix", type=str, default=None,
-                        help="仅用于保存目录的实验名前缀（预训练加载仍使用原 experiment_name）")
+                        help="Prefix for save directory name (pretrain loading uses original experiment_name)")
     parser.add_argument("--save_name_suffix", type=str, default=None,
-                        help="仅用于保存目录的实验名后缀（预训练加载仍使用原 experiment_name）")
+                        help="Suffix for save directory name (pretrain loading uses original experiment_name)")
     parser.add_argument("--pretrained_dir", type=str, default=None,
-                        help="显式指定预训练权重目录（包含 config.bin 与 pytorch_model.bin）；优先于按 experiment_name 推断")
+                        help="Explicit pretrained weights directory (with config.bin & pytorch_model.bin)")
     
-    # 🆕 新增：灵活的预训练实验名指定
+    # Flexible pretrain experiment name
     parser.add_argument("--pretrain_exp_name", type=str, default=None,
-                        help="预训练模型实验名（如果与微调实验名不同）；用于从指定的预训练实验加载模型")
+                        help="Pretrain experiment name (if different from finetune experiment name)")
     
-    # 可选：分类任务显式指定类别数（否则从数据集元信息自动推断）
+    # Optional: explicit num_classes for classification (otherwise auto-inferred from dataset)
     parser.add_argument(
         "--num_classes",
         type=int,
-        help="分类类别数（可选；若不提供则从数据集元信息自动推断）",
+        help="Number of classes for classification (optional; auto-inferred from dataset metadata if not provided)",
     )
     
-    # 解析参数
+    # Parse args
     try:
         args = parser.parse_args()
     except SystemExit as e:
-        print("\n❌ 参数解析失败！传入的参数信息:")
+        print("\nArgument parsing failed! Arguments received:")
         print("=" * 60)
-        print("脚本名称:", sys.argv[0])
-        print("所有传入参数:")
+        print("Script:", sys.argv[0])
+        print("All args:")
         for i, arg in enumerate(sys.argv[1:], 1):
             print(f"  {i:2d}: {arg}")
         print("=" * 60)
-        print("请检查参数是否正确，或使用 --help 查看帮助信息")
+        print("Check arguments or use --help")
         print("=" * 60)
         raise
     
-    print("🔧 初始化配置...")
-    # 提前配置输出模式
+    print("Initializing config...")
+    # Configure output mode early
     try:
         _configure_output_mode(bool(getattr(args, 'plain_logs', False)))
     except Exception:
         pass
     
-    # 创建基础配置
     config = ProjectConfig()
     
-    # 如果用户要求显示配置，先显示然后退出
+    # Show config and exit if requested
     if args.show_config:
         show_full_config(config)
         return 0
     
-    # 应用命令行参数到配置（统一将通用训练参数映射到微调命名空间）
+    # Apply CLI args to config (map common training params to finetune namespace)
     apply_args_to_config(config, args, common_to="finetune")
     
-    # 自动生成实验名称（如果未指定）
+    # Auto-generate experiment name if not specified
     create_experiment_name(config)
     # if config.serialization.bpe.engine.encode_rank_mode == 'none' and config.encoder.type == 'gte':
     #     print(f"Warn: bpe编码模式为Raw，且encoder为GTE,降低bs为一半（由于此encoder是动态显存大小，随序列长度正比）")
     #     config.bert.finetuning.batch_size = config.bert.finetuning.batch_size // 2
         
-    # 验证配置
+    # Validate config
     try:
         config.validate()
     except Exception as e:
-        print(f"❌ 配置验证失败: {e}")
+        print(f"Config validation failed: {e}")
         return 1
     
-    # 打印配置摘要
+    # Print config summary
     print_config_summary(config)
     raw_seed=config.system.seed
     
-    # 🆕 检查是否需要重复运行
+    # Check if repeated runs are needed
     repeat_runs = getattr(config, 'repeat_runs', 1)
 
-    # if repeat_runs > 1:
-    print(f"🔄 启用重复运行模式: {repeat_runs} 次")
+    print(f"Repeat runs: {repeat_runs}")
     all_results = []
     for run_i in range(repeat_runs):
           print(f"\n{'='*60}")
-          print(f"🚀 开始第 {run_i + 1}/{repeat_runs} 次运行")
+          print(f"Starting run {run_i + 1}/{repeat_runs}")
           print(f"{'='*60}")
           
           seed=raw_seed+run_i
           try:
-              # 重新设置种子
               from config import setup_global_seeds
               setup_global_seeds(seed)
               result = run_finetuning(
@@ -318,24 +306,24 @@ def main():
               
               result['seed'] = seed
               all_results.append(result)
-              print(f"✅ 第 {run_i + 1} 次运行完成")
-              print(f"📊 最优验证损失: {result['best_val_loss']:.4f}")
+              print(f"Run {run_i + 1} complete")
+              print(f"Best val loss: {result['best_val_loss']:.4f}")
               
-              # 显示测试结果
+              # Display test results
               test_metrics = result.get('test_metrics', {})
               if test_metrics:
-                  print("📈 测试指标:")
+                  print("Test metrics:")
                   for metric, value in test_metrics.items():
                       if isinstance(value, (int, float)):
                           print(f"  {metric}: {value:.4f}")
           except Exception as e:
-              print(f"❌ 第 {run_i + 1} 次运行失败: {e}")
+              print(f"Run {run_i + 1} failed: {e}")
               task.mark_failed()
               raise
-    # 聚合统计结果
+    # Aggregate statistics
     if all_results:
         print(f"\n{'='*60}")
-        print("📊 聚合统计结果")
+        print("Aggregated statistics")
         print(f"{'='*60}")
         from src.utils.stats_aggregation import aggregate_experiment_results, print_aggregated_stats
         aggregated = aggregate_experiment_results(

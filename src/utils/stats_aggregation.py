@@ -1,8 +1,8 @@
 """
-重复运行统计聚合工具
-====================
+Repeat-run statistics aggregation.
 
-负责聚合多次重复运行的实验结果，计算统计指标（均值、方差、标准差等）。
+Aggregates results from multiple repeated experiment runs and computes
+statistical summaries (mean, variance, std, etc.).
 """
 
 from __future__ import annotations
@@ -24,26 +24,26 @@ def aggregate_experiment_results(
     output_file: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    聚合多次重复运行的实验结果
+    Aggregate results from multiple repeated runs.
 
     Args:
-        config: 项目配置
-        experiment_name: 实验名称
-        repeat_runs: 重复运行次数
-        task_type: 任务类型 ("pretrain" 或 "finetune")
+        config: Project config
+        experiment_name: Experiment name
+        repeat_runs: Number of repeated runs
+        task_type: "pretrain" or "finetune"
 
     Returns:
-        聚合后的统计结果字典
+        Aggregated statistics dict
     """
-    logger.info(f"📊 开始聚合 {experiment_name} 的 {repeat_runs} 次重复运行结果")
+    logger.info(f"Aggregating {repeat_runs} runs for {experiment_name}")
 
-    # 收集所有run的结果
+    # Collect results from all runs
     all_results = []
     valid_runs = 0
 
     for run_i in range(repeat_runs):
         try:
-            # 构建结果文件路径
+            # Build result file path
             if task_type == "finetune":
                 results_file = config.get_logs_dir(
                     exp_name=experiment_name,
@@ -60,47 +60,47 @@ def aggregate_experiment_results(
                     result = json.load(f)
                     all_results.append(result)
                     valid_runs += 1
-                    logger.info(f"✅ 找到 run_{run_i} 的结果")
+                    logger.info(f"Found run_{run_i} results")
             else:
-                logger.warning(f"⚠️ run_{run_i} 的结果文件不存在: {results_file}")
+                logger.warning(f"run_{run_i} result file not found: {results_file}")
 
         except Exception as e:
-            logger.warning(f"⚠️ 读取 run_{run_i} 结果失败: {e}")
+            logger.warning(f"Failed to read run_{run_i} results: {e}")
 
     if valid_runs == 0:
-        logger.error("❌ 未找到任何有效的运行结果")
+        logger.error("No valid run results found")
         return {}
 
-    logger.info(f"📈 成功收集 {valid_runs}/{repeat_runs} 次运行结果")
+    logger.info(f"Collected {valid_runs}/{repeat_runs} run results")
 
-    # 聚合结果
+    # Aggregate
     aggregated = _aggregate_results(all_results, task_type)
     aggregated['config'] = config.to_dict()
 
-    # 保存聚合结果
+    # Save aggregated results
     if output_file is None:
         output_file = config.get_logs_dir(exp_name=experiment_name, run_i=-1) / f"{task_type}_aggregated_stats.json"
 
-    # 确保输出目录存在
+    # Ensure output directory exists
     Path(output_file).parent.mkdir(parents=True, exist_ok=True)
 
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(aggregated, f, indent=2, ensure_ascii=False)
 
-    logger.info(f"💾 聚合结果已保存: {output_file}")
+    logger.info(f"Aggregated results saved: {output_file}")
     return aggregated
 
 
 def _aggregate_results(results: List[Dict[str, Any]], task_type: str) -> Dict[str, Any]:
     """
-    对结果列表进行统计聚合
+    Compute statistical aggregation over a list of result dicts.
 
     Args:
-        results: 结果字典列表
-        task_type: 任务类型
+        results: List of result dicts
+        task_type: Task type
 
     Returns:
-        聚合后的统计结果
+        Aggregated statistics
     """
     if not results:
         return {}
@@ -112,51 +112,51 @@ def _aggregate_results(results: List[Dict[str, Any]], task_type: str) -> Dict[st
             "aggregation_timestamp": np.datetime64('now').astype(str)
         },
         "statistics": {},
-        "individual_runs": []  # 保存每个运行的详细信息
+        "individual_runs": []
     }
     
     def get_fair_best(result, metric):
-      """获取公平的最佳测试指标（在avg和learned之间选择最优）"""
+      """Get fair best test metric (choose optimal between avg and learned)."""
       test_data = result['test']
       by_agg = test_data['by_aggregation']
       avg_data = by_agg['avg']
       learned_data = by_agg['learned']
 
-      # 检查指标是否存在
+      # Check if metric exists
       avg_has_metric = metric in avg_data
       learned_has_metric = metric in learned_data
 
       if not avg_has_metric and not learned_has_metric:
-        raise ValueError(f"指标 '{metric}' 在avg和learned聚合中都不存在")
+        raise ValueError(f"Metric '{metric}' not found in either avg or learned aggregation")
 
       if not avg_has_metric:
         return learned_data[metric]
       if not learned_has_metric:
         return avg_data[metric]
 
-      # 使用正确的任务类型路径
+      # Use correct task type path
       task_type = result['config']['task']['type']
 
-      # 对于分类任务（包括多标签分类等），选择较高的指标；对于回归任务，选择较低的指标
+      # For classification: higher is better; for regression: lower is better
       if 'classification' in task_type:
         return max(avg_data[metric], learned_data[metric])
       else:  # regression
         return min(avg_data[metric], learned_data[metric])
 
-    # 保存每个运行的基本信息
+    # Save basic info for each run
     for i, result in enumerate(results):
         run_info = {
             "run_id": i,
-            "seed": result["config"]["system"]["seed"],  # 存在于 config.system.seed
-            "experiment_name": result["config"]["experiment_name"],  # 存在于 config.experiment_name
-            "start_time": result.get("start_time"),  # 这个可能不存在
-            "end_time": result.get("end_time")  # 这个可能不存在
+            "seed": result["config"]["system"]["seed"],
+            "experiment_name": result["config"]["experiment_name"],
+            "start_time": result.get("start_time"),
+            "end_time": result.get("end_time")
         }
 
-        # 添加关键指标
+        # Add key metrics
         add={}
         if task_type == "finetune":
-          # 根据任务类型选择合适的指标
+          # Select metrics based on task type
           task_type_config = result['config']['task']['type']
           if task_type_config == "classification":
             key_metrics = ["accuracy", "roc_auc", "ap", "precision", "recall", "f1"]
@@ -164,13 +164,13 @@ def _aggregate_results(results: List[Dict[str, Any]], task_type: str) -> Dict[st
             key_metrics = ["mae", "rmse", "r2", "loss"]
 
           for metric in key_metrics:
-            # 使用公平最佳值（avg和learned之间的最优选择）
+            # Use fair best value (optimal between avg and learned)
             try:
               fair_value = get_fair_best(result, metric)
               add[f"test_{metric}"] = fair_value
             except (KeyError, ValueError) as e:
-              # 如果指标不存在，跳过这个指标
-              print(f"⚠️ 跳过指标 '{metric}': {e}")
+              # Skip missing metrics
+              print(f"Skipping metric '{metric}': {e}")
               continue
           run_info.update(add)
         elif task_type == "pretrain":
@@ -185,7 +185,7 @@ def _aggregate_results(results: List[Dict[str, Any]], task_type: str) -> Dict[st
     if task_type == "finetune":
         aggregated["statistics"] = _aggregate_finetune_results(results)
 
-        # 在summary中添加pk的三种模式的统计信息
+        # Add pk stats for all three modes to summary
         if 'test' in aggregated["statistics"]:
             pk_summary = {}
             for mode in ['avg', 'best', 'learned']:
@@ -205,10 +205,10 @@ def _aggregate_results(results: List[Dict[str, Any]], task_type: str) -> Dict[st
 
 
 def _aggregate_finetune_results(results: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """聚合微调结果"""
+    """Aggregate finetune results."""
     stats = {}
 
-    # 1. 处理验证集指标 - 层次化结构
+    # 1. Validation metrics
     val_keys = ['val_loss', 'accuracy', 'precision', 'recall', 'f1', 'roc_auc', 'ap','mae', 'rmse', 'r2']
     stats['val'] = {}
     for key in val_keys:
@@ -218,11 +218,11 @@ def _aggregate_finetune_results(results: List[Dict[str, Any]]) -> Dict[str, Any]
           continue
         stats['val'][key] = _calculate_stats(values)
 
-    # 2. 处理测试集指标（所有聚合模式）- 层次化结构
+    # 2. Test metrics (all aggregation modes)
     test_modes = ['avg', 'best', 'learned']
     stats['test'] = {}
 
-    # 根据任务类型确定指标集合
+    # Determine metric set based on task type
     first_result = results[0]
     task_type = first_result['config']['task']['type']
 
@@ -239,14 +239,14 @@ def _aggregate_finetune_results(results: List[Dict[str, Any]]) -> Dict[str, Any]
             values = [value for value in values if value is not None]
             stats['test'][mode][metric] = _calculate_stats(values)
 
-    # 3. 处理时间指标 - 层次化结构
+    # 3. Time metrics
     stats['time'] = {}
     time_keys = ['total_train_time_sec', 'avg_epoch_time_sec']
     for key in time_keys:
         values = [r['time'][key] for r in results]
         stats['time'][key] = _calculate_stats(values)
 
-    # 4. 处理训练指标 - 层次化结构
+    # 4. Training metrics
     stats['train'] = {}
     train_keys = ['last_loss', 'learning_rate_last']
     for key in train_keys:
@@ -257,10 +257,10 @@ def _aggregate_finetune_results(results: List[Dict[str, Any]]) -> Dict[str, Any]
 
 
 def _aggregate_pretrain_results(results: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """聚合预训练结果"""
+    """Aggregate pretrain results."""
     stats = {}
 
-    # 预训练的关键指标
+    # Key pretrain metrics
     keys = [
         'best_val_loss',
         'total_train_time_sec',
@@ -277,13 +277,13 @@ def _aggregate_pretrain_results(results: List[Dict[str, Any]]) -> Dict[str, Any]
 
 def _calculate_stats(values: List[float]) -> Dict[str, float]:
     """
-    计算数值列表的基本统计信息
+    Compute basic statistics for a list of numeric values.
 
     Args:
-        values: 数值列表
+        values: List of numeric values
 
     Returns:
-        统计结果字典
+        Statistics dict
     """
     if not values or len(values) == 0:
         return {}
@@ -291,13 +291,13 @@ def _calculate_stats(values: List[float]) -> Dict[str, float]:
     values = np.array(values)
     n = len(values)
 
-    # 处理单一样本的情况
+    # Handle single-sample case
     if n == 1:
         val = float(values[0])
         stats = {
             'mean': val,
-            'std': 0.0,  # 单一样本的标准差为0
-            'var': 0.0,  # 单一样本的方差为0
+            'std': 0.0,
+            'var': 0.0,
             'min': val,
             'max': val,
             'median': val,
@@ -306,18 +306,18 @@ def _calculate_stats(values: List[float]) -> Dict[str, float]:
     else:
         stats = {
             'mean': float(np.mean(values)),
-            'std': float(np.std(values, ddof=1)),  # 使用样本标准差
-            'var': float(np.var(values, ddof=1)),   # 使用样本方差
+            'std': float(np.std(values, ddof=1)),  # sample std
+            'var': float(np.var(values, ddof=1)),   # sample var
             'min': float(np.min(values)),
             'max': float(np.max(values)),
             'median': float(np.median(values)),
             'count': len(values)
         }
 
-    # 计算95%置信区间（假设正态分布）
+    # 95% confidence interval (normal distribution assumption)
     # if len(values) > 1:
-    #     sem = stats['std'] / np.sqrt(len(values))  # 标准误差
-    #     confidence_interval = 1.96 * sem  # 95% CI
+    #     sem = stats['std'] / np.sqrt(len(values))
+    #     confidence_interval = 1.96 * sem
     #     stats['ci_95'] = float(confidence_interval)
     #     stats['ci_95_lower'] = stats['mean'] - confidence_interval
     #     stats['ci_95_upper'] = stats['mean'] + confidence_interval
@@ -327,29 +327,29 @@ def _calculate_stats(values: List[float]) -> Dict[str, float]:
 
 def print_aggregated_stats(aggregated: Dict[str, Any], task_type: str):
     """
-    打印聚合统计结果
+    Print aggregated statistics.
 
     Args:
-        aggregated: 聚合结果
-        task_type: 任务类型
+        aggregated: Aggregated results
+        task_type: Task type
     """
     if not aggregated:
-        print("❌ 无聚合结果可显示")
+        print("No aggregated results to display")
         return
 
     summary = aggregated.get('summary', {})
     stats = aggregated.get('statistics', {})
 
     print("\n" + "="*60)
-    print(f"📊 {task_type.upper()} 重复运行聚合统计")
+    print(f"{task_type.upper()} aggregated statistics")
     print("="*60)
-    print(f"总运行次数: {summary.get('total_runs', 0)}")
-    print(f"任务类型: {summary.get('task_type', 'unknown')}")
-    print(f"聚合时间: {summary.get('aggregation_timestamp', 'unknown')}")
+    print(f"Total runs: {summary.get('total_runs', 0)}")
+    print(f"Task type: {summary.get('task_type', 'unknown')}")
+    print(f"Timestamp: {summary.get('aggregation_timestamp', 'unknown')}")
 
-    # 显示pk统计信息（如果存在）
+    # PK stats (if available)
     if 'pk_stats' in summary:
-        print(f"\n🎯 PK指标统计:")
+        print(f"\nPK metric stats:")
         for mode, pk_data in summary['pk_stats'].items():
             print(f"  {mode.upper()}: {pk_data['mean']:.4f} ± {pk_data['std']:.4f}")
 
@@ -362,107 +362,107 @@ def print_aggregated_stats(aggregated: Dict[str, Any], task_type: str):
 
 
 def _print_finetune_stats(stats: Dict[str, Any]):
-    """打印微调统计结果"""
-    print("\n🎯 关键性能指标:")
+    """Print finetune statistics."""
+    print("\nKey metrics:")
 
-    # 验证集指标 - 层次化结构
+    # Validation metrics
     if 'val' in stats:
         val_keys = ['val_loss', 'accuracy', 'precision', 'recall', 'f1', 'roc_auc', 'ap','mae', 'rmse', 'r2']
-        print("\n📊 验证集指标:")
+        print("\nValidation metrics:")
         for key in val_keys:
             if key in stats['val']:
                 data = stats['val'][key]
-                if data:  # 检查数据是否为空
-                    print(f"  {key}: {data['mean']:.4f} ± {data['std']:.4f} "
-                          f"(范围: [{data['min']:.4f}, {data['max']:.4f}], n={data['count']})")
+                if data:
+                    print(f"  {key}: {data['mean']:.4f} +/- {data['std']:.4f} "
+                          f"(range: [{data['min']:.4f}, {data['max']:.4f}], n={data['count']})")
 
-    # 测试集指标（显示所有聚合模式）- 层次化结构
+    # Test metrics (all aggregation modes)
     if 'test' in stats:
         test_modes = ['avg', 'best', 'learned']
         metrics = ['val_loss', 'accuracy', 'precision', 'recall', 'f1', 'roc_auc', 'ap','mae', 'rmse', 'r2']
 
-        print("\n🔍 分类任务指标:")
+        print("\nTest metrics:")
         for mode in test_modes:
             if mode in stats['test']:
-                print(f"\n  📊 {mode.upper()}模式:")
+                print(f"\n  {mode.upper()} mode:")
                 for metric in metrics:
                     if metric in stats['test'][mode]:
                         data = stats['test'][mode][metric]
-                        if data:  # 检查数据是否为空
-                            print(f"    {metric}: {data['mean']:.4f} ± {data['std']:.4f} "
-                                  f"(范围: [{data['min']:.4f}, {data['max']:.4f}], n={data['count']})")
+                        if data:
+                            print(f"    {metric}: {data['mean']:.4f} +/- {data['std']:.4f} "
+                                  f"(range: [{data['min']:.4f}, {data['max']:.4f}], n={data['count']})")
 
-    # 时间统计 - 层次化结构
+    # Time stats
     if 'time' in stats:
         if 'total_train_time_sec' in stats['time']:
             data = stats['time']['total_train_time_sec']
             if data:
-                print(f"\n⏱️ 训练时间统计: {data['mean']:.1f} ± {data['std']:.1f} 秒 "
-                      f"(范围: [{data['min']:.1f}, {data['max']:.1f}])")
+                print(f"\nTraining time: {data['mean']:.1f} +/- {data['std']:.1f} sec "
+                      f"(range: [{data['min']:.1f}, {data['max']:.1f}])")
 
         if 'avg_epoch_time_sec' in stats['time']:
             data = stats['time']['avg_epoch_time_sec']
             if data:
-                print(f"⏱️ 平均Epoch时间: {data['mean']:.1f} ± {data['std']:.1f} 秒 "
-                      f"(范围: [{data['min']:.1f}, {data['max']:.1f}])")
+                print(f"Avg epoch time: {data['mean']:.1f} +/- {data['std']:.1f} sec "
+                      f"(range: [{data['min']:.1f}, {data['max']:.1f}])")
 
-    # 显示训练指标统计 - 层次化结构
+    # Training metrics
     if 'train' in stats:
         if 'last_loss' in stats['train'] or 'learning_rate_last' in stats['train']:
-            print(f"\n📚 训练指标:")
+            print(f"\nTraining metrics:")
 
         if 'last_loss' in stats['train']:
             data = stats['train']['last_loss']
             if data:
-                print(f"  最终损失: {data['mean']:.4f} ± {data['std']:.4f} "
-                      f"(范围: [{data['min']:.4f}, {data['max']:.4f}], n={data['count']})")
+                print(f"  Final loss: {data['mean']:.4f} +/- {data['std']:.4f} "
+                      f"(range: [{data['min']:.4f}, {data['max']:.4f}], n={data['count']})")
 
         if 'learning_rate_last' in stats['train']:
             data = stats['train']['learning_rate_last']
             if data:
-                print(f"  最终学习率: {data['mean']:.6f} ± {data['std']:.6f} "
-                      f"(范围: [{data['min']:.6f}, {data['max']:.6f}], n={data['count']})")
+                print(f"  Final LR: {data['mean']:.6f} +/- {data['std']:.6f} "
+                      f"(range: [{data['min']:.6f}, {data['max']:.6f}], n={data['count']})")
 
 
 def _print_pretrain_stats(stats: Dict[str, Any]):
-    """打印预训练统计结果"""
-    print("\n🎯 关键性能指标:")
+    """Print pretrain statistics."""
+    print("\nKey metrics:")
 
     if 'best_val_loss' in stats:
         data = stats['best_val_loss']
-        print(f"  best_val_loss: {data['mean']:.4f} ± {data['std']:.4f} "
-              f"(范围: [{data['min']:.4f}, {data['max']:.4f}], n={data['count']})")
+        print(f"  best_val_loss: {data['mean']:.4f} +/- {data['std']:.4f} "
+              f"(range: [{data['min']:.4f}, {data['max']:.4f}], n={data['count']})")
 
     if 'total_train_time_sec' in stats:
         data = stats['total_train_time_sec']
-        print(f"\n⏱️ 训练时间统计: {data['mean']:.1f} ± {data['std']:.1f} 秒 "
-              f"(范围: [{data['min']:.1f}, {data['max']:.1f}])")
+        print(f"\nTraining time: {data['mean']:.1f} +/- {data['std']:.1f} sec "
+              f"(range: [{data['min']:.1f}, {data['max']:.1f}])")
 
     if 'avg_epoch_time_sec' in stats:
         data = stats['avg_epoch_time_sec']
-        print(f"⏱️ 平均Epoch时间: {data['mean']:.1f} ± {data['std']:.1f} 秒 "
-              f"(范围: [{data['min']:.1f}, {data['max']:.1f}])")
+        print(f"Avg epoch time: {data['mean']:.1f} +/- {data['std']:.1f} sec "
+              f"(range: [{data['min']:.1f}, {data['max']:.1f}])")
 
     if 'effective_max_length' in stats:
         data = stats['effective_max_length']
-        print(f"\n📏 最大序列长度: {data['mean']:.0f} ± {data['std']:.0f} "
-              f"(范围: [{data['min']:.0f}, {data['max']:.0f}])")
+        print(f"\nMax seq length: {data['mean']:.0f} +/- {data['std']:.0f} "
+              f"(range: [{data['min']:.0f}, {data['max']:.0f}])")
 
 
 def generate_detailed_report(aggregated: Dict[str, Any], task_type: str, output_file: Optional[str] = None) -> str:
     """
-    生成详细的聚合报告
+    Generate a detailed aggregation report.
 
     Args:
-        aggregated: 聚合结果
-        task_type: 任务类型
-        output_file: 输出文件路径，如果为None则返回字符串
+        aggregated: Aggregated results
+        task_type: Task type
+        output_file: Output file path; returns string if None
 
     Returns:
-        详细报告字符串
+        Report string
     """
     if not aggregated:
-        report = "❌ 无聚合结果可生成报告"
+        report = "No aggregated results to generate report"
         if output_file:
             with open(output_file, 'w', encoding='utf-8') as f:
                 f.write(report)
@@ -474,15 +474,15 @@ def generate_detailed_report(aggregated: Dict[str, Any], task_type: str, output_
 
     report_lines = []
     report_lines.append("=" * 80)
-    report_lines.append(f"📊 {task_type.upper()} 重复运行详细聚合报告")
+    report_lines.append(f"{task_type.upper()} Detailed Aggregation Report")
     report_lines.append("=" * 80)
-    report_lines.append(f"生成时间: {summary.get('aggregation_timestamp', 'unknown')}")
-    report_lines.append(f"总运行次数: {summary.get('total_runs', 0)}")
-    report_lines.append(f"任务类型: {summary.get('task_type', 'unknown')}")
+    report_lines.append(f"Generated: {summary.get('aggregation_timestamp', 'unknown')}")
+    report_lines.append(f"Total runs: {summary.get('total_runs', 0)}")
+    report_lines.append(f"Task type: {summary.get('task_type', 'unknown')}")
     report_lines.append("")
 
-    # 统计摘要
-    report_lines.append("📈 统计摘要:")
+    # Statistics summary
+    report_lines.append("Statistics Summary:")
     report_lines.append("-" * 40)
 
     if task_type == "finetune":
@@ -490,29 +490,29 @@ def generate_detailed_report(aggregated: Dict[str, Any], task_type: str, output_
     elif task_type == "pretrain":
         _add_pretrain_stats_to_report(stats, report_lines)
     else:
-        report_lines.append(f"⚠️ 未知任务类型: {task_type}")
+        report_lines.append(f"Unknown task type: {task_type}")
 
-    # 单个运行详情
+    # Individual run details
     report_lines.append("")
-    report_lines.append("🔍 单个运行详情:")
+    report_lines.append("Individual Run Details:")
     report_lines.append("-" * 40)
 
     for run in individual_runs:
-        report_lines.append(f"运行 {run['run_id']} (seed={run['seed']}):")
+        report_lines.append(f"Run {run['run_id']} (seed={run['seed']}):")
         if task_type == "finetune":
             if run.get('best_val_loss') is not None:
-                report_lines.append(f"  最佳验证损失: {run['best_val_loss']:.4f}")
+                report_lines.append(f"  Best val loss: {run['best_val_loss']:.4f}")
             if run.get('test_mae') is not None:
-                report_lines.append(f"  测试MAE: {run['test_mae']:.4f}")
+                report_lines.append(f"  Test MAE: {run['test_mae']:.4f}")
             if run.get('total_train_time_sec') is not None:
-                report_lines.append(f"  训练时间: {run['total_train_time_sec']:.1f}秒")
+                report_lines.append(f"  Training time: {run['total_train_time_sec']:.1f}s")
         elif task_type == "pretrain":
             if run.get('best_val_loss') is not None:
-                report_lines.append(f"  最佳验证损失: {run['best_val_loss']:.4f}")
+                report_lines.append(f"  Best val loss: {run['best_val_loss']:.4f}")
             if run.get('total_train_time_sec') is not None:
-                report_lines.append(f"  训练时间: {run['total_train_time_sec']:.1f}秒")
+                report_lines.append(f"  Training time: {run['total_train_time_sec']:.1f}s")
             if run.get('effective_max_length') is not None:
-                report_lines.append(f"  最大序列长度: {run['effective_max_length']}")
+                report_lines.append(f"  Max seq length: {run['effective_max_length']}")
         report_lines.append("")
 
     report_lines.append("=" * 80)
@@ -523,60 +523,60 @@ def generate_detailed_report(aggregated: Dict[str, Any], task_type: str, output_
         Path(output_file).parent.mkdir(parents=True, exist_ok=True)
         with open(output_file, 'w', encoding='utf-8') as f:
             f.write(report)
-        logger.info(f"📝 详细报告已保存: {output_file}")
+        logger.info(f"Detailed report saved: {output_file}")
 
     return report
 
 
 def _add_finetune_stats_to_report(stats: Dict[str, Any], report_lines: List[str]):
-    """添加微调统计到报告"""
-    # 验证集指标
+    """Add finetune stats to report."""
+    # Validation metrics
     val_keys = ['best_val_mae', 'best_val_rmse', 'best_val_r2', 'best_val_loss']
-    report_lines.append("🎯 验证集指标:")
+    report_lines.append("Validation metrics:")
     for key in val_keys:
         if key in stats:
             data = stats[key]
             metric_name = key.replace('best_val_', '')
             report_lines.append(f"  {metric_name}: {data['mean']:.4f} ± {data['std']:.4f}")
-            report_lines.append(f"    范围: [{data['min']:.4f}, {data['max']:.4f}] (n={data['count']})")
+            report_lines.append(f"    Range: [{data['min']:.4f}, {data['max']:.4f}] (n={data['count']})")
             if 'ci_95' in data:
-                report_lines.append(f"    95%置信区间: ±{data['ci_95']:.4f}")
+                report_lines.append(f"    95% CI: +/-{data['ci_95']:.4f}")
 
-    # 测试集指标 - 所有聚合模式
+    # Test metrics - all aggregation modes
     test_modes = ['avg', 'best', 'learned']
     primary_metrics = ['mae', 'rmse', 'r2', 'loss']
 
     for mode in test_modes:
-        report_lines.append(f"\n📊 {mode.upper()}聚合模式测试指标:")
+        report_lines.append(f"\n{mode.upper()} aggregation test metrics:")
         for metric in primary_metrics:
             key = f"test_{mode}_{metric}"
             if key in stats:
                 data = stats[key]
                 report_lines.append(f"  {metric}: {data['mean']:.4f} ± {data['std']:.4f}")
-                report_lines.append(f"    范围: [{data['min']:.4f}, {data['max']:.4f}] (n={data['count']})")
+                report_lines.append(f"    Range: [{data['min']:.4f}, {data['max']:.4f}] (n={data['count']})")
 
-    # 时间统计
+    # Time stats
     if 'total_train_time_sec' in stats:
         data = stats['total_train_time_sec']
-        report_lines.append("\n⏱️ 时间统计:")
-        report_lines.append(f"  总训练时间: {data['mean']:.1f} ± {data['std']:.1f} 秒")
-        report_lines.append(f"    范围: [{data['min']:.1f}, {data['max']:.1f}] 秒")
+        report_lines.append("\nTime statistics:")
+        report_lines.append(f"  Total training time: {data['mean']:.1f} +/- {data['std']:.1f} sec")
+        report_lines.append(f"    Range: [{data['min']:.1f}, {data['max']:.1f}] sec")
 
 
 def _add_pretrain_stats_to_report(stats: Dict[str, Any], report_lines: List[str]):
-    """添加预训练统计到报告"""
+    """Add pretrain stats to report."""
     if 'best_val_loss' in stats:
         data = stats['best_val_loss']
-        report_lines.append("🎯 验证损失:")
-        report_lines.append(f"  均值: {data['mean']:.4f} ± {data['std']:.4f}")
-        report_lines.append(f"  范围: [{data['min']:.4f}, {data['max']:.4f}] (n={data['count']})")
+        report_lines.append("Validation loss:")
+        report_lines.append(f"  Mean: {data['mean']:.4f} +/- {data['std']:.4f}")
+        report_lines.append(f"  Range: [{data['min']:.4f}, {data['max']:.4f}] (n={data['count']})")
 
     if 'total_train_time_sec' in stats:
         data = stats['total_train_time_sec']
-        report_lines.append("\n⏱️ 训练时间:")
-        report_lines.append(f"  总时间: {data['mean']:.1f} ± {data['std']:.1f} 秒")
+        report_lines.append("\nTraining time:")
+        report_lines.append(f"  Total: {data['mean']:.1f} +/- {data['std']:.1f} sec")
 
     if 'effective_max_length' in stats:
         data = stats['effective_max_length']
-        report_lines.append("\n📏 序列长度:")
-        report_lines.append(f"  最大长度: {data['mean']:.0f} ± {data['std']:.0f}")
+        report_lines.append("\nSequence length:")
+        report_lines.append(f"  Max length: {data['mean']:.0f} +/- {data['std']:.0f}")

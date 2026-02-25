@@ -1,17 +1,11 @@
-"""
-数据层模块 - 统一的图数据集接口
-============================
+"""Data layer - unified graph dataset interface."""
 
-提供统一的图数据集加载和处理接口，支持多种图数据集。
-"""
+# from .qm9_loader import QM9Loader  # avoid forcing DGL import at package level
 
-# from .qm9_loader import QM9Loader
-# from .qm9_loader import QM9Loader  # 避免在导入数据层时强制导入 DGL 依赖的数据集
-
-# 为避免在导入本包时触发 DGL 的重依赖，仅在需要时由调用方延迟导入
+# Lazy-import heavy DGL deps only when needed
 # from .single_graph_loader import SingleGraphLoader, load_single_graph_dataset
 
-# 新的统一数据加载器工厂 - 推荐使用
+# Unified data loader factory (recommended)
 from .unified_data_factory import (
     UnifiedDataFactory,
     get_dataloader,
@@ -20,22 +14,22 @@ from .unified_data_factory import (
     get_dataset_info
 )
 
-# 统一数据接口
-# 注意：不要在此处导入 UnifiedDataInterface 以避免循环依赖
-# 需要使用时，请直接 from src.data.unified_data_interface import UnifiedDataInterface
+# Unified data interface
+# Note: do not import UnifiedDataInterface here to avoid circular imports
+# Use: from src.data.unified_data_interface import UnifiedDataInterface
 
-# 预处理数据加载接口 (即将废弃，请使用 UnifiedDataInterface)
-# 暂时保留以避免立即破坏现有代码
+# Legacy preprocessed data interface (deprecated; use UnifiedDataInterface)
+# Kept temporarily for backward compatibility
 
-# 导出公共接口
+# Public API
 __all__ = [
-    # 新的统一数据加载器工厂 - 推荐使用
+    # Unified data loader factory (recommended)
     'UnifiedDataFactory',
     'get_dataloader',
     'get_dataset',
     'list_available_datasets',
     'get_dataset_info',
     
-    # 统一数据接口 - 推荐使用
-    # 'UnifiedDataInterface',  # 为避免循环依赖，停止在此处导出
+    # Unified data interface (recommended)
+    # 'UnifiedDataInterface',  # not exported here to avoid circular imports
 ]

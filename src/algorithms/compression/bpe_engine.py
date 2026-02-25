@@ -5,19 +5,14 @@ from typing import List, Tuple, Optional, Dict
 
 class BPEEngine:
     """
-    统一的高性能 BPE 训练+编码引擎（可选后端）。
+    Unified high-performance BPE train + encode engine (pluggable backends).
 
-    - 训练（train_backend="cpp"|"numba"|"python"）
-      - cpp  : C++ 原生 minBPE 训练（每轮重统计、词典序 tie-break、非重叠合并）
-      # - numba: Numba 加速 minBPE 训练（ragged 扁平数组 + JIT 内核）
-      - python: StandardBPECompressor（增量频次表，作兼容/对照）
+    Training backends: "cpp" | "numba" | "python"
+    Encode backend: "cpp" (C++/pybind11, recommended)
 
-    - 编码（encode_backend="cpp"）
-      - cpp  : C++/pybind11 后端（推荐且唯一支持）
-
-    训练产物与 minBPE 参考语义等价：
-    - 产出 merge_rules: List[Tuple[left_id, right_id, new_id]]；
-    - vocab_size = base_vocab_size + num_merges_performed。
+    Output is semantically equivalent to minBPE reference:
+    - merge_rules: List[Tuple[left_id, right_id, new_id]]
+    - vocab_size = base_vocab_size + num_merges_performed
     """
 
     def __init__(self, *, train_backend: str = "cpp", encode_backend: str = "cpp",
@@ -39,19 +34,19 @@ class BPEEngine:
     # ---------------- Training ----------------
     def train(self, token_sequences: List[List[int]], *, num_merges: int, min_frequency: int) -> Dict:
         if self.train_backend == "numba":
-            # 使用遵循 minBPE 逻辑的 numba 实现（每轮重统计 + ragged 合并）
+            # numba minBPE implementation (re-stats each round + ragged merge)
             return self._train_minbpe_numba(token_sequences, num_merges, min_frequency)
         elif self.train_backend == "python":
             from .main_bpe import StandardBPECompressor
             comp = StandardBPECompressor(num_merges=num_merges, min_frequency=min_frequency, debug=False)
             stats = comp.train(token_sequences)
-            # 提取 merge_rules 与 vocab_size 以统一下游接口
+            # Extract merge_rules and vocab_size for unified downstream interface
             self.merge_rules = list(comp.merge_rules)
             self.vocab_size = len(comp.token_to_id)
             return {"num_merges_performed": stats.get("num_merges_performed", len(self.merge_rules)),
                     "final_vocab_size": self.vocab_size}
         elif self.train_backend == "cpp":
-            # 使用 C++ 原生 minBPE 训练
+            # C++ native minBPE training
             from .cpp_bpe_backend import CppBPEBackend
             results = CppBPEBackend.train_minbpe_cpp(token_sequences, int(num_merges), int(min_frequency))
             self.merge_rules = results["merge_rules"]
@@ -59,15 +54,15 @@ class BPEEngine:
             return {"num_merges_performed": int(results["num_merges_performed"]),
                     "final_vocab_size": self.vocab_size}
         else:
-            raise ValueError(f"不支持的 train_backend: {self.train_backend}")
+            raise ValueError(f"Unsupported train_backend: {self.train_backend}")
 
     
 
     def _train_minbpe_numba(self, token_sequences: List[List[int]], num_merges: int, min_frequency: int) -> Dict:
-        """使用 numba 加速的 BPE 训练（严格遵循 minBPE 逻辑）。"""
+        """Numba-accelerated BPE training (strict minBPE logic)."""
         from .numba_bpe_train import count_pairs_ragged, apply_merge_ragged, select_best_pair
 
-        # 统计基础词表
+        # Count base vocabulary
         base_vocab: Dict[int, None] = {}
         for s in token_sequences:
             for t in s:
@@ -76,11 +71,11 @@ class BPEEngine:
         base_vocab_size = len(base_vocab)
         max_base_id = max(base_vocab.keys()) if base_vocab else -1
 
-        # 与 minBPE 的 ID 分配策略对齐
-        separator_token = max_base_id + 1  # 虚拟分隔符，仅用于计算 next_id 起点
+        # Align with minBPE ID assignment
+        separator_token = max_base_id + 1  # virtual separator for next_id offset
         next_id = separator_token + 1
 
-        # 转换为 ragged 数据结构
+        # Convert to ragged data structure
         import numpy as np
         offsets = [0]
         flat = []
@@ -90,7 +85,7 @@ class BPEEngine:
         flat = np.asarray(flat, dtype=np.int32)
         offsets = np.asarray(offsets, dtype=np.int32)
 
-        # 预热 numba JIT（小样本，避免长时间 warmup）
+        # Warm up numba JIT (small sample)
         if len(offsets) > 2:
             warm_n = min(2, len(offsets) - 1)
             w_flat = flat[:offsets[warm_n]]
@@ -99,14 +94,14 @@ class BPEEngine:
             if w_offsets[-1] >= 3:
                 _ = apply_merge_ragged(w_flat, w_offsets, np.int32(w_flat[0]), np.int32(w_flat[1]), np.int32(10))
 
-        # 初始统计
+        # Initial pair stats
         pair_keys, pair_counts = count_pairs_ragged(flat, offsets)
 
         merges_done = 0
         merge_rules: List[Tuple[int, int, int]] = []
 
         while merges_done < num_merges:
-            # 在 numba 内核中完成“选择最佳 pair”（减少 Python 循环）
+            # Select best pair in numba kernel
             best_left_i32, best_right_i32, best_freq_i32 = select_best_pair(pair_keys, pair_counts, np.int32(min_frequency))
             best_freq = int(best_freq_i32)
             if best_freq < int(min_frequency):
@@ -117,12 +112,12 @@ class BPEEngine:
             new_id = next_id
             next_id += 1
 
-            # 应用一次合并
+            # Apply one merge
             flat, offsets = apply_merge_ragged(
                 flat, offsets, np.int32(left_id), np.int32(right_id), np.int32(new_id)
             )
 
-            # 重新统计下一轮的 pair 频次
+            # Re-count pair frequencies for next round
             pair_keys, pair_counts = count_pairs_ragged(flat, offsets)
 
             merge_rules.append((int(left_id), int(right_id), int(new_id)))
@@ -138,7 +133,7 @@ class BPEEngine:
     # ---------------- Encode backend ----------------
     def build_encoder(self) -> None:
         if self.merge_rules is None or self.vocab_size is None:
-            raise ValueError("请先完成训练或从文件加载 codebook")
+            raise ValueError("Train first or load a codebook")
         if self.encode_backend == "cpp":
             from .cpp_bpe_backend import CppBPEBackend
             self._encoder = CppBPEBackend.from_codebook(
@@ -148,14 +143,14 @@ class BPEEngine:
                 vocab_size=self.vocab_size,
             )
         else:
-            raise ValueError(f"不支持的 encode_backend: {self.encode_backend}")
+            raise ValueError(f"Unsupported encode_backend: {self.encode_backend}")
 
     def encode(self, seq: List[int]) -> List[int]:
-        # 特殊模式：none - 不进行任何BPE编码，直接返回原序列（零拷贝优化）
+        # Special mode: none - skip BPE encoding entirely
         if self.encode_rank_mode == "none":
-            return seq  # 直接返回，避免不必要的切片开销
+            return seq
             
-        # 按需采样 topk
+        # Sample topk if needed
         if self.encode_backend == "cpp" and self.encode_rank_mode in ("topk","random","gaussian"):
             topk = self._sample_topk()
             from .cpp_bpe_backend import CppBPEBackend
@@ -163,16 +158,15 @@ class BPEEngine:
                 return self._encoder.encode_topk(seq, int(topk))
         if self._encoder is None:
             self.build_encoder()
-        # 所有编码器后端都应该实现统一的 encode 接口
-        assert self._encoder is not None, "编码器未正确构建"
+        assert self._encoder is not None, "Encoder not built"
         return self._encoder.encode(seq)
 
     def batch_encode(self, seqs: List[List[int]]) -> List[List[int]]:
-        # 特殊模式：none - 不进行任何BPE编码，直接返回原序列（零拷贝优化）
+        # Special mode: none - skip BPE encoding entirely
         if self.encode_rank_mode == "none":
-            return seqs  # 直接返回，避免不必要的切片开销
+            return seqs
             
-        # 按需采样 topk（同一批共用一次采样，稳定性能）
+        # Sample topk (shared across batch for stability)
         if self.encode_backend == "cpp" and self.encode_rank_mode in ("topk","random","gaussian"):
             topk = self._sample_topk()
             from .cpp_bpe_backend import CppBPEBackend
@@ -180,22 +174,20 @@ class BPEEngine:
                 return self._encoder.batch_encode_topk(seqs, int(topk))
         if self._encoder is None:
             self.build_encoder()
-        # 所有编码器后端都应该实现 batch_encode，或提供 encode 的回退实现
-        assert self._encoder is not None, "编码器未正确构建"
+        assert self._encoder is not None, "Encoder not built"
         if hasattr(self._encoder, "batch_encode"):
             return self._encoder.batch_encode(seqs)
-        # 回退到单个编码（某些简单后端可能只实现 encode）
+        # Fallback to single encode
         return [self.encode(s) for s in seqs]
 
-    # 采样 topk 的内部策略
+    # Internal topk sampling strategy
     def _sample_topk(self) -> Optional[int]:
         import random
         if self.encode_rank_mode == 'all':
             return None
         if self.encode_rank_mode == 'topk':
             return int(self.encode_rank_k) if self.encode_rank_k is not None else None
-        # random/gaussian 需要在 [min,max] 之间采样
-        # 默认区间：若未提供 min/max，则使用 [0, len(merge_rules)]
+        # random/gaussian sample in [min, max]
         if self.encode_rank_min is None or self.encode_rank_max is None:
             a = 0
             b = len(self.merge_rules) if self.merge_rules is not None else 0
@@ -209,15 +201,15 @@ class BPEEngine:
             if (self.encode_rank_dist or 'uniform') == 'uniform':
                 return random.randint(a, b)
             if self.encode_rank_dist == 'triangular':
-                mode = b  # 偏向使用更多 rules
+                mode = b  # bias toward using more rules
                 return int(random.triangular(a, b, mode))
-            # 默认 uniform
+            # default: uniform
             return random.randint(a, b)
         if self.encode_rank_mode == 'gaussian':
-            # 以 max 为均值的截断高斯，偏向使用更多 rules
+            # Truncated Gaussian centered at max (bias toward more rules)
             mu = float(b)
             sigma = max(1.0, (b - a) / 3.0)
-            # 简易截断
+            # Simple truncation
             for _ in range(8):
                 x = int(random.gauss(mu, sigma))
                 if a <= x <= b:
@@ -227,34 +219,30 @@ class BPEEngine:
 
     # ---------------- Codebook IO (lightweight, path-agnostic policy) ----------------
     def to_codebook(self) -> Dict:
-        """导出最小 codebook 字典（与 UDI 的存取格式一致）。"""
+        """Export minimal codebook dict."""
         if self.merge_rules is None or self.vocab_size is None:
-            raise ValueError("codebook 未初始化")
+            raise ValueError("Codebook not initialized")
         return {
             "merge_rules": list(self.merge_rules),
             "vocab_size": int(self.vocab_size),
         }
 
     def load_codebook_dict(self, data: Dict) -> None:
-        """从字典加载 codebook（不涉及路径组织）。"""
+        """Load codebook from dict."""
         assert isinstance(data, dict) and 'merge_rules' in data and 'vocab_size' in data, (
-            "codebook 字典缺少必要字段: 'merge_rules' 或 'vocab_size'"
+            "Codebook dict missing required fields: 'merge_rules' or 'vocab_size'"
         )
         self.merge_rules = [tuple(int(x) for x in t) for t in data['merge_rules']]
         self.vocab_size = int(data['vocab_size'])
         self._encoder = None
 
     def save_codebook(self, path: str) -> None:
-        """保存 codebook 到给定路径。
-
-        说明：仅负责文件写入，不负责路径层级的组织。调用方应提供完整路径。
-        支持 .pkl 或 .json 后缀；其他后缀直接报错。
-        """
+        """Save codebook to file (.pkl or .json)."""
         import os
         import pickle
         import json
         if self.merge_rules is None or self.vocab_size is None:
-            raise ValueError("codebook 未初始化")
+            raise ValueError("Codebook not initialized")
         suffix = os.path.splitext(path)[1].lower()
         data = self.to_codebook()
         if suffix == '.pkl' or suffix == '.pickle':
@@ -264,10 +252,10 @@ class BPEEngine:
             with open(path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False)
         else:
-            raise ValueError(f"不支持的 codebook 文件后缀: {suffix}，请使用 .pkl 或 .json")
+            raise ValueError(f"Unsupported codebook file extension: {suffix}. Use .pkl or .json.")
 
     def load_codebook(self, path: str) -> None:
-        """从给定路径加载 codebook（支持 .pkl/.json）。"""
+        """Load codebook from file (.pkl or .json)."""
         import os
         import pickle
         import json
@@ -279,19 +267,19 @@ class BPEEngine:
             with open(path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
         else:
-            raise ValueError(f"不支持的 codebook 文件后缀: {suffix}，请使用 .pkl 或 .json")
+            raise ValueError(f"Unsupported codebook file extension: {suffix}. Use .pkl or .json.")
         self.load_codebook_dict(data)
 
     @classmethod
     def from_codebook_dict(cls, data: Dict, *, encode_backend: str = 'cpp', **engine_kwargs) -> "BPEEngine":
-        """从 codebook 字典构建只用于编码的引擎。"""
+        """Build encode-only engine from codebook dict."""
         eng = cls(train_backend='python', encode_backend=encode_backend, **engine_kwargs)
         eng.load_codebook_dict(data)
         return eng
 
     @classmethod
     def load_codebook_to_engine(cls, path: str, *, encode_backend: str = 'cpp', **engine_kwargs) -> "BPEEngine":
-        """从文件加载 codebook 并返回引擎实例（编码后端可选）。"""
+        """Load codebook from file and return an engine instance."""
         eng = cls(train_backend='python', encode_backend=encode_backend, **engine_kwargs)
         eng.load_codebook(path)
         return eng

@@ -6,52 +6,36 @@ import numpy as np
 try:
     from numba import njit  # noqa: F401
 except Exception:
-    # 为保持兼容性而保留文件；主线不再调用 numba 版本
+    # File kept for compatibility; main path no longer calls numba version
     def njit(*a, **kw):  # type: ignore
         def deco(fn):
             return fn
         return deco
 
 """
-Numba 加速的 BPE 训练核心（遵循标准 minbpe 逻辑）
+Numba-accelerated BPE training core (follows standard minbpe logic).
 
-设计目标：
-- 完全遵循 minbpe 的训练逻辑：每轮重新统计，选择频次最高的pair
-- 使用 numba 加速关键循环：pair统计 与 merge操作
-- 数据形态：int32 连续数组；pair 键以 int64 打包：(l<<32)|r
+Key functions:
+- count_pairs_ragged: count adjacent pair frequencies in ragged sequences
+- apply_merge_ragged: apply one non-overlapping merge on ragged sequences
+- select_best_pair: pick highest-frequency pair with lexicographic tie-break
 
-提供的函数：
-- count_pairs_ragged(flat:int32[:], offsets:int32[:]) -> (pair_keys:int64[:], counts:int32[:])
-- apply_merge_ragged(flat:int32[:], offsets:int32[:], left:int32, right:int32, new_id:int32) -> (new_flat:int32[:], new_offsets:int32[:])
-
-注意：
-- 这两个函数均为纯数值核，不依赖 Python 字典；适合在训练循环中被重复调用。
+Data layout: int32 flat arrays; pair keys packed as int64: (left<<32)|right.
 """
 
 
 @njit(cache=True, inline="always")
 def _pack_pair_int64(left: np.int32, right: np.int32) -> np.int64:
-    """将 (left,right) 打包为 int64 键: (left<<32)|right。
-    使用显式的 int64 转换避免溢出。
-    """
+    """Pack (left, right) into int64 key: (left<<32)|right."""
     return (np.int64(left) << np.int64(32)) | (np.int64(right) & np.int64(0xFFFFFFFF))
 
 
 @njit(cache=True)
 def count_pairs_ragged(flat: np.ndarray, offsets: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-    """统计 ragged 序列的全局相邻 pair 频次。
-
-    参数：
-    - flat: int32 一维数组，拼接后的所有 token
-    - offsets: int32 一维数组，长度为 num_seqs+1，offsets[i]:offsets[i+1] 表示第 i 个序列
-
-    返回：
-    - pair_keys: int64 一维数组，去重后的 pair 键
-    - counts: int32 一维数组，对应 pair 的出现次数
-    """
+    """Count global adjacent pair frequencies in ragged sequences."""
     num_seqs = offsets.size - 1
 
-    # 计算总的 pair 数量
+    # Count total pairs
     total_pairs = 0
     for s in range(num_seqs):
         start = int(offsets[s])
@@ -63,7 +47,7 @@ def count_pairs_ragged(flat: np.ndarray, offsets: np.ndarray) -> Tuple[np.ndarra
     if total_pairs == 0:
         return np.empty(0, dtype=np.int64), np.empty(0, dtype=np.int32)
 
-    # 收集所有 pair 键
+    # Collect all pair keys
     pair_keys = np.empty(total_pairs, dtype=np.int64)
     k = 0
     for s in range(num_seqs):
@@ -73,7 +57,7 @@ def count_pairs_ragged(flat: np.ndarray, offsets: np.ndarray) -> Tuple[np.ndarra
             pair_keys[k] = _pack_pair_int64(flat[i], flat[i + 1])
             k += 1
 
-    # 排序并进行游程压缩得到 (unique_key, count)
+    # Sort and run-length encode to get (unique_key, count)
     pair_keys.sort()
 
     uniq_keys = np.empty(total_pairs, dtype=np.int64)
@@ -92,7 +76,7 @@ def count_pairs_ragged(flat: np.ndarray, offsets: np.ndarray) -> Tuple[np.ndarra
             out_idx += 1
             run_key = key
             run_count = 1
-    # 最后一段
+    # Last run
     uniq_keys[out_idx] = run_key
     counts[out_idx] = run_count
     out_idx += 1
@@ -102,12 +86,7 @@ def count_pairs_ragged(flat: np.ndarray, offsets: np.ndarray) -> Tuple[np.ndarra
 
 @njit(cache=True)
 def select_best_pair(pair_keys: np.ndarray, pair_counts: np.ndarray, min_frequency: np.int32) -> Tuple[np.int32, np.int32, np.int32]:
-    """从 (pair_keys, pair_counts) 中选择频次最高、且满足 min_frequency 的 pair。
-
-    在频次相同的情况下，按 (left_id, right_id) 的字典序最小进行 tie-break。
-
-    返回：(best_left, best_right, best_freq)。若无满足者，best_freq 返回 -1。
-    """
+    """Select highest-frequency pair meeting min_frequency, with lexicographic tie-break."""
     best_freq = np.int32(-1)
     best_left = np.int32(0)
     best_right = np.int32(0)
@@ -132,7 +111,7 @@ def select_best_pair(pair_keys: np.ndarray, pair_counts: np.ndarray, min_frequen
 
 @njit(cache=True)
 def _compute_new_lengths(flat: np.ndarray, offsets: np.ndarray, left: np.int32, right: np.int32) -> Tuple[np.ndarray, int]:
-    """第一遍：计算每个序列在应用 merge 后的长度，以及总长度。"""
+    """Pass 1: compute post-merge length per sequence and total length."""
     num_seqs = offsets.size - 1
     new_lengths = np.empty(num_seqs, dtype=np.int32)
     total_new = 0
@@ -143,7 +122,7 @@ def _compute_new_lengths(flat: np.ndarray, offsets: np.ndarray, left: np.int32, 
         new_len = 0
         while j < end:
             if j + 1 < end and flat[j] == left and flat[j + 1] == right:
-                # 命中 (left,right) -> new_id，非重叠替换
+                # Match (left, right) -> new_id, non-overlapping
                 new_len += 1
                 j += 2
             else:
@@ -157,7 +136,7 @@ def _compute_new_lengths(flat: np.ndarray, offsets: np.ndarray, left: np.int32, 
 @njit(cache=True)
 def _fill_merged(flat: np.ndarray, offsets: np.ndarray, left: np.int32, right: np.int32, new_id: np.int32,
                  out_flat: np.ndarray, out_offsets: np.ndarray) -> None:
-    """第二遍：按 out_offsets 提供的起点，填充合并后的序列到 out_flat。串行以降低并发复杂度。"""
+    """Pass 2: fill merged sequences into out_flat using out_offsets."""
     num_seqs = offsets.size - 1
     for s in range(num_seqs):
         start = int(offsets[s])
@@ -178,11 +157,8 @@ def _fill_merged(flat: np.ndarray, offsets: np.ndarray, left: np.int32, right: n
 @njit(cache=True)
 def apply_merge_ragged(flat: np.ndarray, offsets: np.ndarray,
                        left: np.int32, right: np.int32, new_id: np.int32) -> Tuple[np.ndarray, np.ndarray]:
-    """对 ragged 序列应用一次 (left,right)->new_id 的非重叠 merge。
-
-    返回合并后的新 flat 与新 offsets。
-    """
-    # 第一遍：长度统计
+    """Apply one non-overlapping (left,right)->new_id merge on ragged sequences."""
+    # Pass 1: length stats
     new_lengths, total_new = _compute_new_lengths(flat, offsets, left, right)
 
     num_seqs = offsets.size - 1
@@ -193,7 +169,7 @@ def apply_merge_ragged(flat: np.ndarray, offsets: np.ndarray,
 
     out_flat = np.empty(total_new, dtype=np.int32)
 
-    # 第二遍：并行填充
+    # Pass 2: fill merged data
     _fill_merged(flat, offsets, left, right, new_id, out_flat, out_offsets)
 
     return out_flat, out_offsets

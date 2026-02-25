@@ -1,43 +1,25 @@
 #!/usr/bin/env python3
 """
-单个方法 BERT 预训练脚本（权威用法）
-================================
+BERT pre-training script (single method).
 
-本脚本是项目内“标准/唯一”的预训练入口，被批量脚本与超参搜索脚本调用。
+This is the standard entry point for pre-training, called by batch scripts and
+hyperparameter search scripts.
 
-必须参数（命令行）:
-  --dataset DATASET   例如: qm9, qm9test, zinc, ...
-  --method  METHOD    例如: feuler, eulerian, cpp, fcpp, topo, smilesHeyBaby
-  --bpe_encode_rank_mode MODE BPE模式: none|all|topk|random|gaussian
-  --epochs E                  训练轮数
-  --batch_size B              批大小
-  --learning_rate LR          学习率
-  --config_json JSON_OR_PATH  高级配置（JSON字符串或文件路径），用于嵌套项覆盖
+Required args:
+  --dataset DATASET             e.g. qm9, qm9test, zinc, ...
+  --method  METHOD              e.g. feuler, eulerian, cpp, fcpp, topo, smiles
+  --bpe_encode_rank_mode MODE   BPE mode: none|all|topk|random|gaussian
+  --epochs E                    training epochs
+  --batch_size B                batch size
+  --learning_rate LR            learning rate
+  --config_json JSON_OR_PATH    advanced config override (JSON string or file path)
 
-推荐实践：用显式 CLI 参数或 --config_json，不要使用其他“覆盖器”。
+Examples:
+  python run_pretrain.py --dataset qm9 --method feuler \
+    --experiment_group my_group --bpe_encode_rank_mode all
 
-示例：用默认配置训练一个可被微调脚本识别的“默认预训练模型”
-  python run_pretrain.py \
-    --dataset qm9 \
-    --method feuler \
-    --experiment_group large_bs_hyperopt_all \
-    --experiment_name  large_bs_all_pt_default \
-    --bpe_encode_rank_mode all
-
-示例：显式指定基础训练超参
-  python run_pretrain.py \
-    --dataset qm9 --method feuler \
-    --experiment_group large_bs_hyperopt_all \
-    --experiment_name  large_bs_all_pt_default \
-    --bpe_encode_rank_mode all \
+  python run_pretrain.py --dataset qm9 --method feuler \
     --epochs 200 --batch_size 256 --learning_rate 4e-4
-
-示例：用 JSON 覆盖嵌套配置（不建议滥用，仅用于必要场景）
-  python run_pretrain.py \
-    --dataset qm9 --method feuler \
-    --experiment_group large_bs_hyperopt_all \
-    --experiment_name  large_bs_all_pt_default \
-    --config_json '{"serialization": {"bpe": {"engine": {"encode_rank_mode": "all"}}}}'
 """
 
 from __future__ import annotations
@@ -55,7 +37,7 @@ from src.training.pretrain_pipeline import train_bert_mlm
 from clearml import Task
 
 
-# 设置项目路径
+# Project path setup
 ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
@@ -72,24 +54,21 @@ from src.utils.config_override import (  # noqa: E402
 
 
 
-# ClearML 任务初始化（支持直接运行和Agent执行）
-# 检测是否已经在任务上下文中（通过Agent执行的情况）
+# ClearML task init (supports both direct run and Agent execution)
 current_task = Task.current_task()
 if current_task is not None:
-    # 已经在任务上下文中，使用现有的任务
     task = current_task
-    print(f"✅ 使用现有ClearML任务: {task.name} (ID: {task.id})")
+    print(f"Using existing ClearML task: {task.name} (ID: {task.id})")
 else:
-    # 直接运行的情况，创建新任务
     try:
         task = Task.init(
             project_name="TokenizerGraph",
             task_name=f"pretrain_manual_{int(time.time())}",
-            auto_connect_frameworks=True  # 确保自动捕获TensorBoard
+            auto_connect_frameworks=True
         )
-        print(f"✅ ClearML任务初始化成功: {task.name} (ID: {task.id})")
+        print(f"ClearML task initialized: {task.name} (ID: {task.id})")
     except Exception as e:
-        print(f"⚠️ ClearML初始化失败，将继续运行: {e}")
+        print(f"ClearML init failed, continuing without it: {e}")
         task = None
 
 
@@ -101,7 +80,7 @@ def _strip_ansi(text: str) -> str:
 
 
 class _AnsiStrippingWriter:
-    """包装标准输出/错误，移除ANSI颜色控制符，并确保UTF-8."""
+    """Wraps stdout/stderr to strip ANSI escape codes and ensure UTF-8."""
     def __init__(self, underlying):
         self._u = underlying
         self.encoding = 'utf-8'
@@ -135,39 +114,39 @@ class _AnsiStrippingWriter:
 
 
 def _ensure_utf8_streams():
-    """确保标准输出/错误为UTF-8并可替换编码。"""
-    # 环境层面
+    """Ensure stdout/stderr use UTF-8 encoding."""
+    # Environment level
     os.environ.setdefault("PYTHONIOENCODING", "utf-8")
     os.environ.setdefault("LANG", "C.UTF-8")
     os.environ.setdefault("LC_ALL", "C.UTF-8")
 
-    # 流层面
+    # Stream level
     for stream_name in ("stdout", "stderr"):
         stream = getattr(sys, stream_name)
         try:
-            # Python 3.7+ 支持 reconfigure
+            # Python 3.7+ supports reconfigure
             stream.reconfigure(encoding='utf-8')  # type: ignore[attr-defined]
         except Exception:
             try:
                 wrapped = io.TextIOWrapper(stream.buffer, encoding='utf-8', errors='replace')  # type: ignore[attr-defined]
                 setattr(sys, stream_name, wrapped)
             except Exception:
-                # 最后兜底：不替换
+                # Last resort: do not replace
                 pass
 
 
 def _configure_output_mode(offline: bool):
-    """根据 offline 模式配置输出：禁用颜色、去除ANSI、尽量减少伪TTY影响。"""
+    """Configure output mode: disable colors, strip ANSI, ensure UTF-8."""
     _ensure_utf8_streams()
 
     if offline:
-        # 关闭颜色、提示TTY为dumb，关闭tqdm等进度条
+        # Disable color, tqdm, set TERM=dumb
         os.environ["NO_COLOR"] = "1"
         os.environ["CLICOLOR"] = "0"
         os.environ["FORCE_COLOR"] = "0"
         os.environ["TERM"] = "dumb"
         os.environ.setdefault("TQDM_DISABLE", "1")
-        # 包装输出，移除ANSI控制符
+        # Wrap output to strip ANSI codes
         if not isinstance(sys.stdout, _AnsiStrippingWriter):
             sys.stdout = _AnsiStrippingWriter(sys.stdout)
         if not isinstance(sys.stderr, _AnsiStrippingWriter):
@@ -175,157 +154,127 @@ def _configure_output_mode(offline: bool):
 
 def run_pretraining(config: ProjectConfig, run_i: Optional[int] = None) -> dict:
     """
-    运行BERT预训练
+    Run BERT pre-training.
 
     Args:
-        config: 项目配置
-        run_i: 重复运行编号
+        config: Project config
+        run_i: Repeat run index
 
     Returns:
-        训练结果字典
+        Training result dict
     """
-    print("🚀 开始BERT预训练...")
+    print("Starting BERT pre-training...")
 
-    # 运行预训练
-    print("🎓 开始模型训练...")
+    print("Training model...")
     try:
         result = train_bert_mlm(config, run_i=run_i)
-        print("✅ 预训练完成!")
+        print("Pre-training complete!")
 
-        print(f"📊 最优验证损失: {result['best_val_loss']:.4f}")
+        print(f"Best val loss: {result['best_val_loss']:.4f}")
 
         return result
 
     except Exception as e:
-        print(f"❌ 预训练失败: {e}")
+        print(f"Pre-training failed: {e}")
         raise
 
 
 def main():
-    """主函数"""
+    """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="单个方法BERT预训练脚本",
+        description="BERT pre-training script (single method)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-使用示例:
-  # 基本使用（默认BPE all模式）
+Examples:
   python run_pretrain.py --dataset qm9test --method feuler
-  
-  # 无BPE压缩（使用原始序列）
   python run_pretrain.py --dataset qm9test --method feuler --bpe_encode_rank_mode none
-  
-  # BPE Top-K压缩
-  python run_pretrain.py --dataset qm9test --method feuler \\
-    --bpe_encode_rank_mode topk --bpe_encode_rank_k 1000
-  
-  # BPE随机压缩
-  python run_pretrain.py --dataset qm9test --method feuler \\
-    --bpe_encode_rank_mode random --bpe_encode_rank_min 100 --bpe_encode_rank_max 2000
-  
-  # BPE高斯采样压缩
-  python run_pretrain.py --dataset qm9test --method feuler \\
-    --bpe_encode_rank_mode gaussian --bpe_encode_rank_k 1500
-  
-  # 自定义训练参数
   python run_pretrain.py --dataset qm9test --method feuler --epochs 10 --batch_size 32
-  
-  # JSON配置覆盖
-  python run_pretrain.py --dataset qm9test --method feuler \\
-    --config_json '{"bert": {"pretraining": {"epochs": 20, "learning_rate": 1e-4}}, 
-                    "serialization": {"bpe": {"engine": {"encode_rank_mode": "topk", "encode_rank_k": 1000}}}}'
         """
     )
     
-    # 添加所有参数（不包含微调参数）
+    # Add all args (excluding finetune args)
     add_all_args(parser, include_finetune=False)
-    # 追加输出控制参数
-    parser.add_argument("--plain_logs", action="store_true", help="启用无颜色、无控制符的离线输出（兼容重定向/日志文件，解决乱码）")
+    parser.add_argument("--plain_logs", action="store_true", help="Enable plain text output (no color/ANSI, for log files)")
     
-    # 解析参数
+    # Parse args
     try:
         args = parser.parse_args()
     except SystemExit as e:
-        print("\n❌ 参数解析失败！传入的参数信息:")
+        print("\nArgument parsing failed! Arguments received:")
         print("=" * 60)
-        print("脚本名称:", sys.argv[0])
-        print("所有传入参数:")
+        print("Script:", sys.argv[0])
+        print("All args:")
         for i, arg in enumerate(sys.argv[1:], 1):
             print(f"  {i:2d}: {arg}")
         print("=" * 60)
-        print("请检查参数是否正确，或使用 --help 查看帮助信息")
+        print("Check arguments or use --help")
         print("=" * 60)
         raise
     
-    print("🔧 初始化配置...")
+    print("Initializing config...")
     
-    # 创建基础配置
     config = ProjectConfig()
     
-    # 如果用户要求显示配置，先显示然后退出
+    # Show config and exit if requested
     if args.show_config:
         show_full_config(config)
         return 0
     
-    # 应用命令行参数到配置
+    # Apply CLI args to config
     apply_args_to_config(config, args)
     
-    # 自动生成实验名称（如果未指定）
+    # Auto-generate experiment name if not specified
     create_experiment_name(config)
     # if config.serialization.bpe.engine.encode_rank_mode == 'none' and config.encoder.type == 'gte':
     #     print(f"Warn: bpe编码模式为Raw，且encoder为GTE,降低bs为一半（由于此encoder是动态显存大小，随序列长度正比）")
     #     config.bert.pretraining.batch_size = config.bert.pretraining.batch_size // 2
     
     
-    # 验证配置
+    # Validate config
     try:
         config.validate()
     except Exception as e:
-        print(f"❌ 配置验证失败: {e}")
+        print(f"Config validation failed: {e}")
         return 1
     
-    # 根据 offline/plian_logs 设置输出模式
+    # Configure output mode based on --plain_logs flag
     try:
-        # 从 args 或配置中判断 offline（优先命令行）
         offline_flag = bool(getattr(args, 'plain_logs', False))
-        # 若配置中定义 system.log_style=offline，也视为离线
-        # 由于此处尚未 apply_args_to_config 完成合并，先用命令行开关控制输出包装
         _configure_output_mode(offline_flag)
     except Exception:
         pass
 
-    # 打印配置摘要
+    # Print config summary
     print_config_summary(config)
     raw_seed=config.system.seed
-    # 🆕 检查是否需要重复运行
+    # Check if repeated runs are needed
     repeat_runs = getattr(config, 'repeat_runs', 1)
 
-    # if repeat_runs > 1:
-    print(f"🔄 启用重复运行模式: {repeat_runs} 次")
+    print(f"Repeat runs: {repeat_runs}")
     all_results = []
     for run_i in range(repeat_runs):
         print(f"\n{'='*60}")
-        print(f"🚀 开始第 {run_i + 1}/{repeat_runs} 次运行")
+        print(f"Starting run {run_i + 1}/{repeat_runs}")
         print(f"{'='*60}")
         
         seed=raw_seed+run_i
         try:
-            # 重新设置种子
             from config import setup_global_seeds
             setup_global_seeds(seed)
             result = run_pretraining(config, run_i=run_i)
             result['seed'] = seed
             all_results.append(result)
-            print(f"✅ 第 {run_i + 1} 次运行完成")
-            print(f"📊 最优验证损失: {result['best_val_loss']:.4f}")
+            print(f"Run {run_i + 1} complete")
+            print(f"Best val loss: {result['best_val_loss']:.4f}")
         except Exception as e:
-            print(f"❌ 第 {run_i + 1} 次运行失败: {e}")
+            print(f"Run {run_i + 1} failed: {e}")
             task.mark_failed()
             raise
           
-    # 聚合统计结果
+    # Aggregate statistics
     if all_results:
         print(f"\n{'='*60}")
-        print("📊 聚合统计结果")
+        print("Aggregated statistics")
         print(f"{'='*60}")
         from src.utils.stats_aggregation import aggregate_experiment_results, print_aggregated_stats
         aggregated = aggregate_experiment_results(

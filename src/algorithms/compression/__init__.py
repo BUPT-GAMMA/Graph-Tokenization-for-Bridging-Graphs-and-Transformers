@@ -1,13 +1,10 @@
-"""
-压缩算法模块
+"""Compression algorithms (BPE).
+压缩算法（BPE）。"""
 
-包含BPE压缩相关的功能
-"""
+from .main_bpe import StandardBPECompressor  # reference implementation (Python)
+from .bpe_engine import BPEEngine  # unified train/encode entry (C++ train + C++/Python encode)
 
-from .main_bpe import StandardBPECompressor  # 参考实现（Python）
-from .bpe_engine import BPEEngine  # 统一训练/编码入口（C++ 训练 + C++/Python 编码）
-
-# 可选后端（仅暴露 C++ 编码后端，训练走 Python/Numba 引擎）
+# Optional backend (C++ encode only)
 try:
     from .cpp_bpe_backend import CppBPEBackend  # noqa: F401
     _cpp_available = True

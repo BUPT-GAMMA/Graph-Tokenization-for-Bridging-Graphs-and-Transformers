@@ -1,18 +1,19 @@
 #!/usr/bin/env python3
 """
-为所有（或指定）数据集，将 token 写入标准特征键：g.ndata['feat'] / g.edata['feat']，并重新保存 data.pkl。
+Write token IDs into standard feature keys (g.ndata['feat'] / g.edata['feat'])
+for all (or specified) datasets and re-save data.pkl.
 
-规则：
-- 节点特征 feat = node_token_ids（若缺失则优先 node_type_id.view(-1,1)，仍缺失则报错）
-- 边特征   feat = edge_token_ids（若缺失则优先 edge_type_id.view(-1,1)，仍缺失则 E=0 则空，否则全 0）
+Rules:
+- Node feat = node_token_ids (fallback: node_type_id.view(-1,1); error if missing)
+- Edge feat = edge_token_ids (fallback: edge_type_id.view(-1,1); zeros if missing)
 
-保存策略：
-- 默认非覆盖：写到 data/gnn_use/<dataset>/data.pkl；同步复制三份划分 JSON
-- 可用 --inplace 覆盖原 data.pkl（可选 --backup 生成 .bak）
+Save strategy:
+- Default: write to data/gnn_use/<dataset>/data.pkl; copy split JSONs
+- --inplace: overwrite original data.pkl (optionally --backup for .bak)
 
-示例：
+Examples:
   python src/data/add_feat_from_tokens.py --datasets "proteins,mutagenicity"
-  python src/data/add_feat_from_tokens.py --inplace --backup   # 处理全部可用数据集
+  python src/data/add_feat_from_tokens.py --inplace --backup
 """
 
 from __future__ import annotations
@@ -29,7 +30,7 @@ from src.data.unified_data_factory import list_available_datasets, get_dataloade
 from config import ProjectConfig
 import json
 
-# 早期数据集：使用其 loader 的 get_graph_*_token_ids 接口获取 token
+# Early datasets: use loader's get_graph_*_token_ids interface
 _EARLY_DATASETS = {"qm9", "qm9test", "zinc", "aqsol"}
 
 
@@ -37,12 +38,12 @@ def _ensure_long_2d(t: torch.Tensor, num_rows: int) -> torch.Tensor:
     t = t.long()
     if t.dim() == 1:
         t = t.view(-1, 1)
-    assert t.shape[0] == num_rows and t.shape[1] == 1, f"feat 形状不符，期望 [{num_rows},1]，得到 {tuple(t.shape)}"
+    assert t.shape[0] == num_rows and t.shape[1] == 1, f"feat shape mismatch: expected [{num_rows},1], got {tuple(t.shape)}"
     return t
 
 
 def _add_feat_to_graph(g, loader=None) -> None:
-    # 节点
+    # Nodes
     n = int(g.num_nodes())
     if loader is not None:
         node_tok = loader.get_graph_node_token_ids(g)
@@ -51,15 +52,15 @@ def _add_feat_to_graph(g, loader=None) -> None:
     elif 'node_type_id' in g.ndata:
         node_tok = g.ndata['node_type_id'].view(-1, 1)
     else:
-        raise KeyError("图缺少 node_token_ids 与 node_type_id，无法构建节点 feat")
+        raise KeyError("Graph missing node_token_ids and node_type_id; cannot build node feat")
     node_tok = _ensure_long_2d(node_tok, n)
-    # 统一保证：节点token为奇数空间（与边错位），若不是则映射为 2*x+1
+    # Ensure node tokens are in odd domain (offset from edges); remap if needed
     if node_tok.numel() > 0:
         if torch.any((node_tok.view(-1) % 2) == 0):
             node_tok = (node_tok * 2 + 1).long()
     g.ndata['feat'] = node_tok
 
-    # 边
+    # Edges
     e = int(g.num_edges())
     if e == 0:
         g.edata['feat'] = torch.empty((0, 1), dtype=torch.long)
@@ -73,7 +74,7 @@ def _add_feat_to_graph(g, loader=None) -> None:
         else:
             edge_tok = torch.zeros((e, 1), dtype=torch.long)
         edge_tok = _ensure_long_2d(edge_tok, e)
-        # 统一保证：边token为偶数空间（与节点错位），若不是则映射为 2*x
+        # Ensure edge tokens are in even domain; remap if needed
         if edge_tok.numel() > 0:
             if torch.any((edge_tok.view(-1) % 2) != 0):
                 edge_tok = (edge_tok * 2).long()
@@ -81,7 +82,7 @@ def _add_feat_to_graph(g, loader=None) -> None:
 
 
 def _strip_to_feat_only(g) -> None:
-    # 仅保留 feat，删除其它 ndata/edata 键以减小体积
+    # Keep only feat; remove other ndata/edata keys to reduce size
     for k in list(g.ndata.keys()):
         if k != 'feat':
             del g.ndata[k]
@@ -91,7 +92,7 @@ def _strip_to_feat_only(g) -> None:
 
 
 def _print_feat_summary(ds_name: str, payload: List[Any], limit: int = 2) -> None:
-    print(f"--- 数据集: {ds_name} 的 feat 概览（最多显示 {limit} 个样本） ---")
+    print(f"--- Dataset: {ds_name} feat overview (up to {limit} samples) ---")
     shown = 0
     for item in payload:
         if shown >= limit:
@@ -111,10 +112,10 @@ def _print_feat_summary(ds_name: str, payload: List[Any], limit: int = 2) -> Non
         ef_dtype = str(ef.dtype) if ef is not None else None
         nf_head = nf.view(-1)[:5].tolist() if nf is not None and nf.numel() > 0 else []
         ef_head = ef.view(-1)[:5].tolist() if ef is not None and ef.numel() > 0 else []
-        print(f"样本{shown}: N={n}, E={e}; node_feat={nf_shape}/{nf_dtype} 例: {nf_head}; edge_feat={ef_shape}/{ef_dtype} 例: {ef_head}")
+        print(f"Sample {shown}: N={n}, E={e}; node_feat={nf_shape}/{nf_dtype} e.g.: {nf_head}; edge_feat={ef_shape}/{ef_dtype} e.g.: {ef_head}")
         shown += 1
     if shown == 0:
-        print("无样本可展示")
+        print("No samples to display")
 
 
 def _process_dataset(ds_name: str, inplace: bool, backup: bool, cfg: ProjectConfig) -> Tuple[str, int]:
@@ -123,19 +124,19 @@ def _process_dataset(ds_name: str, inplace: bool, backup: bool, cfg: ProjectConf
     if not src_file.exists():
         return '', 0
 
-    # 早期数据集：用 loader 加载并按 split 重建原顺序
+    # Early datasets: load via loader and reassemble in original order
     if ds_name in _EARLY_DATASETS:
         try:
             loader = get_dataloader(ds_name, cfg)
             train_data, val_data, test_data, _, _, _ = loader.load_data()
-            # 统一补齐 token 到图上
+            # Populate tokens on graphs
             try:
                 all_samples = train_data + val_data + test_data
                 if hasattr(loader, '_build_attribute_cache'):
-                    loader._build_attribute_cache(all_samples)  # 写入 node/edge_type_id 与 node/edge_token_ids
+                    loader._build_attribute_cache(all_samples)
             except Exception as e:
-                print(f"[WARN] 早期数据集补齐 token 失败（{ds_name}）：{e}")
-            # 读取原始索引
+                print(f"[WARN] Failed to populate tokens for early dataset ({ds_name}): {e}")
+            # Read original indices
             with (data_dir / 'train_index.json').open('r') as f:
                 train_idx = json.load(f)
             with (data_dir / 'val_index.json').open('r') as f:
@@ -144,7 +145,7 @@ def _process_dataset(ds_name: str, inplace: bool, backup: bool, cfg: ProjectConf
                 test_idx = json.load(f)
             total_len = max(train_idx + val_idx + test_idx) + 1 if (train_idx or val_idx or test_idx) else (len(train_data) + len(val_data) + len(test_data))
             assembled: List[Any] = [None] * total_len
-            # 放回原位置：样本 -> (graph, properties)
+            # Place back at original positions
             for pos, s in zip(train_idx, train_data):
                 g = s['dgl_graph']
                 _add_feat_to_graph(g, loader=loader)
@@ -157,11 +158,11 @@ def _process_dataset(ds_name: str, inplace: bool, backup: bool, cfg: ProjectConf
                 g = s['dgl_graph']
                 _add_feat_to_graph(g, loader=loader)
                 assembled[pos] = (g, s.get('properties', {}))
-            # 去除可能的 None（若索引不连续）
+            # Remove possible None entries (non-contiguous indices)
             payload = [x for x in assembled if x is not None]
             updated = len(payload)
         except Exception as e:
-            print(f"[WARN] 早期数据集经 loader 处理失败，回退直接读图字段（{ds_name}）：{e}")
+            print(f"[WARN] Loader processing failed for early dataset ({ds_name}), falling back to raw fields: {e}")
             with src_file.open('rb') as f:
                 payload = pickle.load(f)
             updated = 0
@@ -177,13 +178,13 @@ def _process_dataset(ds_name: str, inplace: bool, backup: bool, cfg: ProjectConf
                 elif isinstance(sample0, dict):
                     for s in payload:
                         g = s.get('dgl_graph')
-                        assert g is not None, '样本缺少 dgl_graph'
+                        assert g is not None, 'Sample missing dgl_graph'
                         _add_feat_to_graph(g, loader=None)
                         updated += 1
                 else:
-                    raise TypeError('不支持的 data.pkl 元素类型')
+                    raise TypeError('Unsupported data.pkl element type')
     else:
-        # 常规数据集：直接读取并写入 feat
+        # Regular datasets: read and write feat directly
         with src_file.open('rb') as f:
             payload = pickle.load(f)
         updated = 0
@@ -199,13 +200,13 @@ def _process_dataset(ds_name: str, inplace: bool, backup: bool, cfg: ProjectConf
             elif isinstance(sample0, dict):
                 for s in payload:
                     g = s.get('dgl_graph')
-                    assert g is not None, '样本缺少 dgl_graph'
+                    assert g is not None, 'Sample missing dgl_graph'
                     _add_feat_to_graph(g, loader=None)
                     updated += 1
             else:
-                raise TypeError('不支持的 data.pkl 元素类型')
+                raise TypeError('Unsupported data.pkl element type')
 
-    # 目标目录与保存
+    # Target directory and save
     if inplace:
         if backup:
             bak = src_file.with_suffix('.pkl.bak')
@@ -218,7 +219,7 @@ def _process_dataset(ds_name: str, inplace: bool, backup: bool, cfg: ProjectConf
         out_dir.mkdir(parents=True, exist_ok=True)
         out_file = out_dir / 'data.pkl'
 
-    # 若写入新目录（默认），仅保留 feat 以减少体积
+    # If writing to new directory (default), keep only feat to reduce size
     if not inplace:
         if isinstance(payload, list) and payload:
             sample0 = payload[0]
@@ -233,16 +234,16 @@ def _process_dataset(ds_name: str, inplace: bool, backup: bool, cfg: ProjectConf
                     g = s.get('dgl_graph')
                     _strip_to_feat_only(g)
 
-    # 打印处理后 feat 情况（保存前）
+    # Print feat summary before saving
     try:
         _print_feat_summary(ds_name, payload, limit=2)
     except Exception as e:
-        print(f"[WARN] 打印 feat 概览失败: {e}")
+        print(f"[WARN] Failed to print feat summary: {e}")
 
     with out_file.open('wb') as f:
         pickle.dump(payload, f)
 
-    # 复制划分 JSON 到目标目录
+    # Copy split JSONs to target directory
     for name in ['train_index.json', 'val_index.json', 'test_index.json']:
         src = data_dir / name
         if src.exists():
@@ -254,9 +255,9 @@ def _process_dataset(ds_name: str, inplace: bool, backup: bool, cfg: ProjectConf
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument('--datasets', type=str, default=None, help='逗号分隔数据集名称；未提供则处理全部可用数据集')
-    ap.add_argument('--inplace', action='store_true', help='原地覆盖 data.pkl')
-    ap.add_argument('--backup', action='store_true', help='inplace 时备份为 data.pkl.bak')
+    ap.add_argument('--datasets', type=str, default=None, help='Comma-separated dataset names; processes all if omitted')
+    ap.add_argument('--inplace', action='store_true', help='Overwrite data.pkl in place')
+    ap.add_argument('--backup', action='store_true', help='Backup as data.pkl.bak when using --inplace')
     args = ap.parse_args()
 
     if args.datasets:
@@ -270,11 +271,11 @@ def main() -> None:
     for ds in datasets:
         out_file, cnt = _process_dataset(ds, inplace=args.inplace, backup=args.backup, cfg=cfg)
         if out_file:
-            print(f"[{ds}] 写入: {out_file} (更新图数: {cnt})")
+            print(f"[{ds}] Written: {out_file} (graphs updated: {cnt})")
         else:
-            print(f"[{ds}] 跳过：未找到 data/{ds}/data.pkl")
+            print(f"[{ds}] Skipped: data/{ds}/data.pkl not found")
         total += cnt
-    print(f"✅ 完成。共更新 {total} 个图。")
+    print(f"Done. {total} graphs updated.")
 
 
 if __name__ == '__main__':

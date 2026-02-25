@@ -1,7 +1,6 @@
 """
-基于 NumPy 的 BPE 训练实现（频率统计使用 NumPy 向量化），接口与 StandardBPECompressor 对齐。
-
-注意：本实现的主要加速点在每轮 pair 频率统计阶段；merge 操作仍采用逐序列扫描（可进一步用 numba/并行强化）。
+NumPy-based BPE training (vectorized pair frequency counting).
+Interface aligned with StandardBPECompressor.
 """
 
 from typing import Any, Dict, List, Tuple
@@ -9,20 +8,19 @@ from collections import defaultdict  # noqa: F401 (reserved for future use)
 
 import numpy as np
 
-from .main_bpe import StandardBPECompressor  # 保留以备参考；主线已不使用 numpy 版本
+from .main_bpe import StandardBPECompressor  # kept for reference; main path no longer uses numpy version
 
 
 class NumpyBPECompressor(StandardBPECompressor):
-    """NumPy 版 BPE：每轮使用 NumPy 统计全局相邻 pair 频率。
+    """NumPy BPE: vectorized global pair frequency counting each round.
 
-    - 词表构建、ID 转换、码本更新、编码/解码均复用基类逻辑
-    - 训练时在每轮基于当前 id_sequences 重新统计全局 pair 频率（向量化）
-    - 合并应用采用与基类一致的逐序列线性扫描策略
+    Vocab building, ID conversion, codebook updates, and encode/decode
+    are inherited from the base class.
     """
 
     def _count_pairs_numpy(self, id_sequences: List[List[int]]) -> Dict[Tuple[int, int], int]:
-        # 将所有序列拼接 pair，并使用 np.unique 统计
-        # 编码 pair: code = (left << 32) | right （均使用 int64）
+        # Concatenate all pairs and count with np.unique
+        # Encode pair: code = (left << 32) | right (int64)
         if not id_sequences:
             return {}
         codes: List[np.ndarray] = []
@@ -38,7 +36,7 @@ class NumpyBPECompressor(StandardBPECompressor):
             return {}
         all_codes = np.concatenate(codes)
         uniq, cnts = np.unique(all_codes, return_counts=True)
-        # 解码回 (l, r) -> count
+        # Decode back to (l, r) -> count
         pair_freqs: Dict[Tuple[int, int], int] = {}
         left_ids = (uniq >> 32).astype(np.int64)
         right_ids = (uniq & np.int64(0xFFFFFFFF)).astype(np.int64)
@@ -49,31 +47,31 @@ class NumpyBPECompressor(StandardBPECompressor):
     def train(self, token_sequences: List[List[int]]) -> Dict[str, Any]:
         self._check_token_sequences(token_sequences)
         if not token_sequences:
-            raise ValueError("训练序列为空")
+            raise ValueError("Training sequences are empty")
 
-        # 1) 词表构建
+        # 1) Build base vocab
         self._build_base_vocab(token_sequences)
         if len(self.token_to_id) < 2:
-            raise ValueError("基础词汇表太小，无法进行合并")
+            raise ValueError("Base vocabulary too small for merging")
 
-        # 2) 转为 ID 序列
+        # 2) Convert to ID sequences
         id_sequences = self._convert_to_id_sequences(token_sequences)
 
-        # 3) 迭代合并
+        # 3) Iterative merging
         merge_count = 0
         for _ in range(self.num_merges):
-            # NumPy 统计全局相邻 pair 频率
+            # NumPy vectorized pair frequency counting
             pair_freqs = self._count_pairs_numpy(id_sequences)
             if not pair_freqs:
                 break
-            # 过滤阈值
+            # Filter by threshold
             valid_pairs = {pair: freq for pair, freq in pair_freqs.items() if freq >= self.min_frequency}
             if not valid_pairs:
                 break
-            # 选择最佳 pair
+            # Select best pair
             best_pair = max(valid_pairs, key=valid_pairs.get)
 
-            # 更新码本
+            # Update codebook
             new_id = self.next_id
             self.next_id += 1
             self.merge_rules.append((best_pair[0], best_pair[1], new_id))
@@ -81,17 +79,17 @@ class NumpyBPECompressor(StandardBPECompressor):
             self.token_to_id[merged_token] = new_id
             self.id_to_token[new_id] = merged_token
 
-            # 应用合并：minBPE 风格的非重叠掩码合并
+            # Apply merge: minBPE-style non-overlapping mask merge
             left_id, right_id = best_pair
             for i, seq in enumerate(id_sequences):
                 if len(seq) < 2:
                     continue
                 arr = np.asarray(seq, dtype=np.int64)
-                # 标记第一个位置匹配 (left,right)
+                # Mark first positions matching (left, right)
                 is_first = (arr[:-1] == left_id) & (arr[1:] == right_id)
                 if not is_first.any():
                     continue
-                # 扩展到与 arr 同长，并抑制重叠：只有不被上一个匹配占用的首位才保留
+                # Extend to arr length, suppress overlaps
                 is_first_full = np.concatenate([is_first, np.array([False], dtype=bool)])
                 is_second = np.roll(is_first_full, 1)
                 is_first_full = is_first_full & (~is_second)
@@ -99,7 +97,7 @@ class NumpyBPECompressor(StandardBPECompressor):
 
                 out = arr.copy()
                 out[is_first_full] = new_id
-                # 删除第二个位置
+                # Delete second positions
                 delete_mask = ~is_second
                 out = out[delete_mask]
                 id_sequences[i] = out.astype(int).tolist()
@@ -107,7 +105,7 @@ class NumpyBPECompressor(StandardBPECompressor):
             merge_count += 1
 
         if merge_count == 0:
-            raise ValueError("未执行任何合并操作")
+            raise ValueError("No merges performed")
 
         return {
             'num_merges_performed': merge_count,

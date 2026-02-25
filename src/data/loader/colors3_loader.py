@@ -17,10 +17,10 @@ logger = get_logger(__name__)
 
 
 class COLORS3Loader(BaseDataLoader):
-    """COLORS-3 图分类数据集（TU）。从预处理目录读取 data.pkl 与三份划分索引。"""
+    """COLORS-3 graph classification dataset (TU). Reads data.pkl and split indices."""
 
     def __init__(self, config: ProjectConfig, dataset_name: str = "colors3", target_property: Optional[str] = None):
-        # 统一以目录名作为 dataset_name；内部再记录标准化名称用于 id 前缀
+        # Use directory name as dataset_name; record normalized name for ID prefix
         super().__init__(dataset_name, config, target_property)
         self._all_data: Optional[List[Dict[str, Any]]] = None
         self._cache_built: bool = False
@@ -30,18 +30,18 @@ class COLORS3Loader(BaseDataLoader):
         self.load_data()
 
     def _load_processed_data(self) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
-        logger.info(f"📂 读取 COLORS-3 预处理目录: {self.data_dir}")
+        logger.info(f"Loading COLORS-3 preprocessed data from: {self.data_dir}")
 
         train_index_file = self.data_dir / "train_index.json"
         test_index_file = self.data_dir / "test_index.json"
         val_index_file = self.data_dir / "val_index.json"
         for f in (train_index_file, test_index_file, val_index_file):
             if not f.exists():
-                raise FileNotFoundError("索引文件不存在，请先运行预处理脚本")
+                raise FileNotFoundError("Index files not found; run preprocessing first")
 
         data_file = self.data_dir / "data.pkl"
         if not data_file.exists():
-            raise FileNotFoundError(f"统一数据文件不存在: {data_file}")
+            raise FileNotFoundError(f"Data file not found: {data_file}")
 
         if self._all_data is None:
             with open(data_file, "rb") as f:
@@ -110,7 +110,7 @@ class COLORS3Loader(BaseDataLoader):
             g: dgl.DGLGraph = sample["dgl_graph"]
             gid = id(g)
             if "node_token_ids" not in g.ndata:
-                raise AssertionError("缺少 node_token_ids，请先运行预处理生成")
+                raise AssertionError("Missing node_token_ids; run preprocessing first")
             node_token_ids = g.ndata["node_token_ids"].long()
             g.ndata["node_type_id"] = node_token_ids.view(-1)
             if "edge_token_ids" not in g.edata:

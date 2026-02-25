@@ -1,8 +1,7 @@
 """
-统一日志配置模块
-==============
+Unified logging module.
 
-为整个项目提供统一的日志配置和管理
+Centralized logging configuration and management for the project.
 """
 
 import logging
@@ -10,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-# 日志级别映射
+# Log level mapping
 LOG_LEVELS = {
     'DEBUG': logging.DEBUG,
     'INFO': logging.INFO,
@@ -19,28 +18,28 @@ LOG_LEVELS = {
     'CRITICAL': logging.CRITICAL
 }
 
-# 默认日志格式
+# Default log formats
 DEFAULT_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 SIMPLE_FORMAT = '%(levelname)s - %(name)s - %(message)s'
 
 class ColoredFormatter(logging.Formatter):
-    """带颜色的日志格式化器"""
+    """Formatter that adds ANSI color codes to log output."""
     
-    # 颜色代码
+    # Color codes
     COLORS = {
-        'DEBUG': '\033[36m',    # 青色
-        'INFO': '\033[32m',     # 绿色
-        'WARNING': '\033[33m',  # 黄色
-        'ERROR': '\033[31m',    # 红色
-        'CRITICAL': '\033[35m', # 紫色
-        'RESET': '\033[0m'      # 重置
+        'DEBUG': '\033[36m',     # cyan
+        'INFO': '\033[32m',      # green
+        'WARNING': '\033[33m',   # yellow
+        'ERROR': '\033[31m',     # red
+        'CRITICAL': '\033[35m',  # magenta
+        'RESET': '\033[0m'
     }
     
     def format(self, record):
-        # 获取原始格式化的消息
+        # Get base formatted message
         formatted = super().format(record)
         
-        # 添加颜色
+        # Add color
         if hasattr(record, 'levelname') and record.levelname in self.COLORS:
             color = self.COLORS[record.levelname]
             reset = self.COLORS['RESET']
@@ -57,39 +56,39 @@ def setup_logger(
     colored: bool = True
 ) -> logging.Logger:
     """
-    设置并返回配置好的logger
+    Set up and return a configured logger.
     
     Args:
-        name: logger名称
-        level: 日志级别
-        format_str: 日志格式
-        console_output: 是否输出到控制台
-        file_output: 文件输出路径
-        colored: 是否使用彩色输出
+        name: Logger name
+        level: Log level
+        format_str: Log format string
+        console_output: Whether to output to console
+        file_output: File output path
+        colored: Whether to use colored output
     
     Returns:
-        配置好的logger实例
+        Configured logger instance
     """
     logger = logging.getLogger(name)
     logger.setLevel(LOG_LEVELS.get(level.upper(), logging.INFO))
     
-    # 避免重复添加handler
+    # Avoid adding duplicate handlers
     if logger.handlers:
         return logger
     
-    # 创建格式化器
+    # Create formatter
     if colored and console_output:
         formatter = ColoredFormatter(format_str)
     else:
         formatter = logging.Formatter(format_str)
     
-    # 控制台输出
+    # Console output
     if console_output:
         console_handler = logging.StreamHandler(sys.stdout)
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)
     
-    # 文件输出
+    # File output
     if file_output:
         file_path = Path(file_output)
         file_path.parent.mkdir(parents=True, exist_ok=True)
@@ -101,17 +100,17 @@ def setup_logger(
     
     return logger
 
-# 预设的logger实例
+# Preset logger instances
 def get_logger(name: str = None, level: str = 'INFO') -> logging.Logger:
     """
-    获取logger实例的快捷方法
+    Get a logger instance.
     
     Args:
-        name: logger名称，如果为None则使用调用模块的名称
-        level: 日志级别
+        name: Logger name; uses caller module name if None
+        level: Log level
     
     Returns:
-        logger实例
+        Logger instance
     """
     if name is None:
         import inspect
@@ -120,7 +119,7 @@ def get_logger(name: str = None, level: str = 'INFO') -> logging.Logger:
     
     return setup_logger(name, level=level)
 
-# 项目级别的logger
+# Project-level loggers
 PROJECT_LOGGER = get_logger('tokenizerGraph')
 DATA_LOGGER = get_logger('tokenizerGraph.data')
 ALGORITHM_LOGGER = get_logger('tokenizerGraph.algorithm')

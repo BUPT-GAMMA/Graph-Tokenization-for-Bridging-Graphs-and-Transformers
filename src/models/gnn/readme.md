@@ -1,3 +1,3 @@
-注意，由于项目用gnn是为了复现baseline，所以从此处移除。gnn相关的baseline，由另外一个仓库（benchmark-gnns）实现。
+GNN baselines are implemented in a separate repository (benchmark-gnns) and are not included here.
 
-本项目仅完成图序列化train的pipeline
+This project focuses on the graph serialization + Transformer training pipeline only.
