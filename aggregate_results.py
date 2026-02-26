@@ -27,6 +27,7 @@ def parse_directory_name(dir_name):
         method = parts[2]
         bpe = parts[3]
         return dataset, method, bpe
+        
     
     # 提取数据集名（去除重复）
     dataset_double = parts[0]
