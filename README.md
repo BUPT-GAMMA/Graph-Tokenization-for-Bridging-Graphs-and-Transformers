@@ -8,32 +8,35 @@
 
 ## Overview
 
-GraphTokenizer is a general framework for **graph tokenization** that converts arbitrary labeled graphs into discrete token sequences, enabling standard off-the-shelf Transformer models (e.g., BERT, GTE) to be applied directly to graph-structured data **without any architectural modifications**.
+The success of large pretrained Transformers is closely tied to tokenizers, which convert raw input into discrete symbols. **GraphTokenizer** extends this paradigm to graph-structured data by introducing a general **graph tokenization** framework. It converts arbitrary labeled graphs into discrete token sequences, enabling standard off-the-shelf Transformer models (e.g., BERT, GTE) to be applied directly to graph data **without any architectural modifications**.
 
-The framework combines **reversible graph serialization** with **Byte Pair Encoding (BPE)**, a widely adopted tokenizer in large language models. A structure-guided serialization mechanism uses global statistics of graph substructures to ensure that frequently occurring substructures appear as adjacent symbols in the sequence — an ideal input for BPE to learn a meaningful vocabulary of structural graph tokens.
+The framework combines **reversible graph serialization** with **Byte Pair Encoding (BPE)**, the de facto standard tokenizer in large language models. To better capture structural information, the serialization process is guided by **global statistics of graph substructures**, ensuring that frequently occurring substructures appear as adjacent symbols in the resulting sequence — an ideal input for BPE to discover a meaningful vocabulary of structural graph tokens. The entire process is **reversible**: the original graph can be faithfully reconstructed from its token sequence.
 
 <p align="center">
   <img src="docs/assets/framework.jpg" width="90%" alt="GraphTokenizer Framework">
 </p>
 
-**Framework overview.** (A) Substructure frequencies are collected from training graphs. (B) Structure-guided reversible serialization via frequency-guided Eulerian circuit. (C) BPE vocabulary is trained on the serialized corpus, and graphs are encoded into discrete tokens for downstream sequence models.
+**Framework overview.** **(A)** Substructure frequencies (labeled-edge patterns) are collected from the training graphs. **(B)** Structure-guided reversible serialization via frequency-guided Eulerian circuit — at each node, the next edge is selected according to the frequency priority (e.g., at the red C node, the C–C pattern has the highest frequency, so that edge is traversed first). **(C)** A BPE vocabulary is trained on the serialized corpus; BPE iteratively merges the most frequent adjacent symbol pairs into new tokens, compressing sequences to ~10% of their original length while preserving common substructures.
 
 ```
-Labeled Graphs → Structure-Guided Serialization → BPE Tokenization → Transformer → Predictions
+Labeled Graphs  →  Structure-Guided Serialization  →  BPE Tokenization  →  Transformer  →  Predictions
 ```
 
 ### Key Contributions
 
-- **General Graph Tokenization Framework.** Combines reversible serialization with BPE to create an interface between graphs and sequence models, enabling standard Transformers to process graph data without modifications.
-- **Structure-Guided Serialization for BPE.** A deterministic serialization guided by global substructure statistics that addresses ordering ambiguities in graphs and aligns frequent substructures into adjacent patterns for BPE to merge.
-- **State-of-the-Art on 14 Benchmarks.** Achieves SOTA results across diverse graph classification and regression benchmarks spanning molecular, biomedical, social, academic, and synthetic domains.
+- **General Graph Tokenization Framework.** Combines reversible graph serialization with BPE to create a bidirectional interface between graphs and sequence models. By decoupling the encoding of graph structure from the model architecture, it enables standard off-the-shelf Transformers to process graph data without any architectural modifications.
+- **Structure-Guided Serialization for BPE.** A deterministic serialization mechanism guided by global substructure statistics. It addresses the ordering ambiguity inherent in graphs (permutation invariance) and systematically arranges frequent substructures into adjacent symbol patterns — precisely the input that BPE's greedy merging strategy is designed to exploit.
+- **State-of-the-Art on 14 Benchmarks.** Achieves SOTA results across diverse graph classification and regression benchmarks spanning molecular, biomedical, social, academic, and synthetic domains. Scaling from a compact BERT-small to a larger GTE backbone yields consistent gains, demonstrating that graph tokenization can leverage the proven scaling behavior of Transformers.
 
 ### Main Results
 
+Classification (↑ higher is better) and regression (↓ lower is better) results:
+
 | Model | molhiv (AUC↑) | p-func (AP↑) | mutag (Acc↑) | coildel (Acc↑) | dblp (Acc↑) | qm9 (MAE↓) | zinc (MAE↓) | aqsol (MAE↓) | p-struct (MAE↓) |
-|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | GCN | 74.0 | 53.2 | 79.7 | 74.6 | 76.6 | 0.134 | 0.399 | 1.345 | 0.342 |
 | GIN | 76.1 | 61.4 | 80.4 | 72.0 | 73.8 | 0.176 | 0.379 | 2.053 | 0.338 |
+| GAT | 72.1 | 51.2 | 80.1 | 74.4 | 76.3 | 0.114 | 0.445 | 1.388 | 0.316 |
 | GatedGCN | 80.6 | 51.2 | 83.6 | 83.7 | 86.0 | 0.096 | 0.370 | 0.940 | 0.312 |
 | GraphGPS | 78.5 | 53.5 | 84.3 | 80.5 | 71.6 | 0.084 | 0.310 | 1.587 | 0.251 |
 | Exphormer | 82.3 | 64.5 | 82.7 | **91.5** | 84.9 | 0.080 | 0.281 | 0.749 | 0.251 |
@@ -42,7 +45,20 @@ Labeled Graphs → Structure-Guided Serialization → BPE Tokenization → Trans
 | **GT+BERT** | 82.6 | 68.5 | 87.5 | 74.1 | 93.2 | 0.122 | 0.241 | 0.648 | 0.247 |
 | **GT+GTE** | **87.4** | **73.1** | **90.1** | 89.6 | **93.6** | **0.071** | 0.131 | **0.609** | **0.242** |
 
-Results are mean over 5 runs. Bold = best. See the paper for full results on all 14 datasets.
+Results are mean over 5 independent runs. **Bold** = best. See the paper for full results on all 14 datasets including DD, Twitter, Proteins, Colors-3, and Synthetic.
+
+### Supported Serialization Methods
+
+| Method | Reversible | Deterministic | Applicable to |
+|:---|:---:|:---:|:---|
+| Freq-Guided Eulerian (Feuler) | ✅ | ✅ | Any labeled graph |
+| Freq-Guided CPP (FCPP) | ✅ | ✅ | Any labeled graph |
+| Eulerian circuit | ✅ | ❌ | Any labeled graph |
+| Chinese Postman (CPP) | ✅ | ❌ | Any labeled graph |
+| Canonical SMILES | ✅ | ✅ | Molecular graphs only |
+| DFS / BFS / Topo | ❌ | ❌ | Any graph |
+
+The default method is **Feuler** (Frequency-Guided Eulerian circuit), which provides both reversibility and determinism with O(|E|) time complexity.
 
 ## Project Structure
 
