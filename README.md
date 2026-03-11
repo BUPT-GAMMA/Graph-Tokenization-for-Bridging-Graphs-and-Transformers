@@ -149,10 +149,16 @@ data/processed/qm9test/
 └── vocab/feuler/bpe/single/vocab.json
 ```
 
-If your goal is to prepare your own dataset from raw sources, see:
+If you want the full verified end-to-end walkthrough, including a tested `qm9test -> prepare -> pretrain -> finetune` smoke test and current dataset caveats, see:
 
 - [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md) — dataset-by-dataset conversion notes
 - [`src/data/README.md`](src/data/README.md) — data layer contract and expected directory layout
+
+Important notes for reproducibility:
+
+- `prepare_data_new.py` uses plural CLI arguments (`--datasets`, `--methods`), while `run_pretrain.py` and `run_finetune.py` use singular ones (`--dataset`, `--method`)
+- if you prepare data with `--multiple_samples K`, the training scripts must be launched with matching `serialization.multiple_sampling.enabled=true` and `serialization.multiple_sampling.num_realizations=K`; otherwise they will read from `single/` instead of `multi_K/`
+- the checked-in default config currently sets `encoder.type: gte`, so runs will use the GTE encoder unless you explicitly switch to `bert`
 
 ### 2. Pre-training
 
@@ -172,6 +178,7 @@ Important notes:
 - `--dataset` and `--method` are required here
 - the script reads the processed artifacts produced by `prepare_data_new.py`
 - the default config uses the paths in `config/default_config.yml`, where `data_dir` resolves to `data/`
+- for a verified one-epoch `qm9test` smoke test with `multi_3` serialization and the exact `config_json` overrides, see [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md)
 
 ### 3. Fine-tuning
 
@@ -188,6 +195,12 @@ python run_finetune.py \
 ```
 
 For regression datasets such as `qm9`, set `--target_property` explicitly. For classification datasets such as `mutagenicity` or `molhiv`, the loader metadata is usually sufficient and no regression target is needed.
+
+Additional notes:
+
+- `run_finetune.py` currently requires CUDA (`torch.cuda.is_available()` is asserted at startup)
+- the safest smoke-test path is to point `--pretrained_dir` directly at `model/<group>/<exp_name>/run_0/best`
+- the pre-trained checkpoint directory must contain both `config.bin` and `pytorch_model.bin`
 
 ### 4. Batch Experiments
 
@@ -230,17 +243,20 @@ python prepare_data_new.py --datasets <dataset> --methods feuler
 ```
 
 5. Verify that `data/processed/<dataset>/serialized_data/...` and `data/processed/<dataset>/vocab/...` were created
-6. Run a small pre-training smoke test:
+6. If you prepared with multiple sampling, also verify whether the artifacts were written to `single/` or `multi_<K>/`
+7. Run a small pre-training smoke test:
 
 ```bash
 python run_pretrain.py --dataset <dataset> --method feuler --epochs 1 --batch_size 8
 ```
 
-7. Run a small fine-tuning smoke test:
+8. Run a small fine-tuning smoke test:
 
 ```bash
 python run_finetune.py --dataset <dataset> --method feuler --epochs 1 --batch_size 8
 ```
+
+Fine-tuning also requires a CUDA-capable device and a valid pre-trained checkpoint.
 
 ## Documentation
 
