@@ -18,6 +18,14 @@ All graphs must have:
 - `g.ndata['feat']` — node token IDs (`LongTensor`, shape `[N, 1]` or `[N, 2]`)
 - `g.edata['feat']` — edge token IDs (`LongTensor`, shape `[E, 1]`)
 
+If you want a dataset to work with the main training pipeline, this directory is only the first step. A dataset is considered "ready" only when all of the following are true:
+
+1. `data/<dataset>/data.pkl` exists
+2. `data/<dataset>/train_index.json`, `val_index.json`, `test_index.json` exist
+3. the dataset name is registered in `src/data/unified_data_factory.py`
+4. `python prepare_data_new.py --datasets <dataset> --methods feuler` finishes successfully
+5. `data/processed/<dataset>/...` artifacts are created
+
 ## Getting Datasets
 
 ### Option A: Download Pre-processed Data
@@ -43,6 +51,29 @@ Extract into the `data/` directory at the project root.
 
 3. **Run conversion**: Each dataset loader in `src/data/loader/` reads from `data/<dataset>/data.pkl`. To generate these files from raw sources, use the appropriate conversion approach below.
 
+4. **Verify final directory layout** before running any training command:
+
+   ```text
+   data/<dataset>/
+   ├── data.pkl
+   ├── train_index.json
+   ├── val_index.json
+   └── test_index.json
+   ```
+
+5. **Run preprocessing** to build serialized sequences and vocabularies:
+
+   ```bash
+   python prepare_data_new.py --datasets <dataset> --methods feuler
+   ```
+
+6. **Run smoke tests**:
+
+   ```bash
+   python run_pretrain.py --dataset <dataset> --method feuler --epochs 1 --batch_size 8
+   python run_finetune.py --dataset <dataset> --method feuler --epochs 1 --batch_size 8
+   ```
+
 ## Dataset Sources & Conversion
 
 ### Molecular Datasets (QM9, ZINC, AQSOL)
@@ -54,6 +85,12 @@ Extract into the `data/` directory at the project root.
 | `aqsol` | [AqSolDB](https://www.nature.com/articles/s41597-019-0151-1) | Regression (solubility) | DGL graphs |
 
 Node tokens = atomic number; Edge tokens = bond type (SINGLE=1, DOUBLE=2, TRIPLE=3, AROMATIC=4).
+
+Expected practical notes:
+
+- `qm9` / `qm9test` loaders expect `data.pkl` and split JSON files
+- they may also read optional SMILES side files if present
+- if SMILES files are absent, the core graph pipeline can still run as long as the required files exist
 
 ### OGB Datasets (MolHIV, Peptides)
 
@@ -100,7 +137,7 @@ Once `data/<dataset>/` contains the required files, run the full pipeline:
 
 ```bash
 # Step 1: Serialize + BPE + build vocab
-python prepare_data_new.py --dataset qm9test --method feuler
+python prepare_data_new.py --datasets qm9test --methods feuler
 
 # Step 2: Pre-train
 python run_pretrain.py --dataset qm9test --method feuler
@@ -108,6 +145,25 @@ python run_pretrain.py --dataset qm9test --method feuler
 # Step 3: Fine-tune
 python run_finetune.py --dataset qm9test --method feuler
 ```
+
+Note the CLI difference:
+
+- `prepare_data_new.py` uses plural arguments: `--datasets`, `--methods`
+- `run_pretrain.py` / `run_finetune.py` use singular arguments: `--dataset`, `--method`
+
+If you skip Step 1, the later scripts will fail because the serialized cache and vocabulary have not been built yet.
+
+## Minimal End-to-End Validation
+
+For a new dataset integration, the recommended validation order is:
+
+1. `python prepare_data_new.py --datasets <dataset> --methods feuler`
+2. check `data/processed/<dataset>/serialized_data/feuler/single/serialized_data.pickle`
+3. check `data/processed/<dataset>/vocab/feuler/bpe/single/vocab.json`
+4. `python run_pretrain.py --dataset <dataset> --method feuler --epochs 1 --batch_size 8`
+5. `python run_finetune.py --dataset <dataset> --method feuler --epochs 1 --batch_size 8`
+
+If all five steps pass, the dataset is usually ready for larger-scale experiments.
 
 ## Adding a New Dataset
 

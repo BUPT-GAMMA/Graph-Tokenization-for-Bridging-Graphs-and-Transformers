@@ -2,7 +2,7 @@
 
 **Graph Tokenization for Bridging Graphs and Transformers**
 
-[[中文文档 / Chinese README]](README_zh.md) · [[Paper (ICLR 2026)]](https://openreview.net/forum?id=PLACEHOLDER)
+[[中文文档 / Chinese README]](README_zh.md) · [[Paper (ICLR 2026 / OpenReview)]](https://openreview.net/forum?id=jCctxI1BGF) · arXiv (coming soon)
 
 > **Branches:** `release` — clean code for reproducing paper experiments. [`dev`](../../tree/dev) — full development version with utility scripts, benchmarks, and internal docs.
 
@@ -108,6 +108,22 @@ Key dependencies: `torch`, `dgl`, `networkx`, `rdkit`, `transformers`, `pybind11
 
 ### 1. Data Preparation
 
+Before running `prepare_data_new.py`, make sure the raw/preprocessed dataset files already exist under `data/<dataset>/`.
+
+The loaders in `src/data/loader/` assume the following files are present:
+
+```text
+data/<dataset>/
+├── data.pkl
+├── train_index.json
+├── val_index.json
+└── test_index.json
+```
+
+For molecular datasets such as `qm9` and `zinc`, some loaders will also look for optional SMILES files such as `smiles_1_direct.txt`.
+
+If you are using the repository exactly as released by the authors, the simplest smoke test is to start from `qm9test`, because it is the smallest built-in example used throughout the codebase.
+
 Serialize graphs and train a BPE tokenizer:
 
 ```bash
@@ -117,7 +133,26 @@ python prepare_data_new.py \
     --bpe_merges 2000
 ```
 
-This loads the dataset, serializes all graphs with the chosen method (e.g., frequency-guided Eulerian circuit), trains a BPE model on the resulting sequences, and builds a vocabulary. All artifacts are cached for reuse.
+This script:
+
+- loads `data/qm9test/data.pkl` together with the fixed split files
+- serializes every graph with the selected method
+- trains a BPE model on the serialized corpus
+- builds the vocabulary used by downstream Transformer runs
+- writes cached artifacts under `data/processed/<dataset>/...`
+
+After this step, you should expect processed artifacts in locations similar to:
+
+```text
+data/processed/qm9test/
+├── serialized_data/feuler/single/serialized_data.pickle
+└── vocab/feuler/bpe/single/vocab.json
+```
+
+If your goal is to prepare your own dataset from raw sources, see:
+
+- [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md) — dataset-by-dataset conversion notes
+- [`src/data/README.md`](src/data/README.md) — data layer contract and expected directory layout
 
 ### 2. Pre-training
 
@@ -132,6 +167,12 @@ python run_pretrain.py \
     --batch_size 256
 ```
 
+Important notes:
+
+- `--dataset` and `--method` are required here
+- the script reads the processed artifacts produced by `prepare_data_new.py`
+- the default config uses the paths in `config/default_config.yml`, where `data_dir` resolves to `data/`
+
 ### 3. Fine-tuning
 
 Fine-tune the pre-trained model on downstream graph prediction tasks:
@@ -145,6 +186,8 @@ python run_finetune.py \
     --epochs 200 \
     --batch_size 64
 ```
+
+For regression datasets such as `qm9`, set `--target_property` explicitly. For classification datasets such as `mutagenicity` or `molhiv`, the loader metadata is usually sufficient and no regression target is needed.
 
 ### 4. Batch Experiments
 
@@ -173,11 +216,38 @@ Scripts for all paper experiments are in the `final/` directory:
 - **Multi-sampling comparison** — `final/exp2_mult_seralize_comp/`: effect of multiple serialization samples
 - **BPE vocabulary visualization** — `final/exp4_bpe_vocab_visual/`: codebook inspection and visualization
 
+## Dataset Preparation Checklist
+
+Use this checklist if you want to make sure a new dataset is really runnable end-to-end.
+
+1. Put the dataset under `data/<dataset>/`
+2. Ensure `data.pkl`, `train_index.json`, `val_index.json`, and `test_index.json` all exist
+3. Confirm the dataset name is registered in `src/data/unified_data_factory.py`
+4. Run:
+
+```bash
+python prepare_data_new.py --datasets <dataset> --methods feuler
+```
+
+5. Verify that `data/processed/<dataset>/serialized_data/...` and `data/processed/<dataset>/vocab/...` were created
+6. Run a small pre-training smoke test:
+
+```bash
+python run_pretrain.py --dataset <dataset> --method feuler --epochs 1 --batch_size 8
+```
+
+7. Run a small fine-tuning smoke test:
+
+```bash
+python run_finetune.py --dataset <dataset> --method feuler --epochs 1 --batch_size 8
+```
+
 ## Documentation
 
 - [Configuration Guide](docs/guides/config_guide.md) — config file structure and parameters
 - [Experiment Guide](docs/guides/experiment_guide.md) — how to design and run experiments
 - [BPE Usage Guide](docs/bpe/BPE_USAGE_GUIDE.md) — BPE engine API and usage
+- [Dataset Conversion Guide](scripts/dataset_conversion/README.md) — how to prepare `data/<dataset>/` so the loaders can run directly
 
 ## Citation
 
