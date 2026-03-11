@@ -2,7 +2,7 @@
 
 **Graph Tokenization for Bridging Graphs and Transformers**
 
-[[English README]](README.md) · [[论文 (ICLR 2026)]](https://openreview.net/forum?id=PLACEHOLDER)
+[[English README]](README.md) · [[论文 (ICLR 2026 / OpenReview)]](https://openreview.net/forum?id=jCctxI1BGF) · arXiv（即将发布）
 
 > **分支说明：** `release` — 复现论文实验的精简代码。[`dev`](../../tree/dev) — 包含工具脚本、benchmark 和内部文档的完整开发版本。
 
@@ -108,6 +108,22 @@ python setup.py build_ext --inplace
 
 ### 1. 数据预处理
 
+在运行 `prepare_data_new.py` 之前，请先确认 `data/<dataset>/` 下已经放好了数据集原始/预处理文件。
+
+当前各 loader 默认假设目录中至少存在：
+
+```text
+data/<dataset>/
+├── data.pkl
+├── train_index.json
+├── val_index.json
+└── test_index.json
+```
+
+对于 `qm9`、`zinc` 这类分子数据集，部分 loader 还会尝试读取可选的 SMILES 文件，例如 `smiles_1_direct.txt`。
+
+如果你只是想先验证整套流程能跑通，建议优先使用仓库里最小的示例数据集 `qm9test`。
+
 序列化图并训练 BPE 分词器：
 
 ```bash
@@ -117,11 +133,30 @@ python prepare_data_new.py \
     --bpe_merges 2000
 ```
 
-该脚本加载数据集，用指定方法（如频率引导欧拉回路）序列化所有图，在生成的序列上训练 BPE 模型，并构建词表。所有中间产物会被缓存以供复用。
+该脚本会：
+
+- 读取 `data/qm9test/data.pkl` 及固定划分文件
+- 用指定方法对所有图做序列化
+- 在序列化语料上训练 BPE
+- 构建下游 Transformer 所需词表
+- 将缓存产物写入 `data/processed/<dataset>/...`
+
+执行完成后，通常会生成类似下面的文件：
+
+```text
+data/processed/qm9test/
+├── serialized_data/feuler/single/serialized_data.pickle
+└── vocab/feuler/bpe/single/vocab.json
+```
+
+如果你要从原始公开数据集自己准备 `data/<dataset>/`，请优先查看：
+
+- [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md) — 各数据集转换说明
+- [`src/data/README.md`](src/data/README.md) — 数据层接口约定与目录结构
 
 ### 2. 预训练
 
-用掩码语言模型（MLM）任务预训练 Transformer 编码器：
+使用 Masked Language Modeling (MLM) 预训练 Transformer 编码器：
 
 ```bash
 python run_pretrain.py \
@@ -131,6 +166,12 @@ python run_pretrain.py \
     --epochs 100 \
     --batch_size 256
 ```
+
+注意：
+
+- 这里必须使用单数参数 `--dataset` 和 `--method`
+- 该脚本直接读取 `prepare_data_new.py` 生成的缓存结果
+- 默认路径配置来自 `config/default_config.yml`，其中 `data_dir` 会解析到项目根目录下的 `data/`
 
 ### 3. 微调
 
@@ -145,6 +186,8 @@ python run_finetune.py \
     --epochs 200 \
     --batch_size 64
 ```
+
+对于 `qm9` 这类回归数据集，建议显式指定 `--target_property`；对于 `mutagenicity`、`molhiv` 这类分类数据集，通常可以直接依赖 loader 内部元信息。
 
 ### 4. 批量实验
 
@@ -171,13 +214,40 @@ python batch_finetune_simple.py \
 - **主实验** — `final/exp1_main/run/`：全部 14 个数据集的预训练与微调命令
 - **效率分析** — `final/exp1_speed/`：序列化速度、token 长度统计、训练吞吐量
 - **多重采样对比** — `final/exp2_mult_seralize_comp/`：多次序列化采样的效果
-- **BPE 词表可视化** — `final/exp4_bpe_vocab_visual/`：codebook 检查与可视化
+- **BPE 词表可视化** — `final/exp4_bpe_vocab_visual/`：码本分析与可视化
+
+## 数据准备检查清单
+
+如果你希望确保“别人照着 README 真的能跑起来”，建议按下面的顺序检查：
+
+1. 将数据放到 `data/<dataset>/`
+2. 确认 `data.pkl`、`train_index.json`、`val_index.json`、`test_index.json` 全部存在
+3. 确认该数据集名称已经在 `src/data/unified_data_factory.py` 中注册
+4. 运行：
+
+```bash
+python prepare_data_new.py --datasets <dataset> --methods feuler
+```
+
+5. 检查 `data/processed/<dataset>/serialized_data/...` 与 `data/processed/<dataset>/vocab/...` 是否生成成功
+6. 做一个最小预训练冒烟测试：
+
+```bash
+python run_pretrain.py --dataset <dataset> --method feuler --epochs 1 --batch_size 8
+```
+
+7. 再做一个最小微调冒烟测试：
+
+```bash
+python run_finetune.py --dataset <dataset> --method feuler --epochs 1 --batch_size 8
+```
 
 ## 文档
 
 - [配置指南](docs/guides/config_guide.md) — 配置文件结构与参数说明
-- [实验指南](docs/guides/experiment_guide.md) — 实验设计与执行方法
+- [实验指南](docs/guides/experiment_guide.md) — 如何设计与运行实验
 - [BPE 使用指南](docs/bpe/BPE_USAGE_GUIDE.md) — BPE 引擎 API 与使用方法
+- [数据集转换指南](scripts/dataset_conversion/README.md) — 如何准备可被 loader 直接读取的 `data/<dataset>/`
 
 ## 引用
 
