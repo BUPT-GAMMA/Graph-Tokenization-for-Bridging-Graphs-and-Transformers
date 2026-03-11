@@ -149,10 +149,16 @@ data/processed/qm9test/
 └── vocab/feuler/bpe/single/vocab.json
 ```
 
-如果你要从原始公开数据集自己准备 `data/<dataset>/`，请优先查看：
+如果你要看完整、已经实测过的 `qm9test -> prepare -> pretrain -> finetune` 最小链路，以及当前仓库里各数据集的已知注意事项，请优先查看：
 
 - [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md) — 各数据集转换说明
 - [`src/data/README.md`](src/data/README.md) — 数据层接口约定与目录结构
+
+为了保证可复现，还需要注意：
+
+- `prepare_data_new.py` 使用复数参数 `--datasets`、`--methods`，而 `run_pretrain.py` / `run_finetune.py` 使用单数参数 `--dataset`、`--method`
+- 如果你在准备数据时使用了 `--multiple_samples K`，训练阶段也必须传入匹配的 `serialization.multiple_sampling.enabled=true` 和 `serialization.multiple_sampling.num_realizations=K`，否则训练会去读 `single/` 而不是 `multi_K/`
+- 当前仓库默认配置里 `encoder.type: gte`，所以如果你不显式切到 `bert`，实际运行的会是 GTE 编码器
 
 ### 2. 预训练
 
@@ -172,6 +178,7 @@ python run_pretrain.py \
 - 这里必须使用单数参数 `--dataset` 和 `--method`
 - 该脚本直接读取 `prepare_data_new.py` 生成的缓存结果
 - 默认路径配置来自 `config/default_config.yml`，其中 `data_dir` 会解析到项目根目录下的 `data/`
+- 如果你需要一条已经实测通过的 `qm9test + multi_3` 一轮预训练命令，请直接参考 [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md)
 
 ### 3. 微调
 
@@ -188,6 +195,12 @@ python run_finetune.py \
 ```
 
 对于 `qm9` 这类回归数据集，建议显式指定 `--target_property`；对于 `mutagenicity`、`molhiv` 这类分类数据集，通常可以直接依赖 loader 内部元信息。
+
+另外请注意：
+
+- `run_finetune.py` 当前会在启动时直接断言 CUDA 可用
+- 最稳妥的最小验证方式是显式传 `--pretrained_dir model/<group>/<exp_name>/run_0/best`
+- 该预训练目录下必须同时存在 `config.bin` 和 `pytorch_model.bin`
 
 ### 4. 批量实验
 
@@ -230,17 +243,20 @@ python prepare_data_new.py --datasets <dataset> --methods feuler
 ```
 
 5. 检查 `data/processed/<dataset>/serialized_data/...` 与 `data/processed/<dataset>/vocab/...` 是否生成成功
-6. 做一个最小预训练冒烟测试：
+6. 如果使用了多重采样，再确认生成目录到底是 `single/` 还是 `multi_<K>/`
+7. 做一个最小预训练冒烟测试：
 
 ```bash
 python run_pretrain.py --dataset <dataset> --method feuler --epochs 1 --batch_size 8
 ```
 
-7. 再做一个最小微调冒烟测试：
+8. 再做一个最小微调冒烟测试：
 
 ```bash
 python run_finetune.py --dataset <dataset> --method feuler --epochs 1 --batch_size 8
 ```
+
+微调还要求机器上有可用 CUDA，并且能找到有效的预训练权重目录。
 
 ## 文档
 

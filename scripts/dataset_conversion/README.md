@@ -67,12 +67,16 @@ Extract into the `data/` directory at the project root.
    python prepare_data_new.py --datasets <dataset> --methods feuler
    ```
 
+   If you use multi-sampling during preparation, remember the exact `K` value. Training must later use the same `serialization.multiple_sampling.num_realizations=K`, or it will look in the wrong cache directory.
+
 6. **Run smoke tests**:
 
    ```bash
    python run_pretrain.py --dataset <dataset> --method feuler --epochs 1 --batch_size 8
    python run_finetune.py --dataset <dataset> --method feuler --epochs 1 --batch_size 8
    ```
+
+   For fine-tuning, also make sure CUDA is available and that you pass a valid pre-trained checkpoint directory.
 
 ## Dataset Sources & Conversion
 
@@ -151,19 +155,88 @@ Note the CLI difference:
 - `prepare_data_new.py` uses plural arguments: `--datasets`, `--methods`
 - `run_pretrain.py` / `run_finetune.py` use singular arguments: `--dataset`, `--method`
 
+If you prepare with `--multiple_samples K`, the training scripts must be launched with matching `serialization.multiple_sampling.enabled=true` and `serialization.multiple_sampling.num_realizations=K`. Otherwise `UnifiedDataInterface` will read from `single/` instead of `multi_<K>/`.
+
 If you skip Step 1, the later scripts will fail because the serialized cache and vocabulary have not been built yet.
 
 ## Minimal End-to-End Validation
 
-For a new dataset integration, the recommended validation order is:
+The following `qm9test` smoke test was executed successfully on the current repository state and is the safest reproducible path for a first run.
 
-1. `python prepare_data_new.py --datasets <dataset> --methods feuler`
-2. check `data/processed/<dataset>/serialized_data/feuler/single/serialized_data.pickle`
-3. check `data/processed/<dataset>/vocab/feuler/bpe/single/vocab.json`
-4. `python run_pretrain.py --dataset <dataset> --method feuler --epochs 1 --batch_size 8`
-5. `python run_finetune.py --dataset <dataset> --method feuler --epochs 1 --batch_size 8`
+1. Prepare a fresh `multi_3` cache so you do not overwrite existing `single/`, `multi_10/`, or `multi_100/` artifacts:
 
-If all five steps pass, the dataset is usually ready for larger-scale experiments.
+    ```bash
+    python prepare_data_new.py \
+        --datasets qm9test \
+        --methods feuler \
+        --multiple_samples 3 \
+        --workers 1 \
+        --bpe_merges 64 \
+        --bpe_min_freq 2 \
+        --out prepare_results/e2e_qm9test_feuler_multi3
+    ```
+
+    Expected new artifacts:
+
+    ```text
+    data/processed/qm9test/serialized_data/feuler/multi_3/serialized_data.pickle
+    data/processed/qm9test/vocab/feuler/bpe/multi_3/vocab.json
+    model/bpe/qm9test/feuler/multi_3/bpe_codebook.pkl
+    ```
+
+2. Run a one-epoch pre-training smoke test against that same `multi_3` cache:
+
+    ```bash
+    CUDA_VISIBLE_DEVICES=0 python run_pretrain.py \
+        --dataset qm9test \
+        --method feuler \
+        --experiment_group e2e_audit \
+        --experiment_name e2e_qm9test_feuler_multi3_pretrain \
+        --epochs 1 \
+        --batch_size 256 \
+        --learning_rate 1e-4 \
+        --bpe_encode_rank_mode all \
+        --log_style offline \
+        --plain_logs \
+        --config_json '{"device":"cuda:0","system":{"device":"cuda:0","num_workers":1,"persistent_workers":true},"serialization":{"multiple_sampling":{"enabled":true,"num_realizations":3},"bpe":{"num_merges":64}}}'
+    ```
+
+    This creates a checkpoint at:
+
+    ```text
+    model/e2e_audit/e2e_qm9test_feuler_multi3_pretrain/run_0/best/
+    ```
+
+    The directory must contain both `config.bin` and `pytorch_model.bin`.
+
+3. Run a one-epoch fine-tuning smoke test using that explicit checkpoint directory:
+
+    ```bash
+    CUDA_VISIBLE_DEVICES=1 python run_finetune.py \
+        --dataset qm9test \
+        --method feuler \
+        --target_property homo \
+        --pretrained_dir model/e2e_audit/e2e_qm9test_feuler_multi3_pretrain/run_0/best \
+        --experiment_group e2e_audit \
+        --experiment_name e2e_qm9test_feuler_multi3_finetune \
+        --epochs 1 \
+        --batch_size 256 \
+        --learning_rate 1e-5 \
+        --bpe_encode_rank_mode all \
+        --aggregation_mode avg \
+        --log_style offline \
+        --plain_logs \
+        --config_json '{"device":"cuda:0","system":{"device":"cuda:0","num_workers":1,"persistent_workers":true},"serialization":{"multiple_sampling":{"enabled":true,"num_realizations":3},"bpe":{"num_merges":64}},"bert":{"finetuning":{"save_models":false}}}'
+    ```
+
+If all three steps pass, the `prepare_data_new.py -> run_pretrain.py -> run_finetune.py` path is confirmed to be working for that dataset/configuration pair.
+
+## Current Repository Caveats
+
+- `dataset.limit` should be treated as legacy metadata rather than a reliable way to subset data for smoke tests. For minimal verification, use `qm9test` or prepare a dedicated smaller dataset.
+- The checked-in default config uses `encoder.type: gte`, so a run will use the GTE encoder unless you explicitly switch to `bert`.
+- `run_finetune.py` currently asserts that CUDA is available before any training starts.
+- In the checked-in repository state audited here, `code2` does not pass the loader smoke test because `data/code2/data.pkl` is missing, so it should not be documented as immediately runnable without regenerating its processed data first.
 
 ## Adding a New Dataset
 
