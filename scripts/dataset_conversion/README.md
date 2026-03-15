@@ -18,13 +18,29 @@ All graphs must have:
 - `g.ndata['feat']` — node token IDs (`LongTensor`, shape `[N, 1]` or `[N, 2]`)
 - `g.edata['feat']` — edge token IDs (`LongTensor`, shape `[E, 1]`)
 
-If you want a dataset to work with the main training pipeline, this directory is only the first step. A dataset is considered "ready" only when all of the following are true:
+This directory layout is only the raw-data prerequisite for the main training pipeline. A dataset should be treated as training-ready only when all of the following are true:
 
 1. `data/<dataset>/data.pkl` exists
 2. `data/<dataset>/train_index.json`, `val_index.json`, `test_index.json` exist
 3. the dataset name is registered in `src/data/unified_data_factory.py`
 4. `python prepare_data_new.py --datasets <dataset> --methods feuler` finishes successfully
 5. `data/processed/<dataset>/...` artifacts are created
+
+## Audited Dataset Availability
+
+The audited status below reflects the checked-in repository state on 2026-03-15. The classification is intentionally strict:
+
+- `Loader OK` means the dataset is registered in `src/data/unified_data_factory.py` and `loader.load_data()` succeeds with the local files currently present in `data/<dataset>/`.
+- `feuler training cache readable` means `UnifiedDataInterface` can read the existing `feuler` serialized cache, vocab, and BPE codebook from the current repository state.
+- `End-to-end verified` is reserved for datasets that were actually executed through `prepare_data_new.py -> run_pretrain.py -> run_finetune.py`.
+- `feuler training cache readable` does not imply that the dataset has been reproduced from raw data in the current audit window.
+
+| Status | Datasets | Meaning |
+| --- | --- | --- |
+| End-to-end verified | `qm9test` | `prepare_data_new.py -> run_pretrain.py -> run_finetune.py` has been executed successfully in the current repository state. |
+| Loader OK + feuler training cache readable | `aqsol`, `coildel`, `colors3`, `dblp`, `dd`, `molhiv`, `mutagenicity`, `peptides_func`, `peptides_struct`, `proteins`, `qm9`, `qm9test`, `synthetic`, `twitter`, `zinc` | Raw data files load successfully, and the current `feuler` cache can be consumed by the training read path. |
+| Loader OK, prepare required before training | `mnist`, `mnist_raw` | Loader smoke tests succeed, but the current repository state does not contain the required `feuler` serialized cache, vocab, and BPE codebook. |
+| Blocked in current repository state | `code2` | The raw loader path is blocked because `data/code2/data.pkl` is missing. Existing partial cache files are not sufficient to claim that the dataset is runnable. |
 
 ## Getting Datasets
 
@@ -67,7 +83,7 @@ Extract into the `data/` directory at the project root.
    python prepare_data_new.py --datasets <dataset> --methods feuler
    ```
 
-   If you use multi-sampling during preparation, remember the exact `K` value. Training must later use the same `serialization.multiple_sampling.num_realizations=K`, or it will look in the wrong cache directory.
+If multi-sampling is used during preparation, the exact `K` value must be preserved. Training must use the same `serialization.multiple_sampling.num_realizations=K`; otherwise it will read from a different cache directory.
 
 6. **Run smoke tests**:
 
@@ -76,7 +92,7 @@ Extract into the `data/` directory at the project root.
    python run_finetune.py --dataset <dataset> --method feuler --epochs 1 --batch_size 8
    ```
 
-   For fine-tuning, also make sure CUDA is available and that you pass a valid pre-trained checkpoint directory.
+   For fine-tuning, CUDA must be available and the command should point to a valid pre-trained checkpoint directory.
 
 ## Dataset Sources & Conversion
 
@@ -155,15 +171,15 @@ Note the CLI difference:
 - `prepare_data_new.py` uses plural arguments: `--datasets`, `--methods`
 - `run_pretrain.py` / `run_finetune.py` use singular arguments: `--dataset`, `--method`
 
-If you prepare with `--multiple_samples K`, the training scripts must be launched with matching `serialization.multiple_sampling.enabled=true` and `serialization.multiple_sampling.num_realizations=K`. Otherwise `UnifiedDataInterface` will read from `single/` instead of `multi_<K>/`.
+If preparation uses `--multiple_samples K`, the training scripts must be launched with matching `serialization.multiple_sampling.enabled=true` and `serialization.multiple_sampling.num_realizations=K`. Otherwise `UnifiedDataInterface` reads from `single/` instead of `multi_<K>/`.
 
-If you skip Step 1, the later scripts will fail because the serialized cache and vocabulary have not been built yet.
+Skipping Step 1 leaves the serialized cache and vocabulary absent, so later training commands will fail.
 
 ## Minimal End-to-End Validation
 
-The following `qm9test` smoke test was executed successfully on the current repository state and is the safest reproducible path for a first run.
+The following `qm9test` sequence was executed successfully on the current repository state. It is the only dataset/configuration pair that has been fully verified through `prepare -> pretrain -> finetune` in this audit.
 
-1. Prepare a fresh `multi_3` cache so you do not overwrite existing `single/`, `multi_10/`, or `multi_100/` artifacts:
+1. Prepare a fresh `multi_3` cache to avoid overwriting the existing `single/`, `multi_10/`, or `multi_100/` artifacts:
 
     ```bash
     python prepare_data_new.py \
@@ -184,7 +200,7 @@ The following `qm9test` smoke test was executed successfully on the current repo
     model/bpe/qm9test/feuler/multi_3/bpe_codebook.pkl
     ```
 
-2. Run a one-epoch pre-training smoke test against that same `multi_3` cache:
+2. Run a one-epoch pre-training smoke test against the same `multi_3` cache:
 
     ```bash
     CUDA_VISIBLE_DEVICES=0 python run_pretrain.py \
@@ -229,7 +245,7 @@ The following `qm9test` smoke test was executed successfully on the current repo
         --config_json '{"device":"cuda:0","system":{"device":"cuda:0","num_workers":1,"persistent_workers":true},"serialization":{"multiple_sampling":{"enabled":true,"num_realizations":3},"bpe":{"num_merges":64}},"bert":{"finetuning":{"save_models":false}}}'
     ```
 
-If all three steps pass, the `prepare_data_new.py -> run_pretrain.py -> run_finetune.py` path is confirmed to be working for that dataset/configuration pair.
+If all three steps pass, the `prepare_data_new.py -> run_pretrain.py -> run_finetune.py` path is confirmed for that dataset/configuration pair only.
 
 ## Current Repository Caveats
 

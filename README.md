@@ -149,16 +149,23 @@ data/processed/qm9test/
 └── vocab/feuler/bpe/single/vocab.json
 ```
 
-If you want the full verified end-to-end walkthrough, including a tested `qm9test -> prepare -> pretrain -> finetune` smoke test and current dataset caveats, see:
+Refer to the following resources for detailed data preparation and execution instructions:
 
 - [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md) — dataset-by-dataset conversion notes
 - [`src/data/README.md`](src/data/README.md) — data layer contract and expected directory layout
 
-Important notes for reproducibility:
+Current audited status:
+
+- `qm9test` is the only dataset that has been fully verified through `prepare_data_new.py -> run_pretrain.py -> run_finetune.py`
+- `mnist` and `mnist_raw` currently pass loader-level checks only; `prepare_data_new.py` must be executed before training
+- `code2` is blocked in the checked-in repository state because `data/code2/data.pkl` is missing
+- The complete audited status table is maintained in [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md)
+
+**Important Notes:**
 
 - `prepare_data_new.py` uses plural CLI arguments (`--datasets`, `--methods`), while `run_pretrain.py` and `run_finetune.py` use singular ones (`--dataset`, `--method`)
-- if you prepare data with `--multiple_samples K`, the training scripts must be launched with matching `serialization.multiple_sampling.enabled=true` and `serialization.multiple_sampling.num_realizations=K`; otherwise they will read from `single/` instead of `multi_K/`
-- the checked-in default config currently sets `encoder.type: gte`, so runs will use the GTE encoder unless you explicitly switch to `bert`
+- If preparing data with `--multiple_samples K`, the training scripts must be launched with matching `serialization.multiple_sampling.enabled=true` and `serialization.multiple_sampling.num_realizations=K`; otherwise, they will read from `single/` instead of `multi_K/`
+- The checked-in default config currently sets `encoder.type: gte`, so runs will use the GTE encoder unless explicitly switched to `bert`
 
 ### 2. Pre-training
 
@@ -173,12 +180,12 @@ python run_pretrain.py \
     --batch_size 256
 ```
 
-Important notes:
+**Important Notes:**
 
-- `--dataset` and `--method` are required here
-- the script reads the processed artifacts produced by `prepare_data_new.py`
-- the default config uses the paths in `config/default_config.yml`, where `data_dir` resolves to `data/`
-- for a verified one-epoch `qm9test` smoke test with `multi_3` serialization and the exact `config_json` overrides, see [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md)
+- `--dataset` and `--method` are required
+- The script reads the processed artifacts produced by `prepare_data_new.py`
+- The default config uses the paths in `config/default_config.yml`, where `data_dir` resolves to `data/`
+- A verified one-epoch `qm9test` smoke test with `multi_3` serialization is documented in [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md)
 
 ### 3. Fine-tuning
 
@@ -196,11 +203,11 @@ python run_finetune.py \
 
 For regression datasets such as `qm9`, set `--target_property` explicitly. For classification datasets such as `mutagenicity` or `molhiv`, the loader metadata is usually sufficient and no regression target is needed.
 
-Additional notes:
+**Fine-tuning Notes:**
 
 - `run_finetune.py` currently requires CUDA (`torch.cuda.is_available()` is asserted at startup)
-- the safest smoke-test path is to point `--pretrained_dir` directly at `model/<group>/<exp_name>/run_0/best`
-- the pre-trained checkpoint directory must contain both `config.bin` and `pytorch_model.bin`
+- For smoke tests, `--pretrained_dir` should point directly to `model/<group>/<exp_name>/run_0/best`
+- The pre-trained checkpoint directory must contain both `config.bin` and `pytorch_model.bin`
 
 ### 4. Batch Experiments
 
@@ -231,7 +238,7 @@ Scripts for all paper experiments are in the `final/` directory:
 
 ## Dataset Preparation Checklist
 
-Use this checklist if you want to make sure a new dataset is really runnable end-to-end.
+Use the following checklist to verify that a dataset is runnable end-to-end:
 
 1. Put the dataset under `data/<dataset>/`
 2. Ensure `data.pkl`, `train_index.json`, `val_index.json`, and `test_index.json` all exist

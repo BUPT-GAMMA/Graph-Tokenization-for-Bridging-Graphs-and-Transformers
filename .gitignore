@@ -7,8 +7,11 @@
 .history
 .claude
 .cursor
+.windsurf/
 .specstory/
 /.pytest_cache/
+AGENTS.md
+Agent.markdown
 
 # ==========================================
 # 论文（正在撰写）
@@ -21,8 +24,10 @@ paper/
 /data/*
 !/data/DATASET_STATS.md
 !/data/*/
-/data/*/
+/data/*/*
 !/data/*/README.md
+!/data/*/*.py
+!/data/*/*.ipynb
 /dataset/
 /local/
 /cache
@@ -73,6 +78,11 @@ nohup.out
 env.txt
 *.backup
 sitecustomize.py
+
+# ==========================================
+# 本地 Agent / AI 协作文档
+# ==========================================
+/docs/handoffs/
 
 # ==========================================
 # 根目录生成的 CSV 数据

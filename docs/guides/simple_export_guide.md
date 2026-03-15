@@ -2,11 +2,11 @@
 
 ## 📋 概述
 
-这是一个**极简**的数据集导出方案，为每个数据集创建单独的导出脚本，输出统一的简单格式。
+这是一个**极简**的数据集导出方案说明。这里描述的是推荐接口，不表示仓库当前已经包含每个数据集对应的独立导出脚本文件。
 
 ## 🎯 设计原则
 
-1. **一个数据集一个脚本**：每个数据集有独立的 `export_<dataset>.py`
+1. **一个数据集一个脚本**：推荐形态是每个数据集有独立的 `export_<dataset>.py`
 2. **极简数据格式**：只保存构建图需要的基本信息
 3. **直接可用**：导出的数据可以直接转换为DGL或PyG格式
 4. **无复杂逻辑**：没有条件判断、假设、兼容性代码
@@ -16,9 +16,7 @@
 ```
 项目根目录/
 ├── simple_graph_loader.py     # 通用加载器
-├── export_qm9.py             # QM9导出脚本
-├── export_zinc.py            # ZINC导出脚本  
-├── export_molhiv.py          # MOLHIV导出脚本
+├── export_<dataset>.py       # 计划中的单数据集导出脚本
 └── export_<dataset>.py       # 其他数据集导出脚本
 ```
 
@@ -61,17 +59,9 @@
 ### 第1步：导出数据集
 
 ```bash
-# 导出QM9数据集
-python export_qm9.py
-# 输出: qm9_simple.pkl
-
-# 导出ZINC数据集  
-python export_zinc.py
-# 输出: zinc_simple.pkl
-
-# 导出MOLHIV数据集
-python export_molhiv.py
-# 输出: molhiv_simple.pkl
+# 按约定形态调用
+python export_<dataset>.py
+# 输出: <dataset>_simple.pkl
 ```
 
 ### 第2步：在目标项目中使用
@@ -204,11 +194,11 @@ if 'feature' in dgl_graph.ndata:
 
 ## ✅ 已实现的数据集
 
-| 数据集 | 导出脚本 | 节点特征 | 边特征 | 标签类型 |
+| 数据集 | 计划中的脚本形态 | 节点特征 | 边特征 | 标签类型 |
 |--------|----------|----------|---------|----------|
-| QM9 | `export_qm9.py` | 原子序数(1维) | 键类型(1维) | 多属性回归 |
-| ZINC | `export_zinc.py` | 原子序数(1维) | 键类型(1维) | 单值回归 |
-| MOLHIV | `export_molhiv.py` | 原子序数(1维) | 键类型(1维) | 二分类 |
+| QM9 | `export_<dataset>.py` | 原子序数(1维) | 键类型(1维) | 多属性回归 |
+| ZINC | `export_<dataset>.py` | 原子序数(1维) | 键类型(1维) | 单值回归 |
+| MOLHIV | `export_<dataset>.py` | 原子序数(1维) | 键类型(1维) | 二分类 |
 
 ## 🔧 在其他项目中集成
 
