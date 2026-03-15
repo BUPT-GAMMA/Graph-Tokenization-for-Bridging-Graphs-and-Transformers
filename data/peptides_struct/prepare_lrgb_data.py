@@ -14,6 +14,7 @@ import torch
 from pathlib import Path
 from typing import List, Tuple, Any, Dict
 import gzip
+import sys
 
 try:
     import torch_geometric
@@ -25,6 +26,11 @@ except ImportError:
     exit(1)
 
 import dgl
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
 from config import ProjectConfig
 from src.utils.logger import get_logger
 

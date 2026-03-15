@@ -17,8 +17,13 @@ from pathlib import Path
 from typing import List
 import json
 import pickle
+import sys
 
 import numpy as np
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+	sys.path.insert(0, str(REPO_ROOT))
 
 from config import ProjectConfig
 
@@ -109,7 +114,6 @@ if __name__ == "__main__":
 	cfg = ProjectConfig()
 	prepare_mnist_raw(cfg)
 	validate_mnist_raw_format(cfg)
-
 
 
 
