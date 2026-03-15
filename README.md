@@ -153,6 +153,9 @@ Refer to the following resources for detailed data preparation and execution ins
 
 - [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md) — dataset-by-dataset conversion notes
 - [`src/data/README.md`](src/data/README.md) — data layer contract and expected directory layout
+- [`docs/reproducibility/dataset-cold-start-audit.md`](docs/reproducibility/dataset-cold-start-audit.md) — cold-start reproducibility audit and script traceability
+- [`docs/reproducibility/cold-start-runbook.md`](docs/reproducibility/cold-start-runbook.md) — independent clone-based cold-start run record
+- [`docs/reproducibility/cold-start-roadmap.md`](docs/reproducibility/cold-start-roadmap.md) — remaining dataset-by-dataset closure plan
 
 Current audited status:
 

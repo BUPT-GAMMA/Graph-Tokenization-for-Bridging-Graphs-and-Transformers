@@ -84,6 +84,134 @@ This means the current remote repository does not yet include the local dataset 
 2. Normalize which of them are official cold-start entry points.
 3. Repeat the independent clone-based run after those scripts are part of the repository history.
 
+## Successful Clone-Based Reproduction in Local Snapshot
+
+To continue verification without waiting for the remote repository to include those scripts, a local snapshot branch was created and cloned:
+
+- source branch: `repro-audit-local`
+- source commit used for clone: `70b82a2`
+- clone path: `/tmp/tokenizerGraph-cold-start-local`
+
+### Dataset
+
+- `mnist_raw`
+
+### Command
+
+```bash
+python data/mnist_raw/prepare.py
+```
+
+### Outcome
+
+- public download succeeded through the current proxy environment
+- `data/mnist_raw/data.pkl` was generated with `70000` samples
+- split files were generated:
+  - `train_index.json` -> `56000`
+  - `val_index.json` -> `7000`
+  - `test_index.json` -> `7000`
+- the script's built-in validation completed successfully
+
+### Comparison Against Existing Baseline
+
+The newly generated files were compared against the current repository baseline at `/home/gzy/py/tokenizerGraph/data/mnist_raw`.
+
+SHA-256 comparison:
+
+- `data.pkl`
+  - baseline: `f972168e3a211fd665a307ad37dba63f45a10dd3f4150523b787d8f316d647c1`
+  - cloned run: `f972168e3a211fd665a307ad37dba63f45a10dd3f4150523b787d8f316d647c1`
+- `train_index.json`
+  - baseline: `c066c82580c2cf26fed2730306f5e50f0f1265e4f31806f9878d94ef31f2f4d2`
+  - cloned run: `c066c82580c2cf26fed2730306f5e50f0f1265e4f31806f9878d94ef31f2f4d2`
+- `val_index.json`
+  - baseline: `f94831ef28a8c6576976962827f4c6aaab2f67b5c508c4dcd12ca4162c7c7204`
+  - cloned run: `f94831ef28a8c6576976962827f4c6aaab2f67b5c508c4dcd12ca4162c7c7204`
+- `test_index.json`
+  - baseline: `e2e0956c699938b02f15276a22960788ef94d32f0fcd5a7289473274262b1745`
+  - cloned run: `e2e0956c699938b02f15276a22960788ef94d32f0fcd5a7289473274262b1745`
+
+Additional checks:
+
+- `data.pkl` sample count matched exactly
+- first sample label and image array matched exactly
+- last sample label and image array matched exactly
+- `UnifiedDataInterface` in the cloned repository loaded the generated dataset successfully
+
+### Conclusion
+
+`mnist_raw` is now verified as a clone-based cold-start reproducible dataset, and its generated artifacts are byte-identical to the current baseline.
+
+## Additional Clone-Based Results
+
+### `molhiv`
+
+Command:
+
+```bash
+python data/molhiv/preprocess_molhiv.py
+```
+
+Observed result:
+
+- public OGB download succeeded
+- `train_index.json`, `val_index.json`, `test_index.json` matched the current baseline byte-for-byte
+- `data.pkl` did not match at raw file hash level
+- `data.pkl` did match at semantic digest level
+- sampled graph/label checks at index `0`, `20563`, `41126` were all exactly equal in:
+  - labels
+  - node count
+  - edge count
+  - `ndata` keys, shapes, dtypes, values
+  - `edata` keys, shapes, dtypes, values
+
+Interpretation:
+
+- current cold-start script reproduces the same dataset semantics
+- the remaining difference is in pickle-level binary representation, not the dataset content checked so far
+
+### `proteins`
+
+Command:
+
+```bash
+python data/proteins/preprocess_proteins.py
+```
+
+Observed result:
+
+- TU download succeeded
+- `train_index.json`, `val_index.json`, `test_index.json` matched the current baseline byte-for-byte
+- `data.pkl` did not match at raw file hash level
+- `data.pkl` did match at semantic digest level
+
+Interpretation:
+
+- same situation as `molhiv`
+- split policy matches baseline exactly
+- pickle bytes still differ
+
+### `colors3`
+
+Command:
+
+```bash
+python data/colors3/preprocess_colors3.py
+```
+
+Observed result:
+
+- TU download succeeded
+- graph/label semantics matched the current baseline on sampled checks
+- `data.pkl` semantic digest matched
+- all three split files differed from the current baseline
+
+Interpretation:
+
+- this is not yet a baseline-identical cold-start path
+- unlike `molhiv` and `proteins`, the remaining difference is not only pickle serialization
+- `colors3` still has a split-policy or ordering mismatch that must be resolved before closure
+
 ## Success Criteria
 
 本轮冷启动复现成功，至少需要满足：

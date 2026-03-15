@@ -37,6 +37,12 @@
 - `twitter`
 - `mnist_raw`
 
+Verified clone-based statuses so far:
+
+- `mnist_raw` -> byte-identical to baseline
+- `molhiv` -> semantic-equivalent to baseline; split files byte-identical, `data.pkl` pickle bytes differ
+- `proteins` -> semantic-equivalent to baseline; split files byte-identical, `data.pkl` pickle bytes differ
+
 ### Traceable but not yet a public-raw cold-start pipeline in the current repository
 
 - `qm9`
@@ -47,6 +53,10 @@
 ### Partially traceable / not yet normalized in current repository
 
 - `mnist`
+
+### Cold-start runnable but not yet baseline-identical
+
+- `colors3`
 
 ## Dataset Matrix
 

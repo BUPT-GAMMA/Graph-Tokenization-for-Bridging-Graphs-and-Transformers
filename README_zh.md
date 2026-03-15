@@ -153,6 +153,9 @@ data/processed/qm9test/
 
 - [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md) — 数据集转换说明、验证命令与当前审计状态
 - [`src/data/README.md`](src/data/README.md) — 数据层接口约定与目录结构
+- [`docs/reproducibility/dataset-cold-start-audit.md`](docs/reproducibility/dataset-cold-start-audit.md) — 冷启动可复现性审计与脚本追溯结果
+- [`docs/reproducibility/cold-start-runbook.md`](docs/reproducibility/cold-start-runbook.md) — 独立克隆目录冷启动复现实录
+- [`docs/reproducibility/cold-start-roadmap.md`](docs/reproducibility/cold-start-roadmap.md) — 后续逐数据集收口路线图
 
 当前审计结论：
 
