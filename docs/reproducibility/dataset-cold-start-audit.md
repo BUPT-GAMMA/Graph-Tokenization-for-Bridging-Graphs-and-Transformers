@@ -46,6 +46,9 @@ Verified clone-based statuses so far:
 - `peptides_func` -> semantic-equivalent to baseline; split files byte-identical, `data.pkl.gz` bytes differ
 - `peptides_struct` -> semantic-equivalent to baseline; split files byte-identical, `data.pkl.gz` bytes differ
 - `synthetic` -> semantic-equivalent to baseline; split files byte-identical, `data.pkl` pickle bytes differ
+- `mutagenicity` -> semantic-equivalent to baseline; split files byte-identical, `data.pkl` pickle bytes differ
+- `coildel` -> semantic-equivalent to baseline; split files byte-identical, `data.pkl` pickle bytes differ
+- `dd` -> semantic-equivalent to baseline; split files byte-identical, `data.pkl` pickle bytes differ
 
 ### Traceable but not yet a public-raw cold-start pipeline in the current repository
 
@@ -64,6 +67,9 @@ Verified clone-based statuses so far:
 - `proteins`
 - `colors3`
 - `synthetic`
+- `mutagenicity`
+- `coildel`
+- `dd`
 - `peptides_func`
 - `peptides_struct`
 

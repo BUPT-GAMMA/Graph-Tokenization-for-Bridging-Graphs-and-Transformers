@@ -271,6 +271,66 @@ Interpretation:
 - current cold-start script reproduces the same dataset semantics and split policy
 - remaining difference is in pickle-level binary representation only
 
+### `mutagenicity`
+
+Command:
+
+```bash
+python data/mutagenicity/preprocess_mutagenicity.py
+```
+
+Observed result:
+
+- TU download succeeded
+- `train_index.json`, `val_index.json`, `test_index.json` match the current baseline byte-for-byte
+- `data.pkl` semantic digest matches the current baseline
+- `data.pkl` raw file hash differs
+
+Interpretation:
+
+- current cold-start script reproduces the same dataset semantics and split policy
+- remaining difference is in pickle-level binary representation only
+
+### `coildel`
+
+Command:
+
+```bash
+python data/coildel/preprocess_coil_del.py
+```
+
+Observed result:
+
+- TU download succeeded
+- `train_index.json`, `val_index.json`, `test_index.json` match the current baseline byte-for-byte
+- `data.pkl` semantic digest matches the current baseline
+- `data.pkl` raw file hash differs
+
+Interpretation:
+
+- current cold-start script reproduces the same dataset semantics and split policy
+- remaining difference is in pickle-level binary representation only
+
+### `dd`
+
+Command:
+
+```bash
+python data/dd/preprocess_dd.py
+```
+
+Observed result:
+
+- TU download succeeded
+- `train_index.json`, `val_index.json`, `test_index.json` match the current baseline byte-for-byte
+- `data.pkl` semantic digest matches the current baseline
+- `data.pkl` raw file hash differs
+
+Interpretation:
+
+- current cold-start script reproduces the same dataset semantics and split policy
+- remaining difference is in pickle-level binary representation only
+
 ## Success Criteria
 
 本轮冷启动复现成功，至少需要满足：
