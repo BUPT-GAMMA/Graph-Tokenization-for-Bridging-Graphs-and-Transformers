@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import gzip
 import json
 import pickle
 from pathlib import Path
@@ -48,7 +49,12 @@ def _update_digest_with_value(digest: "hashlib._Hash", value) -> None:
 
 
 def semantic_digest_pickle(path: Path) -> str:
-    payload = pickle.load(path.open("rb"))
+    if path.name.endswith(".pkl.gz"):
+        with gzip.open(path, "rb") as f:
+            payload = pickle.load(f)
+    else:
+        with path.open("rb") as f:
+            payload = pickle.load(f)
     digest = hashlib.sha256()
     _update_digest_with_value(digest, payload)
     return digest.hexdigest()
@@ -78,7 +84,7 @@ def _compare_binary_files(baseline: Path, candidate: Path) -> dict:
     baseline_sha = sha256_file(baseline)
     candidate_sha = sha256_file(candidate)
     semantic_match = None
-    if baseline.suffix == ".pkl":
+    if baseline.name.endswith(".pkl") or baseline.name.endswith(".pkl.gz"):
         semantic_match = semantic_digest_pickle(baseline) == semantic_digest_pickle(candidate)
     return {
         "match": baseline_sha == candidate_sha,
