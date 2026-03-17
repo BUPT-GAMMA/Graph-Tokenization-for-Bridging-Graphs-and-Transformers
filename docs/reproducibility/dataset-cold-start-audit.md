@@ -42,6 +42,10 @@ Verified clone-based statuses so far:
 - `mnist_raw` -> byte-identical to baseline
 - `molhiv` -> semantic-equivalent to baseline; split files byte-identical, `data.pkl` pickle bytes differ
 - `proteins` -> semantic-equivalent to baseline; split files byte-identical, `data.pkl` pickle bytes differ
+- `colors3` -> semantic-equivalent to baseline; split files byte-identical after split-policy fix, `data.pkl` pickle bytes differ
+- `peptides_func` -> semantic-equivalent to baseline; split files byte-identical, `data.pkl.gz` bytes differ
+- `peptides_struct` -> semantic-equivalent to baseline; split files byte-identical, `data.pkl.gz` bytes differ
+- `synthetic` -> semantic-equivalent to baseline; split files byte-identical, `data.pkl` pickle bytes differ
 
 ### Traceable but not yet a public-raw cold-start pipeline in the current repository
 
@@ -54,9 +58,14 @@ Verified clone-based statuses so far:
 
 - `mnist`
 
-### Cold-start runnable but not yet baseline-identical
+### Cold-start runnable but not yet baseline byte-identical
 
+- `molhiv`
+- `proteins`
 - `colors3`
+- `synthetic`
+- `peptides_func`
+- `peptides_struct`
 
 ## Dataset Matrix
 

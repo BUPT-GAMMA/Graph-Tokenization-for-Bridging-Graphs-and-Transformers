@@ -199,18 +199,77 @@ Command:
 python data/colors3/preprocess_colors3.py
 ```
 
-Observed result:
+Observed result after split-policy fix:
 
 - TU download succeeded
-- graph/label semantics matched the current baseline on sampled checks
-- `data.pkl` semantic digest matched
-- all three split files differed from the current baseline
+- all three split files now match the current baseline byte-for-byte
+- `data.pkl` semantic digest matches the current baseline
+- `data.pkl` raw file hash still differs
 
 Interpretation:
 
-- this is not yet a baseline-identical cold-start path
-- unlike `molhiv` and `proteins`, the remaining difference is not only pickle serialization
-- `colors3` still has a split-policy or ordering mismatch that must be resolved before closure
+- `colors3` has been upgraded from “split mismatch” to the same status as `molhiv` and `proteins`
+- remaining difference is in pickle-level binary representation only
+
+### `peptides_func`
+
+Command:
+
+```bash
+python data/peptides_func/prepare_lrgb_data.py
+```
+
+Observed result:
+
+- public LRGB download succeeded
+- `train_index.json`, `val_index.json`, `test_index.json` match the current baseline byte-for-byte
+- `data.pkl.gz` semantic digest matches the current baseline
+- `data.pkl.gz` raw file hash differs
+
+Interpretation:
+
+- current cold-start script reproduces the same dataset semantics and split policy
+- remaining difference is in compressed pickle bytes
+
+### `peptides_struct`
+
+Command:
+
+```bash
+python data/peptides_func/prepare_lrgb_data.py
+```
+
+Observed result:
+
+- public LRGB download succeeded
+- `train_index.json`, `val_index.json`, `test_index.json` match the current baseline byte-for-byte
+- `data.pkl.gz` semantic digest matches the current baseline
+- `data.pkl.gz` raw file hash differs
+
+Interpretation:
+
+- current cold-start script reproduces the same dataset semantics and split policy
+- remaining difference is in compressed pickle bytes
+
+### `synthetic`
+
+Command:
+
+```bash
+python data/synthetic/preprocess_synthetic.py
+```
+
+Observed result:
+
+- TU download succeeded
+- `train_index.json`, `val_index.json`, `test_index.json` match the current baseline byte-for-byte
+- `data.pkl` semantic digest matches the current baseline
+- `data.pkl` raw file hash differs
+
+Interpretation:
+
+- current cold-start script reproduces the same dataset semantics and split policy
+- remaining difference is in pickle-level binary representation only
 
 ## Success Criteria
 

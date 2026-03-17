@@ -1,4 +1,5 @@
 import json
+import gzip
 import pickle
 from pathlib import Path
 
@@ -72,3 +73,19 @@ def test_semantic_digest_pickle_can_ignore_protocol_differences(tmp_path):
 
     assert sha256_file(baseline) != sha256_file(candidate)
     assert semantic_digest_pickle(baseline) == semantic_digest_pickle(candidate)
+
+
+def test_compare_dataset_artifacts_supports_pickle_gzip(tmp_path):
+    baseline = tmp_path / "baseline"
+    candidate = tmp_path / "candidate"
+    baseline.mkdir()
+    candidate.mkdir()
+    payload = [({"x": [1, 2]}, 1), ({"x": [3, 4]}, 0)]
+    with gzip.open(baseline / "data.pkl.gz", "wb") as f:
+        pickle.dump(payload, f, protocol=4)
+    with gzip.open(candidate / "data.pkl.gz", "wb") as f:
+        pickle.dump(payload, f, protocol=5)
+
+    report = compare_dataset_artifacts(baseline, candidate, required_files=["data.pkl.gz"])
+    assert report["files"]["data.pkl.gz"]["match"] is False
+    assert report["files"]["data.pkl.gz"]["semantic_match"] is True

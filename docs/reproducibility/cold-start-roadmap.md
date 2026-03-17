@@ -86,20 +86,18 @@
 
 - `mnist_raw`
 
-### Clone-verified with semantic equivalence but not byte-identical `data.pkl`
+### Clone-verified with semantic equivalence but not byte-identical artifact bytes
 
 - `molhiv`
 - `proteins`
-
-### Cold-start runs but currently mismatches baseline
-
 - `colors3`
+- `synthetic`
+- `peptides_func`
+- `peptides_struct`
 
 ### Script exists and can likely be reproduced next
 
-- `molhiv`
 - `code2`
-- `proteins`
 - `synthetic`
 - `mutagenicity`
 - `coildel`
