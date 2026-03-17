@@ -153,6 +153,16 @@ That legacy implementation appears to contain raw QM9 download and processing lo
 
 This lineage appears to build older molecular graph datasets from public raw sources, but it is not yet normalized into a current one-command preprocessing script that produces the exact current `data/<dataset>` layout.
 
+### 2.5. Current runtime transport blockers already identified
+
+- `code2`
+  - public source path exists through OGB
+  - current runtime encountered `HTTP 502` from the upstream download path
+- `qm9`
+  - both the DGL dataset source and the DeepChem CSV source currently fail with SSL EOF / handshake errors under the current proxy chain
+
+These are currently treated as environment or upstream transport blockers rather than evidence that the repository-side preprocessing design is wrong.
+
 ### 3. Export documentation is noisier than the codebase
 
 Current documentation still references scripts such as:
