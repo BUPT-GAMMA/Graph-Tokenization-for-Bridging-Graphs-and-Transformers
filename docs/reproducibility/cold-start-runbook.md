@@ -351,6 +351,50 @@ Interpretation:
 - current cold-start script reproduces the same dataset semantics and split policy
 - remaining difference is in pickle-level binary representation only
 
+## Current External Source Blockers
+
+### `code2`
+
+Attempted command:
+
+```bash
+python data/code2/preprocess_code2.py
+```
+
+Observed blocker:
+
+- OGB upstream download returned `HTTP 502` during `DglGraphPropPredDataset(name="ogbg-code2")`
+
+Interpretation:
+
+- this is currently an external-source availability issue
+- it is not yet evidence of a repository-side preprocessing bug
+
+### `qm9`
+
+Two raw-source probes were attempted in the current runtime:
+
+1. DGL source:
+
+```text
+https://data.dgl.ai/dataset/qm9_eV.npz
+```
+
+2. DeepChem CSV source:
+
+```text
+https://deepchemdata.s3-us-west-1.amazonaws.com/datasets/qm9.csv
+```
+
+Observed blocker:
+
+- both paths failed with SSL EOF / handshake errors under the current proxy chain
+
+Interpretation:
+
+- `qm9` raw recovery is currently blocked by external transport conditions in this runtime
+- the repository still needs a normalized raw-to-current-format script once a working source path is available
+
 ## Success Criteria
 
 本轮冷启动复现成功，至少需要满足：
