@@ -92,13 +92,15 @@
 - `proteins`
 - `colors3`
 - `synthetic`
+- `mutagenicity`
+- `coildel`
+- `dd`
 - `peptides_func`
 - `peptides_struct`
 
 ### Script exists and can likely be reproduced next
 
 - `code2`
-- `synthetic`
 - `mutagenicity`
 - `coildel`
 - `dblp`
