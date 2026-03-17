@@ -158,6 +158,13 @@ Needed work:
 3. export current-format artifacts
 4. compare against existing baseline
 
+Current progress:
+
+- `data/qm9/prepare_qm9_raw.py` has been introduced as a raw scaffold
+- remaining blockers are:
+  - raw source transport failures in the current runtime
+  - unresolved exact baseline split rule
+
 ### Group C: MNIST superpixel normalization
 
 - `mnist`

@@ -410,10 +410,20 @@ Observed blocker:
 
 - both paths failed with SSL EOF / handshake errors under the current proxy chain
 
+Repository progress made meanwhile:
+
+- a raw scaffold has been added at `data/qm9/prepare_qm9_raw.py`
+- the scaffold targets the current baseline field layout:
+  - `ndata['pos']`
+  - `ndata['attr']` with width `11`
+  - `edata['edge_attr']` with width `4`
+  - `data.pkl`
+  - four SMILES side files
+
 Interpretation:
 
 - `qm9` raw recovery is currently blocked by external transport conditions in this runtime
-- the repository still needs a normalized raw-to-current-format script once a working source path is available
+- the repository now has a raw-script entry point, but the exact baseline split rule is still unresolved
 
 ## Success Criteria
 
