@@ -50,6 +50,7 @@ Verified clone-based statuses so far:
 - `coildel` -> semantic-equivalent to baseline; split files byte-identical, `data.pkl` pickle bytes differ
 - `dd` -> semantic-equivalent to baseline; split files byte-identical, `data.pkl` pickle bytes differ
 - `dblp` -> semantic-equivalent to baseline; split files byte-identical, `data.pkl` pickle bytes differ
+- `twitter` -> semantic-equivalent to baseline; split files byte-identical, `data.pkl` pickle bytes differ
 
 ### Traceable but not yet a public-raw cold-start pipeline in the current repository
 
@@ -72,6 +73,7 @@ Verified clone-based statuses so far:
 - `coildel`
 - `dd`
 - `dblp`
+- `twitter`
 - `peptides_func`
 - `peptides_struct`
 
