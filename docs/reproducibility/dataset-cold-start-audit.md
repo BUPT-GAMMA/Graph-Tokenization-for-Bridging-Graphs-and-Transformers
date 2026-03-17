@@ -95,7 +95,7 @@ Verified clone-based statuses so far:
 | `twitter` | TU `TWITTER-Real-Graph-Partial` | Present in current repo | `data/twitter/preprocess_twitter_real_graph_partial.py` | Cold-start reproducible | Public source should be surfaced more clearly in docs |
 | `mnist_raw` | `torchvision.datasets.MNIST` | Present in current repo | `data/mnist_raw/prepare.py` | Cold-start reproducible | Needs formal cold-start runbook |
 | `mnist` | `tensorflow.keras.datasets.mnist` | Present but incomplete | `data/mnist/convert_mnist_to_dgl.py` | Partially traceable | Depends on local `final_slic` pipeline and is not packaged as a clean reproducible cold-start path |
-| `qm9` | MoleculeNet / DGL built-in | Secondary script present in current repo; legacy raw-data lineage found in backup repo | `data/qm9/process_qm9_dataset.py` and `/home/gzy/py/backup_tokenizerGraph/backup/legacy_scripts/qm9_loader.py` | Partially traceable | The current script is a secondary script built on already processed QM9 data, not yet a public-raw cold-start pipeline |
+| `qm9` | MoleculeNet / DGL built-in | Raw scaffold now present in current repo; legacy raw-data lineage found in backup repo | `data/qm9/prepare_qm9_raw.py`, `data/qm9/process_qm9_dataset.py`, `/home/gzy/py/backup_tokenizerGraph/backup/legacy_scripts/qm9_loader.py` | Partially traceable | Raw source transport is currently blocked and the exact baseline split rule is still unresolved |
 | `qm9test` | Derived from `qm9` | Secondary script present in current repo | `data/qm9test/create_qm9test_dataset.py` | Partially traceable | The current script builds `qm9test` from an already processed `qm9`; it is not yet a public-raw cold-start pipeline |
 | `zinc` | ZINC-12K / legacy molecule pipeline | Legacy preparation code found in backup repo | `/home/gzy/py/backup_tokenizerGraph/foreign_dataset_files_to_convert/dataset_prepare.py` and `data/zinc/README.md` | Traceable outside current repo | Current repo lacks a normalized standalone preprocessing script |
 | `aqsol` | AqSolDB / legacy molecule pipeline | Legacy preparation code found in backup repo | `/home/gzy/py/backup_tokenizerGraph/foreign_dataset_files_to_convert/dataset_prepare.py` | Traceable outside current repo | Current repo lacks a normalized standalone preprocessing script |
@@ -134,12 +134,22 @@ The current repository already contains different baseline formats for the three
 
 This means that “strictly consistent with existing processed datasets” must be interpreted dataset-by-dataset, not as one single shared molecular format.
 
-### 1. `qm9` and `qm9test` do have scripts in the current repository, but they are secondary scripts
+### 1. `qm9` and `qm9test` now have a split between raw scaffold and secondary scripts
 
+- `data/qm9/prepare_qm9_raw.py`
 - `data/qm9/process_qm9_dataset.py`
 - `data/qm9test/create_qm9test_dataset.py`
 
-These are secondary scripts built on top of an already processed QM9 dataset. They do not start from public raw data, so they do not yet qualify as a public-raw cold-start pipeline.
+Current status:
+
+- `data/qm9/prepare_qm9_raw.py` is the new raw cold-start scaffold targeting the current baseline layout
+- `data/qm9/process_qm9_dataset.py` remains a secondary script built on already processed QM9 data
+- `data/qm9test/create_qm9test_dataset.py` remains a secondary derivation step from QM9
+
+The raw scaffold still cannot be treated as fully closed because:
+
+1. the public raw sources currently fail under the present runtime transport conditions
+2. the exact current `qm9` baseline split rule is still unresolved
 
 For the deeper raw-data lineage, the backup repository also contains:
 
