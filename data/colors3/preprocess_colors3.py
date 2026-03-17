@@ -9,9 +9,6 @@ import dgl
 import numpy as np
 import torch
 from dgl.data import TUDataset
-from sklearn.model_selection import train_test_split
-
-
 def multihot_row_to_int(row: np.ndarray) -> int:
     # 将二值多热向量编码为整数（bit 编码）
     val = 0
@@ -22,15 +19,12 @@ def multihot_row_to_int(row: np.ndarray) -> int:
 
 
 def build_splits(n: int, labels):
-    idx = np.arange(n)
-    labels = np.array(labels)
-    train_idx, temp_idx = train_test_split(
-        idx, test_size=0.2, random_state=42, shuffle=True, stratify=labels
-    )
-    val_idx, test_idx = train_test_split(
-        temp_idx, test_size=0.5, random_state=42, shuffle=True, stratify=labels[temp_idx]
-    )
-    return sorted(train_idx.tolist()), sorted(val_idx.tolist()), sorted(test_idx.tolist())
+    train_end = int(n * 0.8)
+    val_end = int(n * 0.9)
+    train_idx = list(range(0, train_end))
+    val_idx = list(range(train_end, val_end))
+    test_idx = list(range(val_end, n))
+    return train_idx, val_idx, test_idx
 
 
 def main() -> None:
@@ -77,5 +71,4 @@ def main() -> None:
 
 if __name__ == '__main__':
     main()
-
 
