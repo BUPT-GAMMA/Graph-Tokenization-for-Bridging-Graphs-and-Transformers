@@ -351,6 +351,26 @@ Interpretation:
 - current cold-start script reproduces the same dataset semantics and split policy
 - remaining difference is in pickle-level binary representation only
 
+### `twitter`
+
+Command:
+
+```bash
+python data/twitter/preprocess_twitter_real_graph_partial.py
+```
+
+Observed result:
+
+- TU download succeeded
+- `train_index.json`, `val_index.json`, `test_index.json` match the current baseline byte-for-byte
+- `data.pkl` semantic digest matches the current baseline
+- `data.pkl` raw file hash differs
+
+Interpretation:
+
+- current cold-start script reproduces the same dataset semantics and split policy
+- remaining difference is in pickle-level binary representation only
+
 ## Current External Source Blockers
 
 ### `code2`

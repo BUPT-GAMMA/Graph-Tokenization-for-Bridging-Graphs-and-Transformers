@@ -96,6 +96,7 @@
 - `coildel`
 - `dd`
 - `dblp`
+- `twitter`
 - `peptides_func`
 - `peptides_struct`
 
@@ -105,7 +106,6 @@
 - `mutagenicity`
 - `coildel`
 - `dd`
-- `twitter`
 - `peptides_func`
 - `peptides_struct`
 
