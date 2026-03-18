@@ -144,7 +144,7 @@ Current status:
 
 - `data/qm9/prepare_qm9_raw.py` is the new raw cold-start scaffold targeting the current baseline layout
 - `data/qm9/process_qm9_dataset.py` remains a secondary script built on already processed QM9 data
-- `data/qm9test/create_qm9test_dataset.py` remains a secondary derivation step from QM9
+- `data/qm9test/create_qm9test_dataset.py` remains a secondary derivation step from QM9, but now supports an explicit `original_indices_path` override so that the baseline subset can be reproduced once the canonical indices are available
 
 The raw scaffold still cannot be treated as fully closed because:
 
