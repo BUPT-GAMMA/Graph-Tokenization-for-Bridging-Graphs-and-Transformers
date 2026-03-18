@@ -97,8 +97,8 @@ Verified clone-based statuses so far:
 | `mnist` | `tensorflow.keras.datasets.mnist` | Present but incomplete | `data/mnist/convert_mnist_to_dgl.py` | Partially traceable | Depends on local `final_slic` pipeline and is not packaged as a clean reproducible cold-start path |
 | `qm9` | MoleculeNet / DGL built-in | Raw scaffold now present in current repo; legacy raw-data lineage found in backup repo | `data/qm9/prepare_qm9_raw.py`, `data/qm9/process_qm9_dataset.py`, `/home/gzy/py/backup_tokenizerGraph/backup/legacy_scripts/qm9_loader.py` | Partially traceable | Raw source transport is currently blocked and the exact baseline split rule is still unresolved |
 | `qm9test` | Derived from `qm9` | Secondary script present in current repo | `data/qm9test/create_qm9test_dataset.py` | Partially traceable | The current script builds `qm9test` from an already processed `qm9`; it is not yet a public-raw cold-start pipeline |
-| `zinc` | ZINC-12K / legacy molecule pipeline | Legacy preparation code found in backup repo | `/home/gzy/py/backup_tokenizerGraph/foreign_dataset_files_to_convert/dataset_prepare.py` and `data/zinc/README.md` | Traceable outside current repo | Current repo lacks a normalized standalone preprocessing script |
-| `aqsol` | AqSolDB / legacy molecule pipeline | Legacy preparation code found in backup repo | `/home/gzy/py/backup_tokenizerGraph/foreign_dataset_files_to_convert/dataset_prepare.py` | Traceable outside current repo | Current repo lacks a normalized standalone preprocessing script |
+| `zinc` | ZINC-12K / legacy molecule pipeline | Raw scaffold now present in current repo | `data/zinc/prepare_zinc_raw.py` | Partially traceable | Raw source is Dropbox-based and currently times out in this runtime; baseline equivalence not yet verified |
+| `aqsol` | AqSolDB / legacy molecule pipeline | Raw scaffold now present in current repo | `data/aqsol/prepare_aqsol_raw.py` | Partially traceable | Raw source is Dropbox-based and currently times out in this runtime; baseline equivalence not yet verified |
 
 ## Important Findings
 
@@ -172,6 +172,10 @@ This lineage appears to build older molecular graph datasets from public raw sou
   - current runtime encountered `HTTP 502` from the upstream download path
 - `qm9`
   - both the DGL dataset source and the DeepChem CSV source currently fail with SSL EOF / handshake errors under the current proxy chain
+- `zinc`
+  - Dropbox raw source currently hits `ConnectTimeout`
+- `aqsol`
+  - Dropbox raw source currently hits `ConnectTimeout`
 
 These are currently treated as environment or upstream transport blockers rather than evidence that the repository-side preprocessing design is wrong.
 
