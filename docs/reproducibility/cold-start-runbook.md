@@ -425,6 +425,44 @@ Interpretation:
 - `qm9` raw recovery is currently blocked by external transport conditions in this runtime
 - the repository now has a raw-script entry point, but the exact baseline split rule is still unresolved
 
+### `zinc`
+
+Command:
+
+```bash
+python data/zinc/prepare_zinc_raw.py
+```
+
+Observed blocker:
+
+- raw source URL is Dropbox-based
+- current runtime hit `ConnectTimeout` while requesting:
+  - `https://www.dropbox.com/s/feo9qle74kg48gy/molecules.zip?dl=1`
+
+Interpretation:
+
+- repository-side raw script scaffold now exists
+- actual cold-start run is currently blocked by external source reachability
+
+### `aqsol`
+
+Command:
+
+```bash
+python data/aqsol/prepare_aqsol_raw.py
+```
+
+Observed blocker:
+
+- raw source URL is Dropbox-based
+- current runtime hit `ConnectTimeout` while requesting:
+  - `https://www.dropbox.com/s/lzu9lmukwov12kt/aqsol_graph_raw.zip?dl=1`
+
+Interpretation:
+
+- repository-side raw script scaffold now exists
+- actual cold-start run is currently blocked by external source reachability
+
 ## Success Criteria
 
 本轮冷启动复现成功，至少需要满足：
