@@ -12,7 +12,7 @@ import pickle
 import json
 import numpy as np
 from pathlib import Path
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Tuple, Any, Optional
 import time
 from tqdm import tqdm
 import sys
@@ -28,7 +28,26 @@ from utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-def create_qm9test_dataset(config: ProjectConfig, test_ratio: float = 0.1, random_state: int = 42) -> None:
+def _load_original_indices(path: Optional[str]) -> Optional[List[int]]:
+    if path is None:
+        return None
+    indices_path = Path(path)
+    if not indices_path.exists():
+        raise FileNotFoundError(f"original_indices_path not found: {indices_path}")
+    payload = json.loads(indices_path.read_text(encoding="utf-8"))
+    if isinstance(payload, dict):
+        payload = payload.get("original_indices", [])
+    if not isinstance(payload, list):
+        raise ValueError("original_indices_path must contain a JSON list or {'original_indices': [...]} object")
+    return [int(x) for x in payload]
+
+
+def create_qm9test_dataset(
+    config: ProjectConfig,
+    test_ratio: float = 0.1,
+    random_state: int = 42,
+    original_indices_path: Optional[str] = None,
+) -> None:
     """
     创建QM9Test数据集
     
@@ -50,16 +69,20 @@ def create_qm9test_dataset(config: ProjectConfig, test_ratio: float = 0.1, rando
     
     logger.info(f"✅ 成功加载 {len(all_data)} 个QM9样本")
     
-    # 随机选择10%的数据
-    np.random.seed(random_state)
-    total_size = len(all_data)
-    test_size = int(total_size * test_ratio)
-    
-    # 随机选择索引
-    selected_indices = np.random.choice(total_size, test_size, replace=False)
-    selected_indices = sorted(selected_indices.tolist())  # 按顺序排列
-    
-    logger.info(f"🎯 随机选择 {test_size} 个样本 (索引范围: {min(selected_indices)} - {max(selected_indices)})")
+    selected_indices = _load_original_indices(original_indices_path)
+    if selected_indices is None:
+        # 随机选择10%的数据
+        np.random.seed(random_state)
+        total_size = len(all_data)
+        test_size = int(total_size * test_ratio)
+        selected_indices = np.random.choice(total_size, test_size, replace=False)
+        selected_indices = sorted(selected_indices.tolist())  # 按顺序排列
+        logger.info(f"🎯 随机选择 {test_size} 个样本 (索引范围: {min(selected_indices)} - {max(selected_indices)})")
+    else:
+        logger.info(
+            f"🎯 使用显式原始索引文件，共 {len(selected_indices)} 个样本 "
+            f"(索引范围: {min(selected_indices)} - {max(selected_indices)})"
+        )
     
     # 提取选中的数据
     test_data = [all_data[i] for i in selected_indices]
@@ -170,7 +193,8 @@ def create_qm9test_dataset(config: ProjectConfig, test_ratio: float = 0.1, rando
         'test_samples': len(test_new_indices),
         'original_indices': selected_indices,  # 在原始QM9中的索引
         'creation_time': time.strftime('%Y-%m-%d %H:%M:%S'),
-        'random_state': random_state
+        'random_state': random_state,
+        'original_indices_path': original_indices_path,
     }
     
     metadata_file = qm9test_dir / "metadata.json"
@@ -266,8 +290,12 @@ def main():
     # 加载配置
     config = ProjectConfig()
     
+    original_indices_path = None
+    if len(sys.argv) > 1:
+        original_indices_path = sys.argv[1]
+
     # 创建QM9Test数据集
-    create_qm9test_dataset(config, test_ratio=0.1, random_state=42)
+    create_qm9test_dataset(config, test_ratio=0.1, random_state=42, original_indices_path=original_indices_path)
     
     # 验证数据集
     verify_qm9test_dataset(config)

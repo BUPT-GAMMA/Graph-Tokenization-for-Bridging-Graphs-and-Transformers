@@ -19,3 +19,8 @@ def test_qm9test_original_indices_come_from_qm9_non_train_partition():
 def test_qm9_secondary_script_writes_to_qm9_processed_not_current_baseline_dir():
     script_text = (Path("data/qm9") / "process_qm9_dataset.py").read_text(encoding="utf-8")
     assert 'output_dir = "data/qm9_processed"' in script_text
+
+
+def test_qm9test_script_supports_explicit_original_indices_override():
+    script_text = (Path("data/qm9test") / "create_qm9test_dataset.py").read_text(encoding="utf-8")
+    assert "original_indices_path" in script_text

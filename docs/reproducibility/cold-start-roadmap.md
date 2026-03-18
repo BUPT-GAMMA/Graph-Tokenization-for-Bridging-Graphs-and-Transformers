@@ -161,6 +161,7 @@ Needed work:
 Current progress:
 
 - `data/qm9/prepare_qm9_raw.py` has been introduced as a raw scaffold
+- `data/qm9test/create_qm9test_dataset.py` now supports explicit original-index replay
 - remaining blockers are:
   - raw source transport failures in the current runtime
   - unresolved exact baseline split rule
