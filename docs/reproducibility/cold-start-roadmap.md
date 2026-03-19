@@ -101,6 +101,8 @@
 - `peptides_struct`
 - `qm9`
 - `qm9test`
+- `zinc`
+- `aqsol`
 
 ### Script exists and can likely be reproduced next
 
@@ -162,9 +164,10 @@ Current progress:
 
 - `data/qm9/prepare_qm9_raw.py` now replays baseline split order and resolves duplicate-signature molecules by exact graph-tensor signature before WL fallback
 - `data/qm9test/create_qm9test_dataset.py` now replays directly from canonical `data/qm9` and can reproduce the current baseline subset exactly except for `data.pkl` pickle bytes
-- `data/zinc/prepare_zinc_raw.py` and `data/aqsol/prepare_aqsol_raw.py` have been introduced as raw scaffolds
+- `data/zinc/prepare_zinc_raw.py` now reproduces the baseline from public `ZINC.pkl`, with byte-identical split files and `smiles_*`
+- `data/aqsol/prepare_aqsol_raw.py` now reproduces the baseline from public raw zip + dictionary mapping, with byte-identical split files and `smiles_*`
 - remaining blockers are:
-  - raw source transport failures for `zinc` / `aqsol`
+  - both `zinc` and `aqsol` still require an explicit outbound proxy in the current runtime
 
 ### Group C: MNIST superpixel normalization
 
