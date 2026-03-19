@@ -51,11 +51,11 @@ Verified clone-based statuses so far:
 - `dd` -> semantic-equivalent to baseline; split files byte-identical, `data.pkl` pickle bytes differ
 - `dblp` -> semantic-equivalent to baseline; split files byte-identical, `data.pkl` pickle bytes differ
 - `twitter` -> semantic-equivalent to baseline; split files byte-identical, `data.pkl` pickle bytes differ
+- `qm9` -> semantic-equivalent to baseline; split files byte-identical, four `smiles_*` files byte-identical, `data.pkl` pickle bytes differ
+- `qm9test` -> semantic-equivalent to baseline; split files byte-identical, four `smiles_*` files byte-identical, `metadata.json` byte-identical, `data.pkl` pickle bytes differ
 
 ### Traceable but not yet a public-raw cold-start pipeline in the current repository
 
-- `qm9`
-- `qm9test`
 - `zinc`
 - `aqsol`
 
@@ -76,6 +76,8 @@ Verified clone-based statuses so far:
 - `twitter`
 - `peptides_func`
 - `peptides_struct`
+- `qm9`
+- `qm9test`
 
 ## Dataset Matrix
 
@@ -95,8 +97,8 @@ Verified clone-based statuses so far:
 | `twitter` | TU `TWITTER-Real-Graph-Partial` | Present in current repo | `data/twitter/preprocess_twitter_real_graph_partial.py` | Cold-start reproducible | Public source should be surfaced more clearly in docs |
 | `mnist_raw` | `torchvision.datasets.MNIST` | Present in current repo | `data/mnist_raw/prepare.py` | Cold-start reproducible | Needs formal cold-start runbook |
 | `mnist` | `tensorflow.keras.datasets.mnist` | Present but incomplete | `data/mnist/convert_mnist_to_dgl.py` | Partially traceable | Depends on local `final_slic` pipeline and is not packaged as a clean reproducible cold-start path |
-| `qm9` | MoleculeNet / DGL built-in | Raw scaffold now present in current repo; legacy raw-data lineage found in backup repo | `data/qm9/prepare_qm9_raw.py`, `data/qm9/process_qm9_dataset.py`, `/home/gzy/py/backup_tokenizerGraph/backup/legacy_scripts/qm9_loader.py` | Partially traceable | Raw source transport is currently blocked and the exact baseline split rule is still unresolved |
-| `qm9test` | Derived from `qm9` | Secondary script present in current repo | `data/qm9test/create_qm9test_dataset.py` | Partially traceable | The current script builds `qm9test` from an already processed `qm9`; it is not yet a public-raw cold-start pipeline |
+| `qm9` | MoleculeNet / DGL built-in | Raw scaffold present in current repo; alignment now verified against current baseline | `data/qm9/prepare_qm9_raw.py`, `data/qm9/process_qm9_dataset.py`, `/home/gzy/py/backup_tokenizerGraph/backup/legacy_scripts/qm9_loader.py` | Cold-start reproducible to semantic baseline equivalence | Public raw-source access still depends on runtime transport/proxy conditions; `data.pkl` bytes still differ |
+| `qm9test` | Derived from `qm9` | Secondary replay script present in current repo | `data/qm9test/create_qm9test_dataset.py` | Reproducible secondary replay pipeline | Not a public-raw dataset by itself; `data.pkl` bytes still differ |
 | `zinc` | ZINC-12K / legacy molecule pipeline | Raw scaffold now present in current repo | `data/zinc/prepare_zinc_raw.py` | Partially traceable | Raw source is Dropbox-based and currently times out in this runtime; baseline equivalence not yet verified |
 | `aqsol` | AqSolDB / legacy molecule pipeline | Raw scaffold now present in current repo | `data/aqsol/prepare_aqsol_raw.py` | Partially traceable | Raw source is Dropbox-based and currently times out in this runtime; baseline equivalence not yet verified |
 
@@ -142,14 +144,17 @@ This means that “strictly consistent with existing processed datasets” must 
 
 Current status:
 
-- `data/qm9/prepare_qm9_raw.py` is the new raw cold-start scaffold targeting the current baseline layout
+- `data/qm9/prepare_qm9_raw.py` is the raw cold-start scaffold targeting the current baseline layout
 - `data/qm9/process_qm9_dataset.py` remains a secondary script built on already processed QM9 data
-- `data/qm9test/create_qm9test_dataset.py` remains a secondary derivation step from QM9, but now supports an explicit `original_indices_path` override so that the baseline subset can be reproduced once the canonical indices are available
+- `data/qm9test/create_qm9test_dataset.py` now replays directly from canonical `data/qm9`, instead of using a loader path that destroys the original global ordering
 
-The raw scaffold still cannot be treated as fully closed because:
+Current verified state:
 
-1. the public raw sources currently fail under the present runtime transport conditions
-2. the exact current `qm9` baseline split rule is still unresolved
+1. `qm9` split files are byte-identical to baseline
+2. `qm9` four `smiles_*` side files are byte-identical to baseline
+3. `qm9` full sample-by-sample tensor comparison is exact, while `data.pkl` bytes still differ
+4. `qm9test` split files, four `smiles_*` side files, and `metadata.json` are byte-identical to baseline
+5. `qm9test` `data.pkl` is semantically identical, while pickle bytes still differ
 
 For the deeper raw-data lineage, the backup repository also contains:
 
@@ -171,7 +176,7 @@ This lineage appears to build older molecular graph datasets from public raw sou
   - public source path exists through OGB
   - current runtime encountered `HTTP 502` from the upstream download path
 - `qm9`
-  - both the DGL dataset source and the DeepChem CSV source currently fail with SSL EOF / handshake errors under the current proxy chain
+  - script logic is now validated, but raw-source access still depends on runtime transport/proxy conditions
 - `zinc`
   - Dropbox raw source currently hits `ConnectTimeout`
 - `aqsol`

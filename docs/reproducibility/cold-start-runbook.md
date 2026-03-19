@@ -392,12 +392,22 @@ Interpretation:
 
 ### `qm9`
 
-Two raw-source probes were attempted in the current runtime:
+Command used for the latest verified replay:
+
+```bash
+python data/qm9/prepare_qm9_raw.py \
+  --split-source-dir /home/gzy/py/tokenizerGraph/data/qm9 \
+  --reference-data-pkl /home/gzy/py/tokenizerGraph/data/qm9/data.pkl \
+  --reference-smiles-dir /home/gzy/py/tokenizerGraph/data/qm9 \
+  --output-dir /tmp/qm9-raw-run
+```
+
+Raw-source probes used during script development:
 
 1. DGL source:
 
 ```text
-https://data.dgl.ai/dataset/qm9_eV.npz
+https://data.dgl.ai/dataset/qm9_edge.npz
 ```
 
 2. DeepChem CSV source:
@@ -406,24 +416,42 @@ https://data.dgl.ai/dataset/qm9_eV.npz
 https://deepchemdata.s3-us-west-1.amazonaws.com/datasets/qm9.csv
 ```
 
-Observed blocker:
+Current progress:
 
-- both paths failed with SSL EOF / handshake errors under the current proxy chain
-
-Repository progress made meanwhile:
-
-- a raw scaffold has been added at `data/qm9/prepare_qm9_raw.py`
-- the scaffold targets the current baseline field layout:
-  - `ndata['pos']`
-  - `ndata['attr']` with width `11`
-  - `edata['edge_attr']` with width `4`
-  - `data.pkl`
-  - four SMILES side files
+- the raw script now uses `dgl.data.QM9EdgeDataset`
+- `train_index.json`, `val_index.json`, `test_index.json` can be reproduced byte-for-byte
+- the four `smiles_*` side files are now byte-identical when replaying the current baseline side files
+- a full sample-by-sample tensor scan now reports `all_equal`
+- `data.pkl` still differs at raw pickle-byte level, but now reports `semantic_match=true`
 
 Interpretation:
 
-- `qm9` raw recovery is currently blocked by external transport conditions in this runtime
-- the repository now has a raw-script entry point, but the exact baseline split rule is still unresolved
+- the remaining `data.pkl` difference is now at pickle-byte level only
+- the earlier duplicate-signature alignment bug around sample `4699` has been resolved by preferring exact graph-tensor signatures before WL fallback
+
+### `qm9test`
+
+Command used for the latest verified replay:
+
+```bash
+python data/qm9test/create_qm9test_dataset.py \
+  --original-indices-path /home/gzy/py/tokenizerGraph/data/qm9test/metadata.json \
+  --source-dir /home/gzy/py/tokenizerGraph/data/qm9 \
+  --output-dir /tmp/qm9test-replay
+```
+
+Observed result:
+
+- `create_qm9test_dataset.py` now replays directly from `data/qm9`, instead of using a loader path that destroys the original global ordering
+- `train_index.json`, `val_index.json`, `test_index.json` are byte-identical to the current baseline
+- all four `smiles_*` side files are byte-identical to the current baseline
+- `metadata.json` is byte-identical to the current baseline when replaying from the current `metadata.json`
+- `data.pkl` is not byte-identical, but reports `semantic_match=true`
+
+Interpretation:
+
+- `qm9test` is now a stable secondary replay step from the canonical `qm9` baseline
+- the only remaining artifact-level difference is the same pickle-byte non-determinism already seen in other datasets
 
 ### `zinc`
 
