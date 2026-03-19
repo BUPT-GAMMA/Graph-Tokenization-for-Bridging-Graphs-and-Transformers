@@ -53,13 +53,10 @@ Verified clone-based statuses so far:
 - `twitter` -> semantic-equivalent to baseline; split files byte-identical, `data.pkl` pickle bytes differ
 - `qm9` -> semantic-equivalent to baseline; split files byte-identical, four `smiles_*` files byte-identical, `data.pkl` pickle bytes differ
 - `qm9test` -> semantic-equivalent to baseline; split files byte-identical, four `smiles_*` files byte-identical, `metadata.json` byte-identical, `data.pkl` pickle bytes differ
+- `zinc` -> semantic-equivalent to baseline; split files byte-identical, four `smiles_*` files byte-identical, `data.pkl` pickle bytes differ
+- `aqsol` -> semantic-equivalent to baseline; split files byte-identical, four `smiles_*` files byte-identical, `data.pkl` pickle bytes differ
 
 ### Traceable but not yet a public-raw cold-start pipeline in the current repository
-
-- `zinc`
-- `aqsol`
-
-### Partially traceable / not yet normalized in current repository
 
 - `mnist`
 
@@ -78,6 +75,8 @@ Verified clone-based statuses so far:
 - `peptides_struct`
 - `qm9`
 - `qm9test`
+- `zinc`
+- `aqsol`
 
 ## Dataset Matrix
 
@@ -99,8 +98,8 @@ Verified clone-based statuses so far:
 | `mnist` | `tensorflow.keras.datasets.mnist` | Present but incomplete | `data/mnist/convert_mnist_to_dgl.py` | Partially traceable | Depends on local `final_slic` pipeline and is not packaged as a clean reproducible cold-start path |
 | `qm9` | MoleculeNet / DGL built-in | Raw scaffold present in current repo; alignment now verified against current baseline | `data/qm9/prepare_qm9_raw.py`, `data/qm9/process_qm9_dataset.py`, `/home/gzy/py/backup_tokenizerGraph/backup/legacy_scripts/qm9_loader.py` | Cold-start reproducible to semantic baseline equivalence | Public raw-source access still depends on runtime transport/proxy conditions; `data.pkl` bytes still differ |
 | `qm9test` | Derived from `qm9` | Secondary replay script present in current repo | `data/qm9test/create_qm9test_dataset.py` | Reproducible secondary replay pipeline | Not a public-raw dataset by itself; `data.pkl` bytes still differ |
-| `zinc` | ZINC-12K / legacy molecule pipeline | Raw scaffold now present in current repo | `data/zinc/prepare_zinc_raw.py` | Partially traceable | Raw source is Dropbox-based and currently times out in this runtime; baseline equivalence not yet verified |
-| `aqsol` | AqSolDB / legacy molecule pipeline | Raw scaffold now present in current repo | `data/aqsol/prepare_aqsol_raw.py` | Partially traceable | Raw source is Dropbox-based and currently times out in this runtime; baseline equivalence not yet verified |
+| `zinc` | benchmarking-gnns public `ZINC.pkl` | Public cold-start script present in current repo | `data/zinc/prepare_zinc_raw.py` | Cold-start reproducible to semantic baseline equivalence | Requires working outbound proxy in this runtime; `data.pkl` bytes still differ |
+| `aqsol` | AqSol raw zip + dictionary pipeline | Public cold-start script present in current repo | `data/aqsol/prepare_aqsol_raw.py` | Cold-start reproducible to semantic baseline equivalence | Requires working outbound proxy in this runtime; `data.pkl` bytes still differ |
 
 ## Important Findings
 
@@ -162,13 +161,17 @@ For the deeper raw-data lineage, the backup repository also contains:
 
 That legacy implementation appears to contain raw QM9 download and processing logic, but it is not yet normalized into the current repository structure.
 
-### 2. `zinc` and `aqsol` also have historical preparation lineage
+### 2. `zinc` and `aqsol` now have validated public-source lineages
 
 - The historical molecule preparation flow exists in:
   - `/home/gzy/py/backup_tokenizerGraph/foreign_dataset_files_to_convert/dataset_prepare.py`
   - `/home/gzy/py/backup_tokenizerGraph/foreign_dataset_files_to_convert/molecules.py`
 
-This lineage appears to build older molecular graph datasets from public raw sources, but it is not yet normalized into a current one-command preprocessing script that produces the exact current `data/<dataset>` layout.
+Current verified state:
+
+1. `zinc` now reproduces the current baseline split files and four `smiles_*` side files byte-for-byte from public `ZINC.pkl`
+2. `aqsol` now reproduces the current baseline split files and four `smiles_*` side files byte-for-byte from the public raw zip plus dictionary mapping
+3. both still differ at `data.pkl` raw pickle-byte level only
 
 ### 2.5. Current runtime transport blockers already identified
 
@@ -178,9 +181,9 @@ This lineage appears to build older molecular graph datasets from public raw sou
 - `qm9`
   - script logic is now validated, but raw-source access still depends on runtime transport/proxy conditions
 - `zinc`
-  - Dropbox raw source currently hits `ConnectTimeout`
+  - public access is available only after explicitly routing through `http://local.nginx.show:7890` in this runtime
 - `aqsol`
-  - Dropbox raw source currently hits `ConnectTimeout`
+  - public access is available only after explicitly routing through `http://local.nginx.show:7890` in this runtime
 
 These are currently treated as environment or upstream transport blockers rather than evidence that the repository-side preprocessing design is wrong.
 
@@ -212,6 +215,6 @@ The current processed datasets under `data/<dataset>` are the baseline targets f
 
 ## Immediate Next Actions
 
-1. Restore or normalize `qm9`, `qm9test`, `zinc`, and `aqsol` preprocessing scripts into the current repository.
+1. Continue normalizing the remaining unresolved dataset `mnist`.
 2. Remove or downgrade non-existent export script references from documentation.
 3. Add a cold-start runbook and execute one independent clone-based cold-start reproduction.

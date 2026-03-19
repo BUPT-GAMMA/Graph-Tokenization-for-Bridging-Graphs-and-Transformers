@@ -458,38 +458,57 @@ Interpretation:
 Command:
 
 ```bash
-python data/zinc/prepare_zinc_raw.py
+export http_proxy=http://local.nginx.show:7890
+export https_proxy=http://local.nginx.show:7890
+python data/zinc/prepare_zinc_raw.py \
+  --use-env-proxy \
+  --split-source-dir /home/gzy/py/tokenizerGraph/data/zinc \
+  --reference-data-pkl /home/gzy/py/tokenizerGraph/data/zinc/data.pkl \
+  --output-dir /tmp/zinc-pkl-run2
 ```
 
-Observed blocker:
+Observed result:
 
-- raw source URL is Dropbox-based
-- current runtime hit `ConnectTimeout` while requesting:
-  - `https://www.dropbox.com/s/feo9qle74kg48gy/molecules.zip?dl=1`
+- direct outbound access to Dropbox and Hugging Face failed in the current runtime
+- the local proxy `http://local.nginx.show:7890` was verified to work for both Dropbox and Hugging Face
+- the script now uses public `ZINC.pkl` from `https://data.dgl.ai/dataset/benchmarking-gnns/ZINC.pkl`
+- `train_index.json`, `val_index.json`, `test_index.json` match the current baseline byte-for-byte
+- the four `smiles_*` side files match the current baseline byte-for-byte
+- `data.pkl` is not byte-identical, but now reports `semantic_match=true`
 
 Interpretation:
 
-- repository-side raw script scaffold now exists
-- actual cold-start run is currently blocked by external source reachability
+- the previous `molecules.zip` path was not the right baseline lineage for the current project
+- the public `ZINC.pkl` package plus explicit-h graph normalization reproduces the current baseline semantics
+- the remaining difference is pickle-byte level only
 
 ### `aqsol`
 
 Command:
 
 ```bash
-python data/aqsol/prepare_aqsol_raw.py
+export http_proxy=http://local.nginx.show:7890
+export https_proxy=http://local.nginx.show:7890
+python data/aqsol/prepare_aqsol_raw.py \
+  --use-env-proxy \
+  --output-dir /tmp/aqsol-proxy-run2
 ```
 
-Observed blocker:
+Observed result:
 
-- raw source URL is Dropbox-based
-- current runtime hit `ConnectTimeout` while requesting:
-  - `https://www.dropbox.com/s/lzu9lmukwov12kt/aqsol_graph_raw.zip?dl=1`
+- the same local proxy `http://local.nginx.show:7890` was required for public-source access
+- the raw zip dictionaries had to be honored as categorical atom/bond vocabularies, not atomic numbers directly
+- RDKit reconstruction required the same relaxed sanitize strategy as the upstream `asqol_conversion_pipeline_v5.py`
+- invalid raw samples had to be skipped exactly as in the upstream conversion pipeline
+- `train_index.json`, `val_index.json`, `test_index.json` match the current baseline byte-for-byte
+- the four `smiles_*` side files match the current baseline byte-for-byte
+- `data.pkl` is not byte-identical, but now reports `semantic_match=true`
 
 Interpretation:
 
-- repository-side raw script scaffold now exists
-- actual cold-start run is currently blocked by external source reachability
+- the previous blocker was not source reachability alone; the real issue was reconstruction logic
+- current script logic now reproduces the current baseline semantics from public raw inputs
+- the remaining difference is pickle-byte level only
 
 ## Success Criteria
 
