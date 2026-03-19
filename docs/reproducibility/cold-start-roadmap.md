@@ -99,6 +99,8 @@
 - `twitter`
 - `peptides_func`
 - `peptides_struct`
+- `qm9`
+- `qm9test`
 
 ### Script exists and can likely be reproduced next
 
@@ -111,8 +113,6 @@
 
 ### Needs normalization before true public-raw cold-start
 
-- `qm9`
-- `qm9test`
 - `zinc`
 - `aqsol`
 - `mnist`
@@ -160,12 +160,11 @@ Needed work:
 
 Current progress:
 
-- `data/qm9/prepare_qm9_raw.py` has been introduced as a raw scaffold
-- `data/qm9test/create_qm9test_dataset.py` now supports explicit original-index replay
+- `data/qm9/prepare_qm9_raw.py` now replays baseline split order and resolves duplicate-signature molecules by exact graph-tensor signature before WL fallback
+- `data/qm9test/create_qm9test_dataset.py` now replays directly from canonical `data/qm9` and can reproduce the current baseline subset exactly except for `data.pkl` pickle bytes
 - `data/zinc/prepare_zinc_raw.py` and `data/aqsol/prepare_aqsol_raw.py` have been introduced as raw scaffolds
 - remaining blockers are:
-  - raw source transport failures in the current runtime
-  - unresolved exact baseline split rule
+  - raw source transport failures for `zinc` / `aqsol`
 
 ### Group C: MNIST superpixel normalization
 
