@@ -122,9 +122,21 @@ final/**/*.log
 *.tex
 
 # ==========================================
-# hyperopt 日志
+# hyperopt 代码保留，运行产物忽略
 # ==========================================
-hyperopt/
+/hyperopt/*
+!/hyperopt/README.md
+!/hyperopt/__init__.py
+!/hyperopt/scripts/
+/hyperopt/scripts/*
+!/hyperopt/scripts/__init__.py
+!/hyperopt/scripts/*.py
+!/hyperopt/journal/
+/hyperopt/journal/*
+!/hyperopt/journal/.gitkeep
+!/hyperopt/results/
+/hyperopt/results/*
+!/hyperopt/results/.gitkeep
 
 # ==========================================
 # 历史遗留单文件排除

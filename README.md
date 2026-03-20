@@ -166,6 +166,12 @@ Refer to the following resources for detailed data preparation and execution ins
 - [`docs/reproducibility/environment-setup.md`](docs/reproducibility/environment-setup.md) — tested environment boundary, dependency layering, and install verification notes
 - [`docs/reproducibility/paper-dataset-cold-start-guide.md`](docs/reproducibility/paper-dataset-cold-start-guide.md) — formal paper-scope dataset setup and validation guide
 
+Pre-packaged datasets are available here:
+
+- Google Drive bundle: <https://drive.google.com/file/d/10etZF9OnV569_Fp7tpdMUVEH9eZECKdW/view?usp=sharing>
+
+The repository also keeps raw-to-unified conversion scripts under dataset folders and [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md). Those scripts are not only for rebuilding the released datasets; they are also intended as concrete references when integrating a new dataset into the same directory contract.
+
 Current audited status:
 
 - `qm9test` is the only dataset that has been fully verified through `prepare_data_new.py -> run_pretrain.py -> run_finetune.py`
@@ -247,6 +253,11 @@ Scripts for all paper experiments are in the `final/` directory:
 - **Efficiency analysis** — `final/exp1_speed/`: serialization speed, token length stats, training throughput
 - **Multi-sampling comparison** — `final/exp2_mult_seralize_comp/`: effect of multiple serialization samples
 - **BPE vocabulary visualization** — `final/exp4_bpe_vocab_visual/`: codebook inspection and visualization
+
+For the maintained Optuna-based hyperparameter search workflow, see:
+
+- [`hyperopt/README.md`](hyperopt/README.md)
+- [`docs/guides/hyperparameter_search.md`](docs/guides/hyperparameter_search.md)
 
 ## Dataset Preparation Checklist
 

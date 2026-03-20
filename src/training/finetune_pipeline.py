@@ -410,6 +410,8 @@ def run_finetune(
         writer.add_scalar('Final/Avg_Epoch_Time', float(avg_epoch_time), 0)
         writer.add_scalar('Final/Total_Train_Time', float(total_train_time), 0)
         writer.add_scalar(f'Final/Best_Val_{pk}', float(best_val), 0)
+        temp_optuna_trial = getattr(config, 'optuna_trial', None)
+        config.optuna_trial = None
         # 组装最终指标并写入日志目录，包含所有聚合模式的结果
         final_json = {
             'dataset': str(dataset_name),
@@ -449,6 +451,7 @@ def run_finetune(
             'aggregator_trained': aggregator is not None,
             'config': config.to_dict(),  # 保存完整配置
         }
+        config.optuna_trial = temp_optuna_trial
         out_json_path = logs_dir / _log_name / 'finetune_metrics.json'
         try:
             (logs_dir / _log_name).mkdir(parents=True, exist_ok=True)
@@ -489,5 +492,4 @@ def run_finetune(
         'aggregator_dir': str(best_dir / "aggregator") if aggregator is not None else None,
         'finetune_metrics': test_metrics_by_mode.get('learned', test_metrics_by_mode["avg"])[pk],
     }
-
 
