@@ -71,6 +71,10 @@
 - 在全新虚拟环境 `/tmp/tokenizerGraph-installcheck-20260320/.venv` 中，以下命令成功完成：
   - `pip install -e /home/gzy/py/tokenizerGraph`
   - 其中 build dependencies、editable metadata、C++ 扩展构建全部成功
+- 基于提交 `45c9b748e0e1672e7b8d17fd4ea07ad45352ba00` 的干净本地克隆 `/tmp/tokenizerGraph-postcommit-20260320` 中：
+  - `pip install -e /tmp/tokenizerGraph-postcommit-20260320` 再次成功
+  - `ProjectConfig().cache_dir` 解析为仓库内本地路径 `/tmp/tokenizerGraph-postcommit-20260320/cache`
+  - 证明此前 `/local/gzy/tokg` 权限问题来自当前工作树的本地 `cache` 符号链接，而非仓库默认配置
 
 ## 复现边界与新增发现
 
@@ -83,6 +87,10 @@
   - `nvidia-smi` 返回 `Failed to initialize NVML: Unknown Error`
   - `torch.cuda.is_available()` 返回 `False`
   - 因此本轮不能对 `run_finetune.py` 的 CUDA 路径作通过声明
+- 在干净克隆中执行 `python prepare_data_new.py --datasets qm9test --methods feuler --bpe_merges 50` 后，首次真实失败点变为：
+  - `data/qm9test/train_index.json` 等索引文件不存在
+  - 说明 `qm9test` 不是 clean clone 自带的 checked-in 示例数据，而是需要先由 `qm9` 派生得到的 smoke-test 数据集
+  - 已据此修正 README 的对外口径，避免继续把 `qm9test` 写成仓库内现成样例
 
 ## 下一步
 
