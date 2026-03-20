@@ -2,7 +2,7 @@
 
 **Graph Tokenization for Bridging Graphs and Transformers**
 
-[[中文文档 / Chinese README]](README_zh.md) · [[Paper (ICLR 2026 / OpenReview)]](https://openreview.net/forum?id=jCctxI1BGF) · arXiv (coming soon)
+[[中文文档 / Chinese README]](README_zh.md) · [[Paper (ICLR 2026 / OpenReview)]](https://openreview.net/forum?id=jCctxI1BGF) · [[arXiv]](https://arxiv.org/abs/2603.11099)
 
 > **Branches:** `release` — paper-scope reproducibility only. [`dev`](../../tree/dev) — full development line, including experimental/blocked preprocessing scripts and audit materials that are intentionally excluded from `release`.
 
