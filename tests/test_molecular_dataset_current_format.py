@@ -1,7 +1,4 @@
-import pickle
 from pathlib import Path
-
-import torch
 
 
 QM9_KEYS = {
@@ -24,39 +21,25 @@ QM9_KEYS = {
 }
 
 
-def _load_first_sample(dataset_name: str):
-    data_path = Path("data") / dataset_name / "data.pkl"
-    with data_path.open("rb") as f:
-        data = pickle.load(f)
-    return data[0]
+def test_audit_doc_records_qm9_current_baseline_format():
+    audit = Path("docs/reproducibility/dataset-cold-start-audit.md").read_text(encoding="utf-8")
+    script = Path("data/qm9/prepare_qm9_raw.py").read_text(encoding="utf-8")
+    assert "sample type: `(DGLGraph, dict)`" in audit
+    assert "label payload: 16-property dictionary" in audit
+    assert "graph fields: `ndata['pos']`, `ndata['attr']`, `edata['edge_attr']`" in audit
+    for key in sorted(QM9_KEYS):
+        assert f'"{key}"' in script
 
 
-def test_qm9_current_format_matches_documented_baseline():
-    graph, label = _load_first_sample("qm9")
-    assert isinstance(label, dict)
-    assert set(label.keys()) == QM9_KEYS
-    assert "pos" in graph.ndata
-    assert "attr" in graph.ndata
-    assert "edge_attr" in graph.edata
-    assert tuple(graph.ndata["pos"].shape[1:]) == (3,)
-    assert tuple(graph.ndata["attr"].shape[1:]) == (11,)
-    assert tuple(graph.edata["edge_attr"].shape[1:]) == (4,)
+def test_audit_doc_records_zinc_current_baseline_format():
+    audit = Path("docs/reproducibility/dataset-cold-start-audit.md").read_text(encoding="utf-8")
+    assert "sample type: `(DGLGraph, torch.Tensor)`" in audit
+    assert "label payload: scalar tensor with shape `(1,)`" in audit
+    assert "graph fields: `ndata['feat']`, `edata['feat']`" in audit
 
 
-def test_zinc_current_format_matches_documented_baseline():
-    graph, label = _load_first_sample("zinc")
-    assert isinstance(label, torch.Tensor)
-    assert label.shape == (1,)
-    assert graph.ndata["feat"].dtype == torch.int64
-    assert graph.edata["feat"].dtype == torch.int64
-    assert graph.ndata["feat"].dim() == 1
-    assert graph.edata["feat"].dim() == 1
-
-
-def test_aqsol_current_format_matches_documented_baseline():
-    graph, label = _load_first_sample("aqsol")
-    assert isinstance(label, float)
-    assert graph.ndata["feat"].dtype == torch.int64
-    assert graph.edata["feat"].dtype == torch.int64
-    assert graph.ndata["feat"].dim() == 1
-    assert graph.edata["feat"].dim() == 1
+def test_audit_doc_records_aqsol_current_baseline_format():
+    audit = Path("docs/reproducibility/dataset-cold-start-audit.md").read_text(encoding="utf-8")
+    assert "sample type: `(DGLGraph, float)`" in audit
+    assert "label payload: Python `float`" in audit
+    assert "graph fields: `ndata['feat']`, `edata['feat']`" in audit

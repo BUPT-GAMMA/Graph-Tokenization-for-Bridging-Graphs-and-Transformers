@@ -21,6 +21,11 @@
 
 ## Summary
 
+Branch-scope note:
+
+- `release` should only expose canonical paper-scope cold-start entrypoints
+- `dev` keeps the broader audit surface, including experimental drafts, blocked loaders, and secondary helper scripts
+
 ### Paper-scope datasets with validated cold-start pipelines
 
 - `molhiv`

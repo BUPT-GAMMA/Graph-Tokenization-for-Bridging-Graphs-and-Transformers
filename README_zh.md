@@ -4,7 +4,7 @@
 
 [[English README]](README.md) · [[论文 (ICLR 2026 / OpenReview)]](https://openreview.net/forum?id=jCctxI1BGF) · arXiv（即将发布）
 
-> **分支说明：** `release` — 复现论文实验的精简代码。[`dev`](../../tree/dev) — 包含工具脚本、benchmark 和内部文档的完整开发版本。
+> **分支说明：** `release` — 只保留论文范围内正式复现所需内容。[`dev`](../../tree/dev) — 完整开发分支，保留实验性/受阻的预处理脚本以及审计材料，这些内容不会进入 `release`。
 
 ## 概述
 
