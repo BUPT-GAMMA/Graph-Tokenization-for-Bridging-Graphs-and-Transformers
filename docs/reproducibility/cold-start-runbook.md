@@ -4,6 +4,22 @@
 
 在独立克隆目录中，从公开原始数据开始执行一次冷启动复现，并将生成结果与当前仓库中的既有处理后数据进行结构对比。
 
+## Formal Scope For This Round
+
+本 runbook 仅将论文主结果实际涉及的数据集视为“正式保证范围”。
+
+当前不纳入正式保证范围的数据集：
+
+- `zinc`
+- `aqsol`
+- `mnist`
+
+说明：
+
+- `zinc` 和 `aqsol` 在仓库中保留实验性脚本与内部验证记录
+- 但本轮对外口径不再将其计为“正式已实现的冷启动流程”
+- `mnist` 仍依赖未标准化的 `final_slic` 路径，因此继续保留为未完成项
+
 ## Candidate Datasets
 
 ### Primary target: `molhiv`

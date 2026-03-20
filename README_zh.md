@@ -156,6 +156,7 @@ data/processed/qm9test/
 - [`docs/reproducibility/dataset-cold-start-audit.md`](docs/reproducibility/dataset-cold-start-audit.md) — 冷启动可复现性审计与脚本追溯结果
 - [`docs/reproducibility/cold-start-runbook.md`](docs/reproducibility/cold-start-runbook.md) — 独立克隆目录冷启动复现实录
 - [`docs/reproducibility/cold-start-roadmap.md`](docs/reproducibility/cold-start-roadmap.md) — 后续逐数据集收口路线图
+- [`docs/reproducibility/paper-dataset-cold-start-guide.md`](docs/reproducibility/paper-dataset-cold-start-guide.md) — 论文范围内数据集的正式准备与验证指南
 
 当前审计结论：
 

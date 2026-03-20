@@ -21,9 +21,8 @@
 
 ## Summary
 
-### Cold-start reproducible in current repository
+### Paper-scope datasets with validated cold-start pipelines
 
-- `code2`
 - `molhiv`
 - `peptides_func`
 - `peptides_struct`
@@ -36,6 +35,12 @@
 - `dd`
 - `twitter`
 - `mnist_raw`
+- `qm9`
+- `qm9test`
+
+### Present in repository but not yet validated end-to-end in the current runtime
+
+- `code2`
 
 Verified clone-based statuses so far:
 
@@ -53,14 +58,20 @@ Verified clone-based statuses so far:
 - `twitter` -> semantic-equivalent to baseline; split files byte-identical, `data.pkl` pickle bytes differ
 - `qm9` -> semantic-equivalent to baseline; split files byte-identical, four `smiles_*` files byte-identical, `data.pkl` pickle bytes differ
 - `qm9test` -> semantic-equivalent to baseline; split files byte-identical, four `smiles_*` files byte-identical, `metadata.json` byte-identical, `data.pkl` pickle bytes differ
-- `zinc` -> semantic-equivalent to baseline; split files byte-identical, four `smiles_*` files byte-identical, `data.pkl` pickle bytes differ
-- `aqsol` -> semantic-equivalent to baseline; split files byte-identical, four `smiles_*` files byte-identical, `data.pkl` pickle bytes differ
 
-### Traceable but not yet a public-raw cold-start pipeline in the current repository
+### Explicitly out of current paper-facing guarantee scope
 
+- `zinc`
+- `aqsol`
 - `mnist`
 
-### Cold-start runnable but not yet baseline byte-identical
+说明：
+
+- `zinc` / `aqsol` 在当前仓库中已经有实验性冷启动脚本和内部验证记录
+- 但由于论文主结果不包含这两个数据集，本轮不再将它们列为“正式已实现并保证”的数据集
+- 文档只保留它们的实验性记录，不将其纳入本轮交付边界
+
+### Paper-scope datasets that are semantically reproducible but not byte-identical
 
 - `molhiv`
 - `proteins`
@@ -75,14 +86,12 @@ Verified clone-based statuses so far:
 - `peptides_struct`
 - `qm9`
 - `qm9test`
-- `zinc`
-- `aqsol`
 
 ## Dataset Matrix
 
 | Dataset | Public source | Script status | Script path | Current assessment | Main gap |
 | --- | --- | --- | --- | --- | --- |
-| `code2` | OGB `ogbg-code2` | Present in current repo | `data/code2/preprocess_code2.py` | Cold-start reproducible | Needs formal runbook entry in main docs |
+| `code2` | OGB `ogbg-code2` | Present in current repo | `data/code2/preprocess_code2.py` | Not yet validated in current runtime | Upstream OGB download hit `HTTP 502`; no final baseline-equivalence result recorded yet |
 | `molhiv` | OGB `ogbg-molhiv` | Present in current repo | `data/molhiv/preprocess_molhiv.py` | Cold-start reproducible | Needs formal runbook entry in main docs |
 | `peptides_func` | LRGB `Peptides-func` | Present in current repo | `data/peptides_func/prepare_lrgb_data.py` | Cold-start reproducible | Script is heavy; main docs do not expose it as official cold-start path |
 | `peptides_struct` | LRGB `Peptides-struct` | Present in current repo | `data/peptides_struct/prepare_lrgb_data.py` | Cold-start reproducible | Same as above |
@@ -98,8 +107,8 @@ Verified clone-based statuses so far:
 | `mnist` | `tensorflow.keras.datasets.mnist` | Present but incomplete | `data/mnist/convert_mnist_to_dgl.py` | Partially traceable | Depends on local `final_slic` pipeline and is not packaged as a clean reproducible cold-start path |
 | `qm9` | MoleculeNet / DGL built-in | Raw scaffold present in current repo; alignment now verified against current baseline | `data/qm9/prepare_qm9_raw.py`, `data/qm9/process_qm9_dataset.py`, `/home/gzy/py/backup_tokenizerGraph/backup/legacy_scripts/qm9_loader.py` | Cold-start reproducible to semantic baseline equivalence | Public raw-source access still depends on runtime transport/proxy conditions; `data.pkl` bytes still differ |
 | `qm9test` | Derived from `qm9` | Secondary replay script present in current repo | `data/qm9test/create_qm9test_dataset.py` | Reproducible secondary replay pipeline | Not a public-raw dataset by itself; `data.pkl` bytes still differ |
-| `zinc` | benchmarking-gnns public `ZINC.pkl` | Public cold-start script present in current repo | `data/zinc/prepare_zinc_raw.py` | Cold-start reproducible to semantic baseline equivalence | Requires working outbound proxy in this runtime; `data.pkl` bytes still differ |
-| `aqsol` | AqSol raw zip + dictionary pipeline | Public cold-start script present in current repo | `data/aqsol/prepare_aqsol_raw.py` | Cold-start reproducible to semantic baseline equivalence | Requires working outbound proxy in this runtime; `data.pkl` bytes still differ |
+| `zinc` | benchmarking-gnns public `ZINC.pkl` | Experimental script present in current repo | `data/zinc/prepare_zinc_raw.py` | Out of current formal scope | Paper results do not depend on this dataset; current script remains an experimental draft |
+| `aqsol` | AqSol raw zip + dictionary pipeline | Experimental script present in current repo | `data/aqsol/prepare_aqsol_raw.py` | Out of current formal scope | Paper results do not depend on this dataset; current script remains an experimental draft |
 
 ## Important Findings
 
@@ -161,17 +170,17 @@ For the deeper raw-data lineage, the backup repository also contains:
 
 That legacy implementation appears to contain raw QM9 download and processing logic, but it is not yet normalized into the current repository structure.
 
-### 2. `zinc` and `aqsol` now have validated public-source lineages
+### 2. `zinc` and `aqsol` remain experimental and out of this round's formal scope
 
 - The historical molecule preparation flow exists in:
   - `/home/gzy/py/backup_tokenizerGraph/foreign_dataset_files_to_convert/dataset_prepare.py`
   - `/home/gzy/py/backup_tokenizerGraph/foreign_dataset_files_to_convert/molecules.py`
 
-Current verified state:
+Current status:
 
-1. `zinc` now reproduces the current baseline split files and four `smiles_*` side files byte-for-byte from public `ZINC.pkl`
-2. `aqsol` now reproduces the current baseline split files and four `smiles_*` side files byte-for-byte from the public raw zip plus dictionary mapping
-3. both still differ at `data.pkl` raw pickle-byte level only
+1. the repository contains experimental scripts and internal comparison notes for both datasets
+2. these scripts are not part of the paper-facing guaranteed cold-start surface for this round
+3. the authoritative deliverable scope should therefore exclude `zinc` and `aqsol`
 
 ### 2.5. Current runtime transport blockers already identified
 
@@ -181,9 +190,9 @@ Current verified state:
 - `qm9`
   - script logic is now validated, but raw-source access still depends on runtime transport/proxy conditions
 - `zinc`
-  - public access is available only after explicitly routing through `http://local.nginx.show:7890` in this runtime
+  - experimental path only; not part of the current guaranteed scope
 - `aqsol`
-  - public access is available only after explicitly routing through `http://local.nginx.show:7890` in this runtime
+  - experimental path only; not part of the current guaranteed scope
 
 These are currently treated as environment or upstream transport blockers rather than evidence that the repository-side preprocessing design is wrong.
 
@@ -215,6 +224,6 @@ The current processed datasets under `data/<dataset>` are the baseline targets f
 
 ## Immediate Next Actions
 
-1. Continue normalizing the remaining unresolved dataset `mnist`.
+1. Continue normalizing the remaining unresolved paper-scope dataset `mnist`.
 2. Remove or downgrade non-existent export script references from documentation.
-3. Add a cold-start runbook and execute one independent clone-based cold-start reproduction.
+3. Keep `zinc` and `aqsol` documented as experimental drafts, not as current formal deliverables.

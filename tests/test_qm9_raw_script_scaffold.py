@@ -1,9 +1,17 @@
 from pathlib import Path
+import importlib.util
 
 import dgl
 import torch
 
-from data.qm9.prepare_qm9_raw import _ordered_graph_signature, _reorder_to_reference
+MODULE_PATH = Path("data/qm9/prepare_qm9_raw.py").resolve()
+SPEC = importlib.util.spec_from_file_location("prepare_qm9_raw_test_module", MODULE_PATH)
+assert SPEC is not None and SPEC.loader is not None
+MODULE = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(MODULE)
+
+_ordered_graph_signature = MODULE._ordered_graph_signature
+_reorder_to_reference = MODULE._reorder_to_reference
 
 
 def test_qm9_raw_script_exists_and_targets_current_baseline_layout():
