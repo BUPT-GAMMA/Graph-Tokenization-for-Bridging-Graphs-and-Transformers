@@ -95,7 +95,9 @@ GraphTokenizer/
 git clone https://github.com/BUPT-GAMMA/GraphTokenizer.git
 cd GraphTokenizer
 
-# Install in development mode
+# Install in development mode.
+# The checked-in pyproject.toml declares the build dependency on pybind11,
+# so a network-enabled pip can bootstrap the C++ extension build automatically.
 pip install -e .
 
 # Build the C++ BPE backend (optional but recommended for speed)
@@ -103,6 +105,11 @@ python setup.py build_ext --inplace
 ```
 
 Key dependencies: `torch`, `dgl`, `networkx`, `rdkit`, `transformers`, `pybind11`, `pandas`.
+
+Notes:
+
+- If you are installing in an offline environment, preinstall `pybind11` into the target environment before running `pip install -e .`.
+- `pip install -e .` only installs the local package metadata/build requirements. Runtime libraries such as `torch`, `dgl`, `rdkit`, and `transformers` still need to exist in the environment you use for experiments.
 
 ## Quick Start
 
@@ -156,6 +163,7 @@ Refer to the following resources for detailed data preparation and execution ins
 - [`docs/reproducibility/dataset-cold-start-audit.md`](docs/reproducibility/dataset-cold-start-audit.md) — cold-start reproducibility audit and script traceability
 - [`docs/reproducibility/cold-start-runbook.md`](docs/reproducibility/cold-start-runbook.md) — independent clone-based cold-start run record
 - [`docs/reproducibility/cold-start-roadmap.md`](docs/reproducibility/cold-start-roadmap.md) — remaining dataset-by-dataset closure plan
+- [`docs/reproducibility/environment-setup.md`](docs/reproducibility/environment-setup.md) — tested environment boundary, dependency layering, and install verification notes
 - [`docs/reproducibility/paper-dataset-cold-start-guide.md`](docs/reproducibility/paper-dataset-cold-start-guide.md) — formal paper-scope dataset setup and validation guide
 
 Current audited status:

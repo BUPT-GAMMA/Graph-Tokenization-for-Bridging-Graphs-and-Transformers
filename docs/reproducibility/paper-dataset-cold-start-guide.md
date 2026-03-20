@@ -39,7 +39,9 @@
 
 ## Environment
 
-建议环境：
+建议先参考 [`environment-setup.md`](environment-setup.md) 准备环境；完整历史环境快照见仓库根目录 `env.txt`。
+
+最小建议命令：
 
 ```bash
 conda activate pthgnn
