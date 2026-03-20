@@ -27,6 +27,12 @@ def test_paper_scope_guide_lists_formal_and_excluded_datasets():
     assert "当前不纳入正式保证范围" in guide
 
 
+def test_paper_scope_guide_points_to_explicit_environment_setup():
+    guide = Path("docs/reproducibility/paper-dataset-cold-start-guide.md").read_text(encoding="utf-8")
+    assert "environment-setup.md" in guide
+    assert "env.txt" in guide
+
+
 def test_export_docs_do_not_advertise_missing_export_scripts_as_existing_tools():
     doc_paths = [
         Path("docs/guides/dataset_export_guide.md"),
@@ -56,3 +62,22 @@ def test_data_preprocess_scripts_are_not_gitignored():
             text=True,
         )
         assert result.returncode != 0, f"{script_path} is still ignored by .gitignore"
+
+
+def test_build_system_declares_pybind11_for_editable_install():
+    pyproject_path = Path("pyproject.toml")
+    assert pyproject_path.exists(), "Cold-start install needs pyproject.toml build metadata"
+
+    pyproject_text = pyproject_path.read_text(encoding="utf-8")
+    assert "[build-system]" in pyproject_text
+    assert "pybind11" in pyproject_text, "Editable install must declare pybind11 as a build dependency"
+
+
+def test_editable_install_egg_info_is_gitignored():
+    result = subprocess.run(
+        ["git", "check-ignore", "tokenizerGraph_cpp_ext.egg-info"],
+        cwd=Path(__file__).resolve().parents[1],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, "Editable-install egg-info directory should be ignored"

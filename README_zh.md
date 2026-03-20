@@ -95,7 +95,9 @@ GraphTokenizer/
 git clone https://github.com/BUPT-GAMMA/GraphTokenizer.git
 cd GraphTokenizer
 
-# 开发模式安装
+# 开发模式安装。
+# 当前仓库中的 pyproject.toml 已声明 pybind11 构建依赖，
+# 在可联网环境中 pip 会自动补齐 C++ 扩展构建所需依赖。
 pip install -e .
 
 # 编译 C++ BPE 后端（可选，推荐以提升速度）
@@ -103,6 +105,11 @@ python setup.py build_ext --inplace
 ```
 
 主要依赖：`torch`、`dgl`、`networkx`、`rdkit`、`transformers`、`pybind11`、`pandas`。
+
+说明：
+
+- 如果是在离线环境安装，请先在目标环境中预装 `pybind11`，再执行 `pip install -e .`。
+- `pip install -e .` 只会处理本地包及其构建依赖；真正运行实验仍需要环境里已有 `torch`、`dgl`、`rdkit`、`transformers` 等运行时依赖。
 
 ## 快速开始
 
@@ -156,6 +163,7 @@ data/processed/qm9test/
 - [`docs/reproducibility/dataset-cold-start-audit.md`](docs/reproducibility/dataset-cold-start-audit.md) — 冷启动可复现性审计与脚本追溯结果
 - [`docs/reproducibility/cold-start-runbook.md`](docs/reproducibility/cold-start-runbook.md) — 独立克隆目录冷启动复现实录
 - [`docs/reproducibility/cold-start-roadmap.md`](docs/reproducibility/cold-start-roadmap.md) — 后续逐数据集收口路线图
+- [`docs/reproducibility/environment-setup.md`](docs/reproducibility/environment-setup.md) — 已验证环境边界、依赖分层与安装验证说明
 - [`docs/reproducibility/paper-dataset-cold-start-guide.md`](docs/reproducibility/paper-dataset-cold-start-guide.md) — 论文范围内数据集的正式准备与验证指南
 
 当前审计结论：
