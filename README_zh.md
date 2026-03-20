@@ -2,7 +2,7 @@
 
 **Graph Tokenization for Bridging Graphs and Transformers**
 
-[[English README]](README.md) · [[论文 (ICLR 2026)]](https://openreview.net/forum?id=PLACEHOLDER)
+[[English README]](README.md) · [[论文 (ICLR 2026 / OpenReview)]](https://openreview.net/forum?id=jCctxI1BGF) · arXiv（即将发布）
 
 > **分支说明：** `release` — 复现论文实验的精简代码。[`dev`](../../tree/dev) — 包含工具脚本、benchmark 和内部文档的完整开发版本。
 
@@ -95,7 +95,9 @@ GraphTokenizer/
 git clone https://github.com/BUPT-GAMMA/GraphTokenizer.git
 cd GraphTokenizer
 
-# 开发模式安装
+# 开发模式安装。
+# 当前仓库中的 pyproject.toml 已声明 pybind11 构建依赖，
+# 在可联网环境中 pip 会自动补齐 C++ 扩展构建所需依赖。
 pip install -e .
 
 # 编译 C++ BPE 后端（可选，推荐以提升速度）
@@ -104,9 +106,30 @@ python setup.py build_ext --inplace
 
 主要依赖：`torch`、`dgl`、`networkx`、`rdkit`、`transformers`、`pybind11`、`pandas`。
 
+说明：
+
+- 如果是在离线环境安装，请先在目标环境中预装 `pybind11`，再执行 `pip install -e .`。
+- `pip install -e .` 只会处理本地包及其构建依赖；真正运行实验仍需要环境里已有 `torch`、`dgl`、`rdkit`、`transformers` 等运行时依赖。
+
 ## 快速开始
 
 ### 1. 数据预处理
+
+在运行 `prepare_data_new.py` 之前，请先确认 `data/<dataset>/` 下已经放好了数据集原始/预处理文件。
+
+当前各 loader 默认假设目录中至少存在：
+
+```text
+data/<dataset>/
+├── data.pkl
+├── train_index.json
+├── val_index.json
+└── test_index.json
+```
+
+对于 `qm9`、`zinc` 这类分子数据集，部分 loader 还会尝试读取可选的 SMILES 文件，例如 `smiles_1_direct.txt`。
+
+对于干净克隆，`qm9test` 不应视为仓库内已带好的示例数据，而应视为一个派生出来的 smoke-test 数据集：先从公开来源构建 `qm9`，再通过 `data/qm9test/create_qm9test_dataset.py` 生成 `qm9test`。
 
 序列化图并训练 BPE 分词器：
 
@@ -117,11 +140,48 @@ python prepare_data_new.py \
     --bpe_merges 2000
 ```
 
-该脚本加载数据集，用指定方法（如频率引导欧拉回路）序列化所有图，在生成的序列上训练 BPE 模型，并构建词表。所有中间产物会被缓存以供复用。
+该脚本会：
+
+- 读取 `data/qm9test/data.pkl` 及固定划分文件
+- 用指定方法对所有图做序列化
+- 在序列化语料上训练 BPE
+- 构建下游 Transformer 所需词表
+- 将缓存产物写入 `data/processed/<dataset>/...`
+
+执行完成后，通常会生成类似下面的文件：
+
+```text
+data/processed/qm9test/
+├── serialized_data/feuler/single/serialized_data.pickle
+└── vocab/feuler/bpe/single/vocab.json
+```
+
+详细的数据准备与执行说明见：
+
+- [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md) — 数据集转换说明、验证命令与当前审计状态
+- [`src/data/README.md`](src/data/README.md) — 数据层接口约定与目录结构
+- [`docs/reproducibility/dataset-cold-start-audit.md`](docs/reproducibility/dataset-cold-start-audit.md) — 冷启动可复现性审计与脚本追溯结果
+- [`docs/reproducibility/cold-start-runbook.md`](docs/reproducibility/cold-start-runbook.md) — 独立克隆目录冷启动复现实录
+- [`docs/reproducibility/cold-start-roadmap.md`](docs/reproducibility/cold-start-roadmap.md) — 后续逐数据集收口路线图
+- [`docs/reproducibility/environment-setup.md`](docs/reproducibility/environment-setup.md) — 已验证环境边界、依赖分层与安装验证说明
+- [`docs/reproducibility/paper-dataset-cold-start-guide.md`](docs/reproducibility/paper-dataset-cold-start-guide.md) — 论文范围内数据集的正式准备与验证指南
+
+当前审计结论：
+
+- `qm9test` 是当前仓库状态下唯一完成 `prepare_data_new.py -> run_pretrain.py -> run_finetune.py` 全链路实测的数据集
+- `mnist` 与 `mnist_raw` 目前仅确认 loader 层可用，训练前仍需执行 `prepare_data_new.py`
+- `code2` 在当前仓库状态下受阻，原因是缺少 `data/code2/data.pkl`
+- 完整状态表维护在 [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md)
+
+执行说明：
+
+- `prepare_data_new.py` 使用复数参数 `--datasets`、`--methods`，`run_pretrain.py` 与 `run_finetune.py` 使用单数参数 `--dataset`、`--method`
+- 使用 `--multiple_samples K` 生成数据时，训练阶段必须使用匹配的 `serialization.multiple_sampling.enabled=true` 与 `serialization.multiple_sampling.num_realizations=K`
+- 默认配置中 `encoder.type: gte`，未显式切换时实际运行路径为 GTE 编码器
 
 ### 2. 预训练
 
-用掩码语言模型（MLM）任务预训练 Transformer 编码器：
+使用 Masked Language Modeling (MLM) 预训练 Transformer 编码器：
 
 ```bash
 python run_pretrain.py \
@@ -131,6 +191,13 @@ python run_pretrain.py \
     --epochs 100 \
     --batch_size 256
 ```
+
+预训练说明：
+
+- 这里必须使用单数参数 `--dataset` 和 `--method`
+- 该脚本直接读取 `prepare_data_new.py` 生成的缓存结果
+- 默认路径配置来自 `config/default_config.yml`，其中 `data_dir` 会解析到项目根目录下的 `data/`
+- 已验证的 `qm9test + multi_3` 单轮预训练命令记录在 [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md)
 
 ### 3. 微调
 
@@ -145,6 +212,14 @@ python run_finetune.py \
     --epochs 200 \
     --batch_size 64
 ```
+
+对于 `qm9` 这类回归数据集，建议显式指定 `--target_property`；对于 `mutagenicity`、`molhiv` 这类分类数据集，通常可以直接依赖 loader 内部元信息。
+
+微调说明：
+
+- `run_finetune.py` 启动时要求 CUDA 可用
+- 最小验证应显式传入 `--pretrained_dir model/<group>/<exp_name>/run_0/best`
+- 预训练目录中必须存在 `config.bin` 与 `pytorch_model.bin`
 
 ### 4. 批量实验
 
@@ -171,13 +246,42 @@ python batch_finetune_simple.py \
 - **主实验** — `final/exp1_main/run/`：全部 14 个数据集的预训练与微调命令
 - **效率分析** — `final/exp1_speed/`：序列化速度、token 长度统计、训练吞吐量
 - **多重采样对比** — `final/exp2_mult_seralize_comp/`：多次序列化采样的效果
-- **BPE 词表可视化** — `final/exp4_bpe_vocab_visual/`：codebook 检查与可视化
+- **BPE 词表可视化** — `final/exp4_bpe_vocab_visual/`：码本分析与可视化
+
+## 数据准备检查清单
+
+建议按以下顺序检查数据集是否具备端到端运行条件：
+
+1. 将数据放到 `data/<dataset>/`
+2. 确认 `data.pkl`、`train_index.json`、`val_index.json`、`test_index.json` 全部存在
+3. 确认该数据集名称已经在 `src/data/unified_data_factory.py` 中注册
+4. 运行：
+```bash
+python prepare_data_new.py --datasets <dataset> --methods feuler
+```
+
+5. 检查 `data/processed/<dataset>/serialized_data/...` 与 `data/processed/<dataset>/vocab/...` 是否生成成功
+6. 如果使用了多重采样，再确认生成目录到底是 `single/` 还是 `multi_<K>/`
+7. 做一个最小预训练冒烟测试：
+
+```bash
+python run_pretrain.py --dataset <dataset> --method feuler --epochs 1 --batch_size 8
+```
+
+8. 再做一个最小微调冒烟测试：
+
+```bash
+python run_finetune.py --dataset <dataset> --method feuler --epochs 1 --batch_size 8
+```
+
+微调要求可用 CUDA 设备，并要求预训练目录中存在有效权重文件。
 
 ## 文档
 
 - [配置指南](docs/guides/config_guide.md) — 配置文件结构与参数说明
-- [实验指南](docs/guides/experiment_guide.md) — 实验设计与执行方法
+- [实验指南](docs/guides/experiment_guide.md) — 如何设计与运行实验
 - [BPE 使用指南](docs/bpe/BPE_USAGE_GUIDE.md) — BPE 引擎 API 与使用方法
+- [数据集转换指南](scripts/dataset_conversion/README.md) — 如何准备可被 loader 直接读取的 `data/<dataset>/`
 
 ## 引用
 

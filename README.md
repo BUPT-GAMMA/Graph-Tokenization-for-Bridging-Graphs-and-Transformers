@@ -2,7 +2,7 @@
 
 **Graph Tokenization for Bridging Graphs and Transformers**
 
-[[中文文档 / Chinese README]](README_zh.md) · [[Paper (ICLR 2026)]](https://openreview.net/forum?id=jCctxI1BGF)
+[[中文文档 / Chinese README]](README_zh.md) · [[Paper (ICLR 2026 / OpenReview)]](https://openreview.net/forum?id=jCctxI1BGF) · arXiv (coming soon)
 
 > **Branches:** `release` — clean code for reproducing paper experiments. [`dev`](../../tree/dev) — full development version with utility scripts, benchmarks, and internal docs.
 
@@ -95,7 +95,9 @@ GraphTokenizer/
 git clone https://github.com/BUPT-GAMMA/GraphTokenizer.git
 cd GraphTokenizer
 
-# Install in development mode
+# Install in development mode.
+# The checked-in pyproject.toml declares the build dependency on pybind11,
+# so a network-enabled pip can bootstrap the C++ extension build automatically.
 pip install -e .
 
 # Build the C++ BPE backend (optional but recommended for speed)
@@ -104,9 +106,30 @@ python setup.py build_ext --inplace
 
 Key dependencies: `torch`, `dgl`, `networkx`, `rdkit`, `transformers`, `pybind11`, `pandas`.
 
+Notes:
+
+- If you are installing in an offline environment, preinstall `pybind11` into the target environment before running `pip install -e .`.
+- `pip install -e .` only installs the local package metadata/build requirements. Runtime libraries such as `torch`, `dgl`, `rdkit`, and `transformers` still need to exist in the environment you use for experiments.
+
 ## Quick Start
 
 ### 1. Data Preparation
+
+Before running `prepare_data_new.py`, make sure the raw/preprocessed dataset files already exist under `data/<dataset>/`.
+
+The loaders in `src/data/loader/` assume the following files are present:
+
+```text
+data/<dataset>/
+├── data.pkl
+├── train_index.json
+├── val_index.json
+└── test_index.json
+```
+
+For molecular datasets such as `qm9` and `zinc`, some loaders will also look for optional SMILES files such as `smiles_1_direct.txt`.
+
+For a clean clone, `qm9test` should be treated as a smoke-test dataset derived from `qm9`, not as a checked-in example dataset. Build `qm9` first from its public source, then generate `qm9test` with `data/qm9test/create_qm9test_dataset.py`.
 
 Serialize graphs and train a BPE tokenizer:
 
@@ -117,7 +140,44 @@ python prepare_data_new.py \
     --bpe_merges 2000
 ```
 
-This loads the dataset, serializes all graphs with the chosen method (e.g., frequency-guided Eulerian circuit), trains a BPE model on the resulting sequences, and builds a vocabulary. All artifacts are cached for reuse.
+This script:
+
+- loads `data/qm9test/data.pkl` together with the fixed split files
+- serializes every graph with the selected method
+- trains a BPE model on the serialized corpus
+- builds the vocabulary used by downstream Transformer runs
+- writes cached artifacts under `data/processed/<dataset>/...`
+
+After this step, you should expect processed artifacts in locations similar to:
+
+```text
+data/processed/qm9test/
+├── serialized_data/feuler/single/serialized_data.pickle
+└── vocab/feuler/bpe/single/vocab.json
+```
+
+Refer to the following resources for detailed data preparation and execution instructions:
+
+- [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md) — dataset-by-dataset conversion notes
+- [`src/data/README.md`](src/data/README.md) — data layer contract and expected directory layout
+- [`docs/reproducibility/dataset-cold-start-audit.md`](docs/reproducibility/dataset-cold-start-audit.md) — cold-start reproducibility audit and script traceability
+- [`docs/reproducibility/cold-start-runbook.md`](docs/reproducibility/cold-start-runbook.md) — independent clone-based cold-start run record
+- [`docs/reproducibility/cold-start-roadmap.md`](docs/reproducibility/cold-start-roadmap.md) — remaining dataset-by-dataset closure plan
+- [`docs/reproducibility/environment-setup.md`](docs/reproducibility/environment-setup.md) — tested environment boundary, dependency layering, and install verification notes
+- [`docs/reproducibility/paper-dataset-cold-start-guide.md`](docs/reproducibility/paper-dataset-cold-start-guide.md) — formal paper-scope dataset setup and validation guide
+
+Current audited status:
+
+- `qm9test` is the only dataset that has been fully verified through `prepare_data_new.py -> run_pretrain.py -> run_finetune.py`
+- `mnist` and `mnist_raw` currently pass loader-level checks only; `prepare_data_new.py` must be executed before training
+- `code2` is blocked in the checked-in repository state because `data/code2/data.pkl` is missing
+- The complete audited status table is maintained in [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md)
+
+**Important Notes:**
+
+- `prepare_data_new.py` uses plural CLI arguments (`--datasets`, `--methods`), while `run_pretrain.py` and `run_finetune.py` use singular ones (`--dataset`, `--method`)
+- If preparing data with `--multiple_samples K`, the training scripts must be launched with matching `serialization.multiple_sampling.enabled=true` and `serialization.multiple_sampling.num_realizations=K`; otherwise, they will read from `single/` instead of `multi_K/`
+- The checked-in default config currently sets `encoder.type: gte`, so runs will use the GTE encoder unless explicitly switched to `bert`
 
 ### 2. Pre-training
 
@@ -132,6 +192,13 @@ python run_pretrain.py \
     --batch_size 256
 ```
 
+**Important Notes:**
+
+- `--dataset` and `--method` are required
+- The script reads the processed artifacts produced by `prepare_data_new.py`
+- The default config uses the paths in `config/default_config.yml`, where `data_dir` resolves to `data/`
+- A verified one-epoch `qm9test` smoke test with `multi_3` serialization is documented in [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md)
+
 ### 3. Fine-tuning
 
 Fine-tune the pre-trained model on downstream graph prediction tasks:
@@ -145,6 +212,14 @@ python run_finetune.py \
     --epochs 200 \
     --batch_size 64
 ```
+
+For regression datasets such as `qm9`, set `--target_property` explicitly. For classification datasets such as `mutagenicity` or `molhiv`, the loader metadata is usually sufficient and no regression target is needed.
+
+**Fine-tuning Notes:**
+
+- `run_finetune.py` currently requires CUDA (`torch.cuda.is_available()` is asserted at startup)
+- For smoke tests, `--pretrained_dir` should point directly to `model/<group>/<exp_name>/run_0/best`
+- The pre-trained checkpoint directory must contain both `config.bin` and `pytorch_model.bin`
 
 ### 4. Batch Experiments
 
@@ -173,11 +248,41 @@ Scripts for all paper experiments are in the `final/` directory:
 - **Multi-sampling comparison** — `final/exp2_mult_seralize_comp/`: effect of multiple serialization samples
 - **BPE vocabulary visualization** — `final/exp4_bpe_vocab_visual/`: codebook inspection and visualization
 
+## Dataset Preparation Checklist
+
+Use the following checklist to verify that a dataset is runnable end-to-end:
+
+1. Put the dataset under `data/<dataset>/`
+2. Ensure `data.pkl`, `train_index.json`, `val_index.json`, and `test_index.json` all exist
+3. Confirm the dataset name is registered in `src/data/unified_data_factory.py`
+4. Run:
+
+```bash
+python prepare_data_new.py --datasets <dataset> --methods feuler
+```
+
+5. Verify that `data/processed/<dataset>/serialized_data/...` and `data/processed/<dataset>/vocab/...` were created
+6. If you prepared with multiple sampling, also verify whether the artifacts were written to `single/` or `multi_<K>/`
+7. Run a small pre-training smoke test:
+
+```bash
+python run_pretrain.py --dataset <dataset> --method feuler --epochs 1 --batch_size 8
+```
+
+8. Run a small fine-tuning smoke test:
+
+```bash
+python run_finetune.py --dataset <dataset> --method feuler --epochs 1 --batch_size 8
+```
+
+Fine-tuning also requires a CUDA-capable device and a valid pre-trained checkpoint.
+
 ## Documentation
 
 - [Configuration Guide](docs/guides/config_guide.md) — config file structure and parameters
 - [Experiment Guide](docs/guides/experiment_guide.md) — how to design and run experiments
 - [BPE Usage Guide](docs/bpe/BPE_USAGE_GUIDE.md) — BPE engine API and usage
+- [Dataset Conversion Guide](scripts/dataset_conversion/README.md) — how to prepare `data/<dataset>/` so the loaders can run directly
 
 ## Citation
 

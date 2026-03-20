@@ -7,8 +7,11 @@
 .history
 .claude
 .cursor
+.windsurf/
 .specstory/
 /.pytest_cache/
+AGENTS.md
+Agent.markdown
 
 # ==========================================
 # 论文（正在撰写）
@@ -21,8 +24,10 @@ paper/
 /data/*
 !/data/DATASET_STATS.md
 !/data/*/
-/data/*/
+/data/*/*
 !/data/*/README.md
+!/data/*/*.py
+!/data/*/*.ipynb
 /dataset/
 /local/
 /cache
@@ -40,6 +45,7 @@ paper/
 # 构建产物 / 编译输出
 # ==========================================
 build/
+*.egg-info/
 *.so
 *.o
 .nfs*
@@ -73,6 +79,11 @@ nohup.out
 env.txt
 *.backup
 sitecustomize.py
+
+# ==========================================
+# 本地 Agent / AI 协作文档
+# ==========================================
+/docs/handoffs/
 
 # ==========================================
 # 根目录生成的 CSV 数据
@@ -124,8 +135,12 @@ gte_exploration_results.csv
 key_findings_summary.png
 
 # ==========================================
-# 临时review文档 / 子项目（release分支排除）
+# bpe_for_images 子项目（保留代码，排除数据/输出/缓存）
 # ==========================================
-_docs_to_review/
-bpe_for_images/
-benchmark_large_scale/
+bpe_for_images/**/mnist_data/
+bpe_for_images/checkpoints/
+bpe_for_images/results/
+bpe_for_images/__pycache__/
+bpe_for_images/**/__pycache__/
+bpe_for_images/bpe/build/
+bpe_for_images/bpe/*.so
