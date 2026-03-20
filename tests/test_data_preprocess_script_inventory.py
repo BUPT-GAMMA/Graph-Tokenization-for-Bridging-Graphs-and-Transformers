@@ -43,14 +43,12 @@ def test_dev_only_experimental_and_helper_scripts_exist():
         assert Path(script_path).exists(), f"missing documented dev-only script: {script_path}"
 
 
-def test_audit_doc_mentions_release_scope_secondary_and_experimental_statuses():
-    audit = Path("docs/reproducibility/dataset-cold-start-audit.md").read_text(encoding="utf-8")
-    assert "secondary scripts" in audit
-    assert "Partially traceable" in audit
-    assert "Out of current formal scope" in audit
-    assert "experimental draft" in audit
-    assert "code2" in audit
-    assert "zinc" in audit
-    assert "aqsol" in audit
-    assert "qm9test" in audit
-    assert "mnist" in audit
+def test_dataset_conversion_readme_mentions_secondary_and_experimental_scripts():
+    readme = Path("scripts/dataset_conversion/README.md").read_text(encoding="utf-8")
+    assert "secondary helpers" in readme
+    assert "experimental scripts" in readme
+    assert "data/qm9/process_qm9_dataset.py" in readme
+    assert "`code2`" in readme
+    assert "`zinc`" in readme
+    assert "`aqsol`" in readme
+    assert "`qm9test`" in readme

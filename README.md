@@ -160,11 +160,6 @@ Refer to the following resources for detailed data preparation and execution ins
 
 - [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md) — dataset-by-dataset conversion notes
 - [`src/data/README.md`](src/data/README.md) — data layer contract and expected directory layout
-- [`docs/reproducibility/dataset-cold-start-audit.md`](docs/reproducibility/dataset-cold-start-audit.md) — cold-start reproducibility audit and script traceability
-- [`docs/reproducibility/cold-start-runbook.md`](docs/reproducibility/cold-start-runbook.md) — independent clone-based cold-start run record
-- [`docs/reproducibility/cold-start-roadmap.md`](docs/reproducibility/cold-start-roadmap.md) — remaining dataset-by-dataset closure plan
-- [`docs/reproducibility/environment-setup.md`](docs/reproducibility/environment-setup.md) — tested environment boundary, dependency layering, and install verification notes
-- [`docs/reproducibility/paper-dataset-cold-start-guide.md`](docs/reproducibility/paper-dataset-cold-start-guide.md) — formal paper-scope dataset setup and validation guide
 
 Pre-packaged datasets are available here:
 
@@ -257,7 +252,6 @@ Scripts for all paper experiments are in the `final/` directory:
 For the maintained Optuna-based hyperparameter search workflow, see:
 
 - [`hyperopt/README.md`](hyperopt/README.md)
-- [`docs/guides/hyperparameter_search.md`](docs/guides/hyperparameter_search.md)
 
 ## Dataset Preparation Checklist
 

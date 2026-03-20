@@ -4,7 +4,7 @@
 
 - [Configuration Guide](guides/config_guide.md) — how the config system works, parameter reference, environment variables
 - [Experiment Guide](guides/experiment_guide.md) — designing experiments, training workflow, evaluation
-- [Hyperparameter Search Guide](guides/hyperparameter_search.md) — maintained Optuna workflow, study layout, and reproducible usage
+- [Hyperparameter Search](../hyperopt/README.md) — maintained Optuna workflow, search-space notes, and reproducible usage
 
 ## BPE System
 

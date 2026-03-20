@@ -98,12 +98,11 @@ def test_dataset_docs_point_to_conversion_scripts_for_new_dataset_integration():
 
 def test_hyperopt_docs_exist_and_reference_optuna():
     readme = Path("hyperopt/README.md").read_text(encoding="utf-8")
-    guide = Path("docs/guides/hyperparameter_search.md").read_text(encoding="utf-8")
 
     assert "Optuna" in readme
     assert "JournalStorage" in readme
     assert "large_batch_search.py" in readme
-
-    assert "Optuna" in guide
-    assert "hyperopt/scripts/large_batch_search.py" in guide
-    assert "hyperopt/scripts/finetune_with_pretrain_options.py" in guide
+    assert "--lr_min" in readme
+    assert "--wd_min" in readme
+    assert "--config_json" in readme
+    assert "hyperopt/scripts/finetune_with_pretrain_options.py" in readme
