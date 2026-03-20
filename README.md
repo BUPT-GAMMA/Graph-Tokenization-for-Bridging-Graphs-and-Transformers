@@ -129,7 +129,7 @@ data/<dataset>/
 
 For molecular datasets such as `qm9` and `zinc`, some loaders will also look for optional SMILES files such as `smiles_1_direct.txt`.
 
-If you are using the repository exactly as released by the authors, the simplest smoke test is to start from `qm9test`, because it is the smallest built-in example used throughout the codebase.
+For a clean clone, `qm9test` should be treated as a smoke-test dataset derived from `qm9`, not as a checked-in example dataset. Build `qm9` first from its public source, then generate `qm9test` with `data/qm9test/create_qm9test_dataset.py`.
 
 Serialize graphs and train a BPE tokenizer:
 
