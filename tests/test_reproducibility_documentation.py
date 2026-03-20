@@ -1,6 +1,11 @@
 from pathlib import Path
 import subprocess
 
+try:
+    import tomllib
+except ModuleNotFoundError:  # pragma: no cover - Python < 3.11
+    import tomli as tomllib
+
 
 MISSING_EXPORT_SCRIPT_PATTERNS = [
     "export_qm9.py",
@@ -30,7 +35,19 @@ def test_paper_scope_guide_lists_formal_and_excluded_datasets():
 def test_paper_scope_guide_points_to_explicit_environment_setup():
     guide = Path("docs/reproducibility/paper-dataset-cold-start-guide.md").read_text(encoding="utf-8")
     assert "environment-setup.md" in guide
-    assert "env.txt" in guide
+    assert Path("docs/reproducibility/environment-setup.md").exists()
+
+
+def test_environment_setup_doc_avoids_machine_specific_paths():
+    guide = Path("docs/reproducibility/environment-setup.md").read_text(encoding="utf-8")
+    assert "/home/gzy/" not in guide
+    assert "/tmp/" not in guide
+
+
+def test_readme_explains_that_qm9test_is_derived_not_checked_in():
+    readme = Path("README.md").read_text(encoding="utf-8")
+    assert "create_qm9test_dataset.py" in readme
+    assert "derived from `qm9`" in readme
 
 
 def test_export_docs_do_not_advertise_missing_export_scripts_as_existing_tools():
@@ -68,9 +85,14 @@ def test_build_system_declares_pybind11_for_editable_install():
     pyproject_path = Path("pyproject.toml")
     assert pyproject_path.exists(), "Cold-start install needs pyproject.toml build metadata"
 
-    pyproject_text = pyproject_path.read_text(encoding="utf-8")
-    assert "[build-system]" in pyproject_text
-    assert "pybind11" in pyproject_text, "Editable install must declare pybind11 as a build dependency"
+    pyproject = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+    build_system = pyproject.get("build-system", {})
+    requires = build_system.get("requires", [])
+
+    assert build_system.get("build-backend") == "setuptools.build_meta"
+    assert any(req.startswith("pybind11") for req in requires), (
+        "Editable install must declare pybind11 in build-system.requires"
+    )
 
 
 def test_editable_install_egg_info_is_gitignored():

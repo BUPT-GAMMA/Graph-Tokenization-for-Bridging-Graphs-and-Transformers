@@ -21,7 +21,7 @@
 - Transformers `4.47.1`
 - RDKit `2025.3.5` / `rdkit-pypi 2022.9.5`
 
-完整历史环境快照保存在仓库根目录的 [`env.txt`](../../env.txt)。
+上述版本号来自本轮实际用于仓库审计与测试的验证环境。
 
 ## Recommended Setup Order
 
@@ -50,7 +50,7 @@ pip install -e .
 
 本轮已新鲜验证：
 
-- 在全新虚拟环境中执行 `pip install -e /home/gzy/py/tokenizerGraph`，构建依赖安装和 editable C++ 扩展构建成功。
+- 在全新虚拟环境中执行仓库根目录下的 `pip install -e .`，构建依赖安装和 editable C++ 扩展构建成功。
 - 文档/脚本/`qm9` 血缘相关的最小测试集通过：
   - `tests/test_reproducibility_documentation.py`
   - `tests/test_data_preprocess_script_inventory.py`
@@ -58,11 +58,10 @@ pip install -e .
   - `tests/test_qm9_lineage.py`
   - `tests/test_repro_compare.py`
 
-本轮未能在当前会话中宣称通过的事项：
+本轮未能在本文档中宣称通过的事项：
 
-- `torch.cuda.is_available()` 在当前会话中为 `False`
-- `nvidia-smi` 返回 `Failed to initialize NVML: Unknown Error`
-- 因此 `run_finetune.py` 的 CUDA 路径不能在本会话里被视为已验证通过
+- CUDA 相关训练链路还没有在一个“GPU 可见且可正常初始化”的会话中留下新鲜通过证据
+- 因此 `run_finetune.py` 的 CUDA 路径仍应视为“需要在目标机器单独验证”
 
 ## Recommended Verification Commands
 

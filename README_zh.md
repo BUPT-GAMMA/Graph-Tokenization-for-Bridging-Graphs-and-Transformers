@@ -129,7 +129,7 @@ data/<dataset>/
 
 对于 `qm9`、`zinc` 这类分子数据集，部分 loader 还会尝试读取可选的 SMILES 文件，例如 `smiles_1_direct.txt`。
 
-仓库中规模最小的示例数据集 `qm9test` 可用于最小验证。
+对于干净克隆，`qm9test` 不应视为仓库内已带好的示例数据，而应视为一个派生出来的 smoke-test 数据集：先从公开来源构建 `qm9`，再通过 `data/qm9test/create_qm9test_dataset.py` 生成 `qm9test`。
 
 序列化图并训练 BPE 分词器：
 
