@@ -57,9 +57,11 @@ The audited status below reflects the checked-in repository state on 2026-03-15.
 
 Pre-processed datasets (in the format above) can be downloaded from:
 
-> **TODO**: Add release download link (e.g., Zenodo, Google Drive, or GitHub Releases).
+- Google Drive bundle: <https://drive.google.com/file/d/10etZF9OnV569_Fp7tpdMUVEH9eZECKdW/view?usp=sharing>
 
 Extract into the `data/` directory at the project root.
+
+This bundle is the fastest path for reproduction. If you want to integrate a new dataset instead, keep reading: the repository also includes raw-to-unified conversion scripts under dataset directories plus the inventory in `scripts/dataset_conversion/`. Those scripts are intended to serve as concrete references for new dataset integration, not only as one-off preprocessing utilities.
 
 ### Option B: Convert from Raw Sources
 
@@ -75,6 +77,16 @@ Extract into the `data/` directory at the project root.
    ```
 
 3. **Run conversion**: Each dataset loader in `src/data/loader/` reads from `data/<dataset>/data.pkl`. To generate these files from raw sources, use the appropriate conversion approach below.
+
+   For a new dataset, start by copying the closest existing conversion script and matching the same output contract:
+
+   ```text
+   data/<dataset>/
+   ├── data.pkl
+   ├── train_index.json
+   ├── val_index.json
+   └── test_index.json
+   ```
 
 4. **Verify final directory layout** before running any training command:
 
@@ -159,6 +171,8 @@ Expected practical notes:
 | `check_ogbg.py` | Inspect OGB graph property prediction datasets |
 | `DGL_tokenization_prep_plan.md` | Detailed tokenization specification for each dataset (Chinese, internal reference) |
 | `DGL_graph_pred_tokenizable_nodes.md` | Survey of DGL datasets with discrete node features suitable for tokenization |
+
+The scripts in this directory, together with the dataset-specific preprocessing scripts under `data/<dataset>/`, are the recommended references when adapting a new raw dataset to the TokenizerGraph format.
 
 ## After Conversion
 

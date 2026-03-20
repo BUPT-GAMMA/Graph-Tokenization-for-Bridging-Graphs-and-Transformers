@@ -7,15 +7,19 @@ from typing import Dict, Optional
 
 def display_startup_config(logger,config, dataset_name: str, method: str, stage: str):
     """Display key config info at startup."""
+    normalized_stage = str(stage).strip().lower()
+    is_pretrain = normalized_stage in {"pretrain", "预训练"}
+
     logger.info("=" * 60)
     logger.info(f"🚀 {stage.upper()} starting - {dataset_name}/{method}")
     logger.info("=" * 60)
     
     # Core config
     encoder_type = config.encoder.type
-    batch_size = getattr(config.bert.pretraining if stage == "pretrain" else config.bert.finetuning, 'batch_size', 'N/A')
-    epochs = getattr(config.bert.pretraining if stage == "pretrain" else config.bert.finetuning, 'epochs', 'N/A')
-    lr = getattr(config.bert.pretraining if stage == "pretrain" else config.bert.finetuning, 'learning_rate', 'N/A')
+    stage_cfg = config.bert.pretraining if is_pretrain else config.bert.finetuning
+    batch_size = getattr(stage_cfg, 'batch_size', 'N/A')
+    epochs = getattr(stage_cfg, 'epochs', 'N/A')
+    lr = getattr(stage_cfg, 'learning_rate', 'N/A')
     
     if config.bert.pretraining.mlm_augmentation_methods is not None and len(config.bert.pretraining.mlm_augmentation_methods) > 0:
         use_augmentation = True
@@ -88,4 +92,3 @@ def display_performance_summary(logger, total_time: float, total_samples: int,
     logger.info(f"   Time: {total_time:.1f}s ({total_time/60:.1f}min)")
     logger.info(f"   Throughput: {throughput:.1f} samples/s")
     logger.info(f"   Best: {best_metric:.4f} (epoch {best_epoch})")
-

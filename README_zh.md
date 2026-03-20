@@ -166,6 +166,12 @@ data/processed/qm9test/
 - [`docs/reproducibility/environment-setup.md`](docs/reproducibility/environment-setup.md) — 已验证环境边界、依赖分层与安装验证说明
 - [`docs/reproducibility/paper-dataset-cold-start-guide.md`](docs/reproducibility/paper-dataset-cold-start-guide.md) — 论文范围内数据集的正式准备与验证指南
 
+预打包数据集下载链接：
+
+- Google Drive 数据包：<https://drive.google.com/file/d/10etZF9OnV569_Fp7tpdMUVEH9eZECKdW/view?usp=sharing>
+
+仓库中也保留了各数据集目录下的原始数据转换脚本，以及 [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md) 中的转换说明。这些脚本不仅用于重建当前发布的数据格式，也可以作为接入新数据集时的参考模板，帮助对齐到本项目统一的 `data/<dataset>/` 目录契约。
+
 当前审计结论：
 
 - `qm9test` 是当前仓库状态下唯一完成 `prepare_data_new.py -> run_pretrain.py -> run_finetune.py` 全链路实测的数据集
@@ -247,6 +253,11 @@ python batch_finetune_simple.py \
 - **效率分析** — `final/exp1_speed/`：序列化速度、token 长度统计、训练吞吐量
 - **多重采样对比** — `final/exp2_mult_seralize_comp/`：多次序列化采样的效果
 - **BPE 词表可视化** — `final/exp4_bpe_vocab_visual/`：码本分析与可视化
+
+维护中的 Optuna 超参数搜索流程见：
+
+- [`hyperopt/README.md`](hyperopt/README.md)
+- [`docs/guides/hyperparameter_search.md`](docs/guides/hyperparameter_search.md)
 
 ## 数据准备检查清单
 

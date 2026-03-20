@@ -17,6 +17,7 @@ tokenizerGraph/
 │   ├── guides/                                 # 指南文档
 │   │   ├── config_guide.md                    # 配置指南
 │   │   ├── experiment_guide.md               # 实验指南
+│   │   ├── hyperparameter_search.md          # 超参数搜索指南
 │   │   ├── coding_standards.md               # 编码规范
 │   │   ├── dataset_export_guide.md           # 数据集导出
 │   │   ├── simple_export_guide.md            # 简单导出
@@ -114,4 +115,3 @@ tokenizerGraph/
 ---
 
 **维护者**: 保持文档结构清晰，命名规范统一
-

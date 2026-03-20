@@ -3,12 +3,54 @@ from __future__ import annotations
 from typing import List, Tuple, Optional, Dict
 
 
+class _PythonBPEEncoder:
+    """Minimal pure-Python encoder fallback for environments without `_cpp_bpe`."""
+
+    def __init__(self, merge_rules: List[Tuple[int, int, int]]) -> None:
+        self._merge_rules = list(merge_rules)
+        self._pair_to_rank = {(left, right): rank for rank, (left, right, _) in enumerate(self._merge_rules)}
+        self._pair_to_newid = {(left, right): new_id for left, right, new_id in self._merge_rules}
+
+    @staticmethod
+    def _apply_single_merge(seq: List[int], left: int, right: int, new_id: int) -> List[int]:
+        merged: List[int] = []
+        i = 0
+        while i < len(seq):
+            if i < len(seq) - 1 and seq[i] == left and seq[i + 1] == right:
+                merged.append(new_id)
+                i += 2
+            else:
+                merged.append(seq[i])
+                i += 1
+        return merged
+
+    def encode(self, seq: List[int]) -> List[int]:
+        ids = list(seq)
+        while len(ids) >= 2:
+            best_pair: Optional[Tuple[int, int]] = None
+            best_rank: Optional[int] = None
+            for pair in zip(ids, ids[1:]):
+                rank = self._pair_to_rank.get(pair)
+                if rank is None:
+                    continue
+                if best_rank is None or rank < best_rank:
+                    best_rank = rank
+                    best_pair = pair
+            if best_pair is None:
+                break
+            ids = self._apply_single_merge(ids, best_pair[0], best_pair[1], self._pair_to_newid[best_pair])
+        return ids
+
+    def batch_encode(self, seqs: List[List[int]]) -> List[List[int]]:
+        return [self.encode(seq) for seq in seqs]
+
+
 class BPEEngine:
     """
     Unified high-performance BPE train + encode engine (pluggable backends).
 
     Training backends: "cpp" | "numba" | "python"
-    Encode backend: "cpp" (C++/pybind11, recommended)
+    Encode backend: "cpp" (C++/pybind11, recommended) | "python" (fallback, deterministic modes only)
 
     Output is semantically equivalent to minBPE reference:
     - merge_rules: List[Tuple[left_id, right_id, new_id]]
@@ -142,6 +184,12 @@ class BPEEngine:
                 pair_to_newid=None,
                 vocab_size=self.vocab_size,
             )
+        elif self.encode_backend == "python":
+            if self.encode_rank_mode not in ("all", "none"):
+                raise ValueError(
+                    f"encode_backend='python' only supports encode_rank_mode='all' or 'none', got {self.encode_rank_mode}"
+                )
+            self._encoder = _PythonBPEEncoder(self.merge_rules)
         else:
             raise ValueError(f"Unsupported encode_backend: {self.encode_backend}")
 
@@ -283,5 +331,4 @@ class BPEEngine:
         eng = cls(train_backend='python', encode_backend=encode_backend, **engine_kwargs)
         eng.load_codebook(path)
         return eng
-
 
