@@ -160,11 +160,6 @@ data/processed/qm9test/
 
 - [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md) — 数据集转换说明、验证命令与当前审计状态
 - [`src/data/README.md`](src/data/README.md) — 数据层接口约定与目录结构
-- [`docs/reproducibility/dataset-cold-start-audit.md`](docs/reproducibility/dataset-cold-start-audit.md) — 冷启动可复现性审计与脚本追溯结果
-- [`docs/reproducibility/cold-start-runbook.md`](docs/reproducibility/cold-start-runbook.md) — 独立克隆目录冷启动复现实录
-- [`docs/reproducibility/cold-start-roadmap.md`](docs/reproducibility/cold-start-roadmap.md) — 后续逐数据集收口路线图
-- [`docs/reproducibility/environment-setup.md`](docs/reproducibility/environment-setup.md) — 已验证环境边界、依赖分层与安装验证说明
-- [`docs/reproducibility/paper-dataset-cold-start-guide.md`](docs/reproducibility/paper-dataset-cold-start-guide.md) — 论文范围内数据集的正式准备与验证指南
 
 预打包数据集下载链接：
 
@@ -257,7 +252,6 @@ python batch_finetune_simple.py \
 维护中的 Optuna 超参数搜索流程见：
 
 - [`hyperopt/README.md`](hyperopt/README.md)
-- [`docs/guides/hyperparameter_search.md`](docs/guides/hyperparameter_search.md)
 
 ## 数据准备检查清单
 

@@ -13,35 +13,33 @@ MISSING_EXPORT_SCRIPT_PATTERNS = [
     "export_molhiv.py",
 ]
 
-
-def test_cold_start_audit_marks_zinc_and_aqsol_as_out_of_current_formal_scope():
-    audit = Path("docs/reproducibility/dataset-cold-start-audit.md").read_text(encoding="utf-8")
-    assert "`zinc`" in audit
-    assert "`aqsol`" in audit
-    assert "Out of current formal scope" in audit
-    assert "experimental draft" in audit
-
-
-def test_paper_scope_guide_lists_formal_and_excluded_datasets():
-    guide = Path("docs/reproducibility/paper-dataset-cold-start-guide.md").read_text(encoding="utf-8")
-    assert "`mnist_raw`" in guide
-    assert "`qm9`" in guide
-    assert "`qm9test`" in guide
-    assert "`zinc`" in guide
-    assert "`aqsol`" in guide
-    assert "当前不纳入正式保证范围" in guide
+REMOVED_REPRO_DOCS = [
+    "docs/reproducibility/dataset-cold-start-audit.md",
+    "docs/reproducibility/cold-start-runbook.md",
+    "docs/reproducibility/cold-start-roadmap.md",
+    "docs/reproducibility/environment-setup.md",
+    "docs/reproducibility/paper-dataset-cold-start-guide.md",
+]
 
 
-def test_paper_scope_guide_points_to_explicit_environment_setup():
-    guide = Path("docs/reproducibility/paper-dataset-cold-start-guide.md").read_text(encoding="utf-8")
-    assert "environment-setup.md" in guide
-    assert Path("docs/reproducibility/environment-setup.md").exists()
+def test_removed_repro_docs_are_not_referenced_from_primary_entry_docs():
+    doc_paths = [
+        Path("README.md"),
+        Path("README_zh.md"),
+        Path("docs/README.md"),
+        Path("scripts/dataset_conversion/README.md"),
+    ]
+    for doc_path in doc_paths:
+        text = doc_path.read_text(encoding="utf-8")
+        for removed_path in REMOVED_REPRO_DOCS:
+            assert removed_path not in text, f"{doc_path} still references removed doc {removed_path}"
 
 
-def test_environment_setup_doc_avoids_machine_specific_paths():
-    guide = Path("docs/reproducibility/environment-setup.md").read_text(encoding="utf-8")
-    assert "/home/gzy/" not in guide
-    assert "/tmp/" not in guide
+def test_hyperopt_readme_is_the_primary_search_doc():
+    readme = Path("hyperopt/README.md").read_text(encoding="utf-8")
+    assert "This is the primary hyperparameter-search documentation entrypoint." in readme
+    assert "--lr_min" in readme
+    assert "--config_json" in readme
 
 
 def test_readme_explains_that_qm9test_is_derived_not_checked_in():

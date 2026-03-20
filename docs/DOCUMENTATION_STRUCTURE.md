@@ -17,11 +17,16 @@ tokenizerGraph/
 │   ├── guides/                                 # 指南文档
 │   │   ├── config_guide.md                    # 配置指南
 │   │   ├── experiment_guide.md               # 实验指南
-│   │   ├── hyperparameter_search.md          # 超参数搜索指南
 │   │   ├── coding_standards.md               # 编码规范
 │   │   ├── dataset_export_guide.md           # 数据集导出
 │   │   ├── simple_export_guide.md            # 简单导出
 │   │   └── dgl_graph_pred_discrete_datasets.md
+│
+├── hyperopt/                                   # 超参数搜索工作流与主文档
+│   ├── README.md                              # 主说明文档
+│   ├── scripts/                               # Optuna 搜索脚本
+│   ├── journal/                               # 搜索日志（不提交）
+│   └── results/                               # 搜索结果（不提交）
 │   │
 │   ├── archive/                                # 归档文档（历史）
 │   │   ├── README.md                          # 归档索引

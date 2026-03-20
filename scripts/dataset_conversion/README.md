@@ -276,10 +276,7 @@ If all three steps pass, the `prepare_data_new.py -> run_pretrain.py -> run_fine
 - The checked-in default config uses `encoder.type: gte`, so a run will use the GTE encoder unless you explicitly switch to `bert`.
 - `run_finetune.py` currently asserts that CUDA is available before any training starts.
 - In the checked-in repository state audited here, `code2` does not pass the loader smoke test because `data/code2/data.pkl` is missing, so it should not be documented as immediately runnable without regenerating its processed data first.
-- A separate cold-start reproducibility audit is maintained in:
-  - `docs/reproducibility/dataset-cold-start-audit.md`
-  - `docs/reproducibility/cold-start-runbook.md`
-  - `docs/reproducibility/paper-dataset-cold-start-guide.md`
+- The current audited status is maintained directly in this file. If dataset availability changes, update the status table above in the same commit.
 
 ## Adding a New Dataset
 
