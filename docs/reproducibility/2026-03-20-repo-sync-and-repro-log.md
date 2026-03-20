@@ -71,6 +71,9 @@
 - 在全新虚拟环境 `/tmp/tokenizerGraph-installcheck-20260320/.venv` 中，以下命令成功完成：
   - `pip install -e /home/gzy/py/tokenizerGraph`
   - 其中 build dependencies、editable metadata、C++ 扩展构建全部成功
+- 基于提交 `8636c52d95b03826f353aab831e178dda10ab75a` 的干净本地克隆 `/tmp/tokenizerGraph-postcommit-20260320` 中：
+  - 重新创建虚拟环境并执行 `pip install -e /tmp/tokenizerGraph-postcommit-20260320` 成功
+  - 说明安装修复在提交后的干净 Git 克隆中可以稳定复现
 - 基于提交 `45c9b748e0e1672e7b8d17fd4ea07ad45352ba00` 的干净本地克隆 `/tmp/tokenizerGraph-postcommit-20260320` 中：
   - `pip install -e /tmp/tokenizerGraph-postcommit-20260320` 再次成功
   - `ProjectConfig().cache_dir` 解析为仓库内本地路径 `/tmp/tokenizerGraph-postcommit-20260320/cache`
