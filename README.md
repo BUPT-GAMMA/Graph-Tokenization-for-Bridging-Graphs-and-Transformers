@@ -156,22 +156,17 @@ data/processed/qm9test/
 └── vocab/feuler/bpe/single/vocab.json
 ```
 
-Refer to the following resources for detailed data preparation and execution instructions:
+Refer to the following resources for formal release-scope setup and execution:
 
-- [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md) — dataset-by-dataset conversion notes
 - [`src/data/README.md`](src/data/README.md) — data layer contract and expected directory layout
-- [`docs/reproducibility/dataset-cold-start-audit.md`](docs/reproducibility/dataset-cold-start-audit.md) — cold-start reproducibility audit and script traceability
-- [`docs/reproducibility/cold-start-runbook.md`](docs/reproducibility/cold-start-runbook.md) — independent clone-based cold-start run record
-- [`docs/reproducibility/cold-start-roadmap.md`](docs/reproducibility/cold-start-roadmap.md) — remaining dataset-by-dataset closure plan
 - [`docs/reproducibility/environment-setup.md`](docs/reproducibility/environment-setup.md) — tested environment boundary, dependency layering, and install verification notes
 - [`docs/reproducibility/paper-dataset-cold-start-guide.md`](docs/reproducibility/paper-dataset-cold-start-guide.md) — formal paper-scope dataset setup and validation guide
 
-Current audited status:
+Release-scope status:
 
-- `qm9test` is the only dataset that has been fully verified through `prepare_data_new.py -> run_pretrain.py -> run_finetune.py`
-- `mnist` and `mnist_raw` currently pass loader-level checks only; `prepare_data_new.py` must be executed before training
-- `code2` is blocked in the checked-in repository state because `data/code2/data.pkl` is missing
-- The complete audited status table is maintained in [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md)
+- `release` keeps only the paper-scope reproducibility entrypoints and their minimum verification assets
+- Experimental, blocked, or audit-only scripts remain on the `dev` branch
+- `qm9test` is a derived smoke-test dataset and must be generated from `qm9` in a clean clone
 
 **Important Notes:**
 
@@ -197,7 +192,7 @@ python run_pretrain.py \
 - `--dataset` and `--method` are required
 - The script reads the processed artifacts produced by `prepare_data_new.py`
 - The default config uses the paths in `config/default_config.yml`, where `data_dir` resolves to `data/`
-- A verified one-epoch `qm9test` smoke test with `multi_3` serialization is documented in [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md)
+- A verified one-epoch `qm9test` smoke test is part of the paper-scope reproducibility materials linked above
 
 ### 3. Fine-tuning
 
@@ -282,7 +277,8 @@ Fine-tuning also requires a CUDA-capable device and a valid pre-trained checkpoi
 - [Configuration Guide](docs/guides/config_guide.md) — config file structure and parameters
 - [Experiment Guide](docs/guides/experiment_guide.md) — how to design and run experiments
 - [BPE Usage Guide](docs/bpe/BPE_USAGE_GUIDE.md) — BPE engine API and usage
-- [Dataset Conversion Guide](scripts/dataset_conversion/README.md) — how to prepare `data/<dataset>/` so the loaders can run directly
+- [Reproducibility Environment Setup](docs/reproducibility/environment-setup.md) — tested environment boundary and install notes
+- [Paper Dataset Cold-Start Guide](docs/reproducibility/paper-dataset-cold-start-guide.md) — formal release-scope dataset setup guide
 
 ## Citation
 

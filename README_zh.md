@@ -156,22 +156,17 @@ data/processed/qm9test/
 └── vocab/feuler/bpe/single/vocab.json
 ```
 
-详细的数据准备与执行说明见：
+正式的 release 版数据准备与执行说明见：
 
-- [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md) — 数据集转换说明、验证命令与当前审计状态
 - [`src/data/README.md`](src/data/README.md) — 数据层接口约定与目录结构
-- [`docs/reproducibility/dataset-cold-start-audit.md`](docs/reproducibility/dataset-cold-start-audit.md) — 冷启动可复现性审计与脚本追溯结果
-- [`docs/reproducibility/cold-start-runbook.md`](docs/reproducibility/cold-start-runbook.md) — 独立克隆目录冷启动复现实录
-- [`docs/reproducibility/cold-start-roadmap.md`](docs/reproducibility/cold-start-roadmap.md) — 后续逐数据集收口路线图
 - [`docs/reproducibility/environment-setup.md`](docs/reproducibility/environment-setup.md) — 已验证环境边界、依赖分层与安装验证说明
 - [`docs/reproducibility/paper-dataset-cold-start-guide.md`](docs/reproducibility/paper-dataset-cold-start-guide.md) — 论文范围内数据集的正式准备与验证指南
 
-当前审计结论：
+当前 release 口径：
 
-- `qm9test` 是当前仓库状态下唯一完成 `prepare_data_new.py -> run_pretrain.py -> run_finetune.py` 全链路实测的数据集
-- `mnist` 与 `mnist_raw` 目前仅确认 loader 层可用，训练前仍需执行 `prepare_data_new.py`
-- `code2` 在当前仓库状态下受阻，原因是缺少 `data/code2/data.pkl`
-- 完整状态表维护在 [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md)
+- `release` 只保留论文范围内的正式复现入口及其最小验证资产
+- 实验性、受阻或审计型脚本统一留在 `dev` 分支
+- `qm9test` 是从 `qm9` 派生的 smoke-test 数据集，干净克隆里需要先生成 `qm9` 再生成它
 
 执行说明：
 
@@ -197,7 +192,7 @@ python run_pretrain.py \
 - 这里必须使用单数参数 `--dataset` 和 `--method`
 - 该脚本直接读取 `prepare_data_new.py` 生成的缓存结果
 - 默认路径配置来自 `config/default_config.yml`，其中 `data_dir` 会解析到项目根目录下的 `data/`
-- 已验证的 `qm9test + multi_3` 单轮预训练命令记录在 [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md)
+- 更完整的实验性与审计型命令只保留在 `dev` 分支
 
 ### 3. 微调
 
@@ -281,7 +276,8 @@ python run_finetune.py --dataset <dataset> --method feuler --epochs 1 --batch_si
 - [配置指南](docs/guides/config_guide.md) — 配置文件结构与参数说明
 - [实验指南](docs/guides/experiment_guide.md) — 如何设计与运行实验
 - [BPE 使用指南](docs/bpe/BPE_USAGE_GUIDE.md) — BPE 引擎 API 与使用方法
-- [数据集转换指南](scripts/dataset_conversion/README.md) — 如何准备可被 loader 直接读取的 `data/<dataset>/`
+- [环境准备说明](docs/reproducibility/environment-setup.md) — 已验证环境边界与安装说明
+- [论文范围冷启动指南](docs/reproducibility/paper-dataset-cold-start-guide.md) — release 正式范围的数据准备入口
 
 ## 引用
 

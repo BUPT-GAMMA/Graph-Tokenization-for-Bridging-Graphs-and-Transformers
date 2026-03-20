@@ -7,19 +7,16 @@ except ModuleNotFoundError:  # pragma: no cover - Python < 3.11
     import tomli as tomllib
 
 
-MISSING_EXPORT_SCRIPT_PATTERNS = [
-    "export_qm9.py",
-    "export_zinc.py",
-    "export_molhiv.py",
+RELEASE_EXCLUDED_SCRIPT_PATHS = [
+    "data/code2/preprocess_code2.py",
+    "data/mnist/convert_mnist_to_dgl.py",
+    "data/mnist/convert_test.py",
+    "data/mnist/test_2slic.py",
+    "data/aqsol/prepare_aqsol_raw.py",
+    "data/zinc/prepare_zinc_raw.py",
+    "data/zinc/usage_example_new.py",
+    "data/qm9/process_qm9_dataset.py",
 ]
-
-
-def test_cold_start_audit_marks_zinc_and_aqsol_as_out_of_current_formal_scope():
-    audit = Path("docs/reproducibility/dataset-cold-start-audit.md").read_text(encoding="utf-8")
-    assert "`zinc`" in audit
-    assert "`aqsol`" in audit
-    assert "Out of current formal scope" in audit
-    assert "experimental draft" in audit
 
 
 def test_paper_scope_guide_lists_formal_and_excluded_datasets():
@@ -50,24 +47,25 @@ def test_readme_explains_that_qm9test_is_derived_not_checked_in():
     assert "derived from `qm9`" in readme
 
 
-def test_export_docs_do_not_advertise_missing_export_scripts_as_existing_tools():
-    doc_paths = [
-        Path("docs/guides/dataset_export_guide.md"),
-        Path("docs/guides/simple_export_guide.md"),
-        Path("export_system/DATASET_EXPORT_GUIDE.md"),
-        Path("export_system/SIMPLE_EXPORT_GUIDE.md"),
-    ]
-    for doc_path in doc_paths:
-        text = doc_path.read_text(encoding="utf-8")
-        for pattern in MISSING_EXPORT_SCRIPT_PATTERNS:
-            assert pattern not in text, f"{doc_path} still advertises missing script {pattern}"
+def test_release_readme_points_only_to_formal_repro_docs():
+    readme = Path("README.md").read_text(encoding="utf-8")
+    assert "docs/reproducibility/environment-setup.md" in readme
+    assert "docs/reproducibility/paper-dataset-cold-start-guide.md" in readme
+    assert "scripts/dataset_conversion/README.md" not in readme
+    assert "docs/reproducibility/dataset-cold-start-audit.md" not in readme
+    assert "docs/reproducibility/cold-start-runbook.md" not in readme
+    assert "docs/reproducibility/cold-start-roadmap.md" not in readme
+
+
+def test_release_does_not_ship_dev_only_preprocess_scripts():
+    for script_path in RELEASE_EXCLUDED_SCRIPT_PATHS:
+        assert not Path(script_path).exists(), f"release should not carry dev-only script {script_path}"
 
 
 def test_data_preprocess_scripts_are_not_gitignored():
     script_paths = [
         "data/molhiv/preprocess_molhiv.py",
         "data/mnist_raw/prepare.py",
-        "data/qm9/process_qm9_dataset.py",
         "data/qm9test/create_qm9test_dataset.py",
         "data/coildel/preprocess_coil_del.py",
     ]

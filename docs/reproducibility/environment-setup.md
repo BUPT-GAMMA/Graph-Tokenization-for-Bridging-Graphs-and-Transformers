@@ -53,7 +53,6 @@ pip install -e .
 - 在全新虚拟环境中执行仓库根目录下的 `pip install -e .`，构建依赖安装和 editable C++ 扩展构建成功。
 - 文档/脚本/`qm9` 血缘相关的最小测试集通过：
   - `tests/test_reproducibility_documentation.py`
-  - `tests/test_data_preprocess_script_inventory.py`
   - `tests/test_qm9_raw_script_scaffold.py`
   - `tests/test_qm9_lineage.py`
   - `tests/test_repro_compare.py`
@@ -69,7 +68,6 @@ pip install -e .
 
 ```bash
 pytest tests/test_reproducibility_documentation.py \
-       tests/test_data_preprocess_script_inventory.py \
        tests/test_qm9_raw_script_scaffold.py \
        tests/test_qm9_lineage.py \
        tests/test_repro_compare.py -v

@@ -157,10 +157,10 @@ export https_proxy=http://local.nginx.show:7890
 
 ```bash
 python data/qm9/prepare_qm9_raw.py \
-  --split-source-dir /home/gzy/py/tokenizerGraph/data/qm9 \
-  --reference-data-pkl /home/gzy/py/tokenizerGraph/data/qm9/data.pkl \
-  --reference-smiles-dir /home/gzy/py/tokenizerGraph/data/qm9 \
-  --output-dir /tmp/qm9-run
+  --split-source-dir <repo>/data/qm9 \
+  --reference-data-pkl <repo>/data/qm9/data.pkl \
+  --reference-smiles-dir <repo>/data/qm9 \
+  --output-dir <scratch>/qm9-run
 ```
 
 当前状态：
@@ -171,11 +171,13 @@ python data/qm9/prepare_qm9_raw.py \
 
 ### `qm9test`
 
+`qm9test` is derived from `qm9` and should be regenerated from a prepared `qm9` baseline in a clean clone.
+
 ```bash
 python data/qm9test/create_qm9test_dataset.py \
-  --original-indices-path /home/gzy/py/tokenizerGraph/data/qm9test/metadata.json \
-  --source-dir /home/gzy/py/tokenizerGraph/data/qm9 \
-  --output-dir /tmp/qm9test-run
+  --original-indices-path <repo>/data/qm9test/metadata.json \
+  --source-dir <repo>/data/qm9 \
+  --output-dir <scratch>/qm9test-run
 ```
 
 当前状态：
@@ -210,12 +212,9 @@ python data/qm9test/create_qm9test_dataset.py \
 
 ```bash
 pytest tests/test_reproducibility_documentation.py \
-  tests/test_data_preprocess_script_inventory.py \
-  tests/test_molecular_dataset_current_format.py \
   tests/test_repro_compare.py \
   tests/test_qm9_lineage.py \
-  tests/test_qm9_raw_script_scaffold.py \
-  tests/test_molecule_raw_script_scaffold.py -v
+  tests/test_qm9_raw_script_scaffold.py -v
 ```
 
 然后人工检查：
