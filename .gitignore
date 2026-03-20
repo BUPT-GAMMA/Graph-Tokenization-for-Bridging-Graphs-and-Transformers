@@ -24,6 +24,7 @@ paper/
 /data/*
 !/data/DATASET_STATS.md
 !/data/*/
+/data/gnn_use/
 /data/*/*
 !/data/*/README.md
 !/data/*/*.py
