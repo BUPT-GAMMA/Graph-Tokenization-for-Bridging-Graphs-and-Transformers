@@ -103,3 +103,8 @@ def test_editable_install_egg_info_is_gitignored():
         text=True,
     )
     assert result.returncode == 0, "Editable-install egg-info directory should be ignored"
+
+
+def test_internal_agent_process_docs_are_not_committed():
+    assert not Path("docs/superpowers/plans/2026-03-20-repo-sync-and-repro.md").exists()
+    assert not Path("docs/reproducibility/2026-03-20-repo-sync-and-repro-log.md").exists()

@@ -4,7 +4,7 @@
 
 [[中文文档 / Chinese README]](README_zh.md) · [[Paper (ICLR 2026 / OpenReview)]](https://openreview.net/forum?id=jCctxI1BGF) · arXiv (coming soon)
 
-> **Branches:** `release` — clean code for reproducing paper experiments. [`dev`](../../tree/dev) — full development version with utility scripts, benchmarks, and internal docs.
+> **Branches:** `release` — paper-scope reproducibility only. [`dev`](../../tree/dev) — full development line, including experimental/blocked preprocessing scripts and audit materials that are intentionally excluded from `release`.
 
 ## Overview
 

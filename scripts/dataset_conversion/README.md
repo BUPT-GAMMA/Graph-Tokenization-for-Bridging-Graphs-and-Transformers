@@ -42,6 +42,15 @@ The audited status below reflects the checked-in repository state on 2026-03-15.
 | Loader OK, prepare required before training | `mnist`, `mnist_raw` | Loader smoke tests succeed, but the current repository state does not contain the required `feuler` serialized cache, vocab, and BPE codebook. |
 | Blocked in current repository state | `code2` | The raw loader path is blocked because `data/code2/data.pkl` is missing. Existing partial cache files are not sufficient to claim that the dataset is runnable. |
 
+## Branch Scope
+
+- `release` keeps only the paper-scope reproducibility entrypoints and their minimum verification assets.
+- `dev` keeps the broader audit surface:
+  - experimental scripts such as `aqsol`, `zinc`, and `code2`
+  - incomplete local-flow scripts such as `mnist`
+  - secondary helpers such as `data/qm9/process_qm9_dataset.py`
+- If a script is not a canonical paper-scope cold-start entrypoint, assume it belongs to `dev` unless the release docs say otherwise.
+
 ## Getting Datasets
 
 ### Option A: Download Pre-processed Data
