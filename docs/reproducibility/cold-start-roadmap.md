@@ -12,6 +12,20 @@
    - `data.pkl` 样本结构一致
    - 必要时字节级或哈希级一致
 
+## Current Delivery Scope
+
+本轮正式交付范围只覆盖论文主结果实际使用的数据集。
+
+明确不纳入本轮正式保证范围：
+
+- `zinc`
+- `aqsol`
+
+说明：
+
+- 这两个数据集在当前仓库里保留实验性脚本和内部验证记录
+- 但由于论文主结果不依赖它们，本轮文档与交付口径统一视为“暂未正式实现”
+
 ## Phase Breakdown
 
 ### Phase 1: Repository readiness
@@ -101,8 +115,6 @@
 - `peptides_struct`
 - `qm9`
 - `qm9test`
-- `zinc`
-- `aqsol`
 
 ### Script exists and can likely be reproduced next
 
@@ -113,11 +125,14 @@
 - `peptides_func`
 - `peptides_struct`
 
-### Needs normalization before true public-raw cold-start
+### Still unresolved inside the paper-facing scope
+
+- `mnist`
+
+### Experimental drafts kept outside the current formal scope
 
 - `zinc`
 - `aqsol`
-- `mnist`
 
 ## Required Remaining Work
 
@@ -164,10 +179,8 @@ Current progress:
 
 - `data/qm9/prepare_qm9_raw.py` now replays baseline split order and resolves duplicate-signature molecules by exact graph-tensor signature before WL fallback
 - `data/qm9test/create_qm9test_dataset.py` now replays directly from canonical `data/qm9` and can reproduce the current baseline subset exactly except for `data.pkl` pickle bytes
-- `data/zinc/prepare_zinc_raw.py` now reproduces the baseline from public `ZINC.pkl`, with byte-identical split files and `smiles_*`
-- `data/aqsol/prepare_aqsol_raw.py` now reproduces the baseline from public raw zip + dictionary mapping, with byte-identical split files and `smiles_*`
-- remaining blockers are:
-  - both `zinc` and `aqsol` still require an explicit outbound proxy in the current runtime
+- `data/zinc/prepare_zinc_raw.py` and `data/aqsol/prepare_aqsol_raw.py` remain in-repo as experimental drafts
+- they are intentionally excluded from the current formal reproducibility commitment
 
 ### Group C: MNIST superpixel normalization
 
@@ -189,9 +202,7 @@ Recommended order from now on:
 4. `code2`
 5. `qm9`
 6. `qm9test`
-7. `zinc`
-8. `aqsol`
-9. `mnist`
+7. `mnist`
 
 ## Evidence Files
 

@@ -256,6 +256,7 @@ If all three steps pass, the `prepare_data_new.py -> run_pretrain.py -> run_fine
 - A separate cold-start reproducibility audit is maintained in:
   - `docs/reproducibility/dataset-cold-start-audit.md`
   - `docs/reproducibility/cold-start-runbook.md`
+  - `docs/reproducibility/paper-dataset-cold-start-guide.md`
 
 ## Adding a New Dataset
 
