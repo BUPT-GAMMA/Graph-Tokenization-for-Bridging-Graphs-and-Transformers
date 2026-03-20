@@ -152,7 +152,7 @@ def _lazy_import_loader(loader_name: str):
 
 def _register_all_loaders():
     """Register all loaders using lazy import."""
-    loader_names = ["qm9", "qm9test", "zinc", "aqsol", "colors3", "proteins", "synthetic", "mutagenicity", "coildel", "dblp", "dd", "twitter", "molhiv", "peptides_func", "peptides_struct", "code2"]
+    loader_names = ["qm9", "qm9test", "zinc", "aqsol", "mnist", "mnist_raw", "colors3", "proteins", "synthetic", "mutagenicity", "coildel", "dblp", "dd", "twitter", "molhiv", "peptides_func", "peptides_struct", "code2"]
     
     for name in loader_names:
         # Register lazy-import factory instead of direct class import

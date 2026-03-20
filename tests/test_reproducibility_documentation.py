@@ -7,38 +7,39 @@ except ModuleNotFoundError:  # pragma: no cover - Python < 3.11
     import tomli as tomllib
 
 
-RELEASE_EXCLUDED_SCRIPT_PATHS = [
-    "data/code2/preprocess_code2.py",
-    "data/mnist/convert_mnist_to_dgl.py",
-    "data/mnist/convert_test.py",
-    "data/mnist/test_2slic.py",
-    "data/aqsol/prepare_aqsol_raw.py",
-    "data/zinc/prepare_zinc_raw.py",
-    "data/zinc/usage_example_new.py",
-    "data/qm9/process_qm9_dataset.py",
+MISSING_EXPORT_SCRIPT_PATTERNS = [
+    "export_qm9.py",
+    "export_zinc.py",
+    "export_molhiv.py",
+]
+
+REMOVED_REPRO_DOCS = [
+    "docs/reproducibility/dataset-cold-start-audit.md",
+    "docs/reproducibility/cold-start-runbook.md",
+    "docs/reproducibility/cold-start-roadmap.md",
+    "docs/reproducibility/environment-setup.md",
+    "docs/reproducibility/paper-dataset-cold-start-guide.md",
 ]
 
 
-def test_paper_scope_guide_lists_formal_and_excluded_datasets():
-    guide = Path("docs/reproducibility/paper-dataset-cold-start-guide.md").read_text(encoding="utf-8")
-    assert "`mnist_raw`" in guide
-    assert "`qm9`" in guide
-    assert "`qm9test`" in guide
-    assert "`zinc`" in guide
-    assert "`aqsol`" in guide
-    assert "当前不纳入正式保证范围" in guide
+def test_removed_repro_docs_are_not_referenced_from_primary_entry_docs():
+    doc_paths = [
+        Path("README.md"),
+        Path("README_zh.md"),
+        Path("docs/README.md"),
+        Path("scripts/dataset_conversion/README.md"),
+    ]
+    for doc_path in doc_paths:
+        text = doc_path.read_text(encoding="utf-8")
+        for removed_path in REMOVED_REPRO_DOCS:
+            assert removed_path not in text, f"{doc_path} still references removed doc {removed_path}"
 
 
-def test_paper_scope_guide_points_to_explicit_environment_setup():
-    guide = Path("docs/reproducibility/paper-dataset-cold-start-guide.md").read_text(encoding="utf-8")
-    assert "environment-setup.md" in guide
-    assert Path("docs/reproducibility/environment-setup.md").exists()
-
-
-def test_environment_setup_doc_avoids_machine_specific_paths():
-    guide = Path("docs/reproducibility/environment-setup.md").read_text(encoding="utf-8")
-    assert "/home/gzy/" not in guide
-    assert "/tmp/" not in guide
+def test_hyperopt_readme_is_the_primary_search_doc():
+    readme = Path("hyperopt/README.md").read_text(encoding="utf-8")
+    assert "This is the primary hyperparameter-search documentation entrypoint." in readme
+    assert "--lr_min" in readme
+    assert "--config_json" in readme
 
 
 def test_readme_explains_that_qm9test_is_derived_not_checked_in():
@@ -47,25 +48,24 @@ def test_readme_explains_that_qm9test_is_derived_not_checked_in():
     assert "derived from `qm9`" in readme
 
 
-def test_release_readme_points_only_to_formal_repro_docs():
-    readme = Path("README.md").read_text(encoding="utf-8")
-    assert "docs/reproducibility/environment-setup.md" in readme
-    assert "docs/reproducibility/paper-dataset-cold-start-guide.md" in readme
-    assert "scripts/dataset_conversion/README.md" not in readme
-    assert "docs/reproducibility/dataset-cold-start-audit.md" not in readme
-    assert "docs/reproducibility/cold-start-runbook.md" not in readme
-    assert "docs/reproducibility/cold-start-roadmap.md" not in readme
-
-
-def test_release_does_not_ship_dev_only_preprocess_scripts():
-    for script_path in RELEASE_EXCLUDED_SCRIPT_PATHS:
-        assert not Path(script_path).exists(), f"release should not carry dev-only script {script_path}"
+def test_export_docs_do_not_advertise_missing_export_scripts_as_existing_tools():
+    doc_paths = [
+        Path("docs/guides/dataset_export_guide.md"),
+        Path("docs/guides/simple_export_guide.md"),
+        Path("export_system/DATASET_EXPORT_GUIDE.md"),
+        Path("export_system/SIMPLE_EXPORT_GUIDE.md"),
+    ]
+    for doc_path in doc_paths:
+        text = doc_path.read_text(encoding="utf-8")
+        for pattern in MISSING_EXPORT_SCRIPT_PATTERNS:
+            assert pattern not in text, f"{doc_path} still advertises missing script {pattern}"
 
 
 def test_data_preprocess_scripts_are_not_gitignored():
     script_paths = [
         "data/molhiv/preprocess_molhiv.py",
         "data/mnist_raw/prepare.py",
+        "data/qm9/process_qm9_dataset.py",
         "data/qm9test/create_qm9test_dataset.py",
         "data/coildel/preprocess_coil_del.py",
     ]
@@ -101,3 +101,8 @@ def test_editable_install_egg_info_is_gitignored():
         text=True,
     )
     assert result.returncode == 0, "Editable-install egg-info directory should be ignored"
+
+
+def test_internal_agent_process_docs_are_not_committed():
+    assert not Path("docs/superpowers/plans/2026-03-20-repo-sync-and-repro.md").exists()
+    assert not Path("docs/reproducibility/2026-03-20-repo-sync-and-repro-log.md").exists()
