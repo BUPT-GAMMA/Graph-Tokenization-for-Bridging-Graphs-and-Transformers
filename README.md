@@ -4,7 +4,7 @@
 
 [[中文文档 / Chinese README]](README_zh.md) · [[Paper (ICLR 2026 / OpenReview)]](https://openreview.net/forum?id=jCctxI1BGF) · arXiv (coming soon)
 
-> **Branches:** `release` — clean code for reproducing paper experiments. [`dev`](../../tree/dev) — full development version with utility scripts, benchmarks, and internal docs.
+> **Branches:** `release` — paper-scope reproducibility only. [`dev`](../../tree/dev) — full development line, including experimental/blocked preprocessing scripts and audit materials that are intentionally excluded from `release`.
 
 ## Overview
 
@@ -156,17 +156,23 @@ data/processed/qm9test/
 └── vocab/feuler/bpe/single/vocab.json
 ```
 
-Refer to the following resources for formal release-scope setup and execution:
+Refer to the following resources for detailed data preparation and execution instructions:
 
+- [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md) — dataset-by-dataset conversion notes
 - [`src/data/README.md`](src/data/README.md) — data layer contract and expected directory layout
-- [`docs/reproducibility/environment-setup.md`](docs/reproducibility/environment-setup.md) — tested environment boundary, dependency layering, and install verification notes
-- [`docs/reproducibility/paper-dataset-cold-start-guide.md`](docs/reproducibility/paper-dataset-cold-start-guide.md) — formal paper-scope dataset setup and validation guide
 
-Release-scope status:
+Pre-packaged datasets are available here:
 
-- `release` keeps only the paper-scope reproducibility entrypoints and their minimum verification assets
-- Experimental, blocked, or audit-only scripts remain on the `dev` branch
-- `qm9test` is a derived smoke-test dataset and must be generated from `qm9` in a clean clone
+- Google Drive bundle: <https://drive.google.com/file/d/10etZF9OnV569_Fp7tpdMUVEH9eZECKdW/view?usp=sharing>
+
+The repository also keeps raw-to-unified conversion scripts under dataset folders and [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md). Those scripts are not only for rebuilding the released datasets; they are also intended as concrete references when integrating a new dataset into the same directory contract.
+
+Current audited status:
+
+- `qm9test` is the only dataset that has been fully verified through `prepare_data_new.py -> run_pretrain.py -> run_finetune.py`
+- `mnist` and `mnist_raw` currently pass loader-level checks only; `prepare_data_new.py` must be executed before training
+- `code2` is blocked in the checked-in repository state because `data/code2/data.pkl` is missing
+- The complete audited status table is maintained in [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md)
 
 **Important Notes:**
 
@@ -192,7 +198,7 @@ python run_pretrain.py \
 - `--dataset` and `--method` are required
 - The script reads the processed artifacts produced by `prepare_data_new.py`
 - The default config uses the paths in `config/default_config.yml`, where `data_dir` resolves to `data/`
-- A verified one-epoch `qm9test` smoke test is part of the paper-scope reproducibility materials linked above
+- A verified one-epoch `qm9test` smoke test with `multi_3` serialization is documented in [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md)
 
 ### 3. Fine-tuning
 
@@ -243,6 +249,10 @@ Scripts for all paper experiments are in the `final/` directory:
 - **Multi-sampling comparison** — `final/exp2_mult_seralize_comp/`: effect of multiple serialization samples
 - **BPE vocabulary visualization** — `final/exp4_bpe_vocab_visual/`: codebook inspection and visualization
 
+For the maintained Optuna-based hyperparameter search workflow, see:
+
+- [`hyperopt/README.md`](hyperopt/README.md)
+
 ## Dataset Preparation Checklist
 
 Use the following checklist to verify that a dataset is runnable end-to-end:
@@ -277,8 +287,7 @@ Fine-tuning also requires a CUDA-capable device and a valid pre-trained checkpoi
 - [Configuration Guide](docs/guides/config_guide.md) — config file structure and parameters
 - [Experiment Guide](docs/guides/experiment_guide.md) — how to design and run experiments
 - [BPE Usage Guide](docs/bpe/BPE_USAGE_GUIDE.md) — BPE engine API and usage
-- [Reproducibility Environment Setup](docs/reproducibility/environment-setup.md) — tested environment boundary and install notes
-- [Paper Dataset Cold-Start Guide](docs/reproducibility/paper-dataset-cold-start-guide.md) — formal release-scope dataset setup guide
+- [Dataset Conversion Guide](scripts/dataset_conversion/README.md) — how to prepare `data/<dataset>/` so the loaders can run directly
 
 ## Citation
 

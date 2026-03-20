@@ -4,7 +4,7 @@
 
 [[English README]](README.md) · [[论文 (ICLR 2026 / OpenReview)]](https://openreview.net/forum?id=jCctxI1BGF) · arXiv（即将发布）
 
-> **分支说明：** `release` — 复现论文实验的精简代码。[`dev`](../../tree/dev) — 包含工具脚本、benchmark 和内部文档的完整开发版本。
+> **分支说明：** `release` — 只保留论文范围内正式复现所需内容。[`dev`](../../tree/dev) — 完整开发分支，保留实验性/受阻的预处理脚本以及审计材料，这些内容不会进入 `release`。
 
 ## 概述
 
@@ -156,17 +156,23 @@ data/processed/qm9test/
 └── vocab/feuler/bpe/single/vocab.json
 ```
 
-正式的 release 版数据准备与执行说明见：
+详细的数据准备与执行说明见：
 
+- [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md) — 数据集转换说明、验证命令与当前审计状态
 - [`src/data/README.md`](src/data/README.md) — 数据层接口约定与目录结构
-- [`docs/reproducibility/environment-setup.md`](docs/reproducibility/environment-setup.md) — 已验证环境边界、依赖分层与安装验证说明
-- [`docs/reproducibility/paper-dataset-cold-start-guide.md`](docs/reproducibility/paper-dataset-cold-start-guide.md) — 论文范围内数据集的正式准备与验证指南
 
-当前 release 口径：
+预打包数据集下载链接：
 
-- `release` 只保留论文范围内的正式复现入口及其最小验证资产
-- 实验性、受阻或审计型脚本统一留在 `dev` 分支
-- `qm9test` 是从 `qm9` 派生的 smoke-test 数据集，干净克隆里需要先生成 `qm9` 再生成它
+- Google Drive 数据包：<https://drive.google.com/file/d/10etZF9OnV569_Fp7tpdMUVEH9eZECKdW/view?usp=sharing>
+
+仓库中也保留了各数据集目录下的原始数据转换脚本，以及 [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md) 中的转换说明。这些脚本不仅用于重建当前发布的数据格式，也可以作为接入新数据集时的参考模板，帮助对齐到本项目统一的 `data/<dataset>/` 目录契约。
+
+当前审计结论：
+
+- `qm9test` 是当前仓库状态下唯一完成 `prepare_data_new.py -> run_pretrain.py -> run_finetune.py` 全链路实测的数据集
+- `mnist` 与 `mnist_raw` 目前仅确认 loader 层可用，训练前仍需执行 `prepare_data_new.py`
+- `code2` 在当前仓库状态下受阻，原因是缺少 `data/code2/data.pkl`
+- 完整状态表维护在 [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md)
 
 执行说明：
 
@@ -192,7 +198,7 @@ python run_pretrain.py \
 - 这里必须使用单数参数 `--dataset` 和 `--method`
 - 该脚本直接读取 `prepare_data_new.py` 生成的缓存结果
 - 默认路径配置来自 `config/default_config.yml`，其中 `data_dir` 会解析到项目根目录下的 `data/`
-- 更完整的实验性与审计型命令只保留在 `dev` 分支
+- 已验证的 `qm9test + multi_3` 单轮预训练命令记录在 [`scripts/dataset_conversion/README.md`](scripts/dataset_conversion/README.md)
 
 ### 3. 微调
 
@@ -243,6 +249,10 @@ python batch_finetune_simple.py \
 - **多重采样对比** — `final/exp2_mult_seralize_comp/`：多次序列化采样的效果
 - **BPE 词表可视化** — `final/exp4_bpe_vocab_visual/`：码本分析与可视化
 
+维护中的 Optuna 超参数搜索流程见：
+
+- [`hyperopt/README.md`](hyperopt/README.md)
+
 ## 数据准备检查清单
 
 建议按以下顺序检查数据集是否具备端到端运行条件：
@@ -276,8 +286,7 @@ python run_finetune.py --dataset <dataset> --method feuler --epochs 1 --batch_si
 - [配置指南](docs/guides/config_guide.md) — 配置文件结构与参数说明
 - [实验指南](docs/guides/experiment_guide.md) — 如何设计与运行实验
 - [BPE 使用指南](docs/bpe/BPE_USAGE_GUIDE.md) — BPE 引擎 API 与使用方法
-- [环境准备说明](docs/reproducibility/environment-setup.md) — 已验证环境边界与安装说明
-- [论文范围冷启动指南](docs/reproducibility/paper-dataset-cold-start-guide.md) — release 正式范围的数据准备入口
+- [数据集转换指南](scripts/dataset_conversion/README.md) — 如何准备可被 loader 直接读取的 `data/<dataset>/`
 
 ## 引用
 
