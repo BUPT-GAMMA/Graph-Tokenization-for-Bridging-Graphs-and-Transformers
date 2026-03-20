@@ -2,7 +2,7 @@
 
 **Graph Tokenization for Bridging Graphs and Transformers**
 
-[[English README]](README.md) · [[论文 (ICLR 2026 / OpenReview)]](https://openreview.net/forum?id=jCctxI1BGF) · arXiv（即将发布）
+[[English README]](README.md) · [[论文 (ICLR 2026 / OpenReview)]](https://openreview.net/forum?id=jCctxI1BGF) · [[arXiv]](https://arxiv.org/abs/2603.11099)
 
 > **分支说明：** `release` — 只保留论文范围内正式复现所需内容。[`dev`](../../tree/dev) — 完整开发分支，保留实验性/受阻的预处理脚本以及审计材料，这些内容不会进入 `release`。
 
