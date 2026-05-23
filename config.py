@@ -116,8 +116,10 @@ class ProjectConfig:
         # Load YAML config
         if config_path is None:
             config_path = Path(__file__).parent / "config" / "default_config.yml"
-        
-        with open(config_path, 'r', encoding='utf-8') as f:
+
+        self._config_path = Path(config_path).resolve()
+
+        with open(self._config_path, 'r', encoding='utf-8') as f:
             config = yaml.safe_load(f)
         
         # Create config nodes
@@ -159,7 +161,12 @@ class ProjectConfig:
             self.device = self.system.device
         
         # Resolve all paths relative to project root (avoid CWD dependency)
-        project_root = Path(self.paths.project_root)
+        config_base_dir = self._config_path.parent if hasattr(self, '_config_path') else (Path(__file__).parent / "config")
+        project_root_cfg = Path(self.paths.project_root)
+        if project_root_cfg.is_absolute():
+            project_root = project_root_cfg
+        else:
+            project_root = (config_base_dir / project_root_cfg).resolve()
 
         def _as_abs(p: str | Path) -> Path:
             p = Path(p)
