@@ -1,0 +1,160 @@
+# ==========================================
+# IDE / OS
+# ==========================================
+.DS_Store
+.idea
+.vscode
+.history
+.claude
+.cursor
+.windsurf/
+.specstory/
+/.pytest_cache/
+AGENTS.md
+Agent.markdown
+
+# ==========================================
+# 论文（正在撰写）
+# ==========================================
+paper/
+
+# ==========================================
+# 数据 / 缓存 / 模型权重
+# ==========================================
+/data/*
+!/data/DATASET_STATS.md
+!/data/*/
+/data/gnn_use/
+/data/*/*
+!/data/*/README.md
+!/data/*/*.py
+!/data/*/*.ipynb
+/dataset/
+/local/
+/cache
+/model/
+/processed/
+/prepare_results/
+/wandb/
+/log/
+/logs/
+/backup_log/
+/backup/
+/archive/
+
+# ==========================================
+# 构建产物 / 编译输出
+# ==========================================
+build/
+*.egg-info/
+*.egg-info
+*.so
+*.o
+.nfs*
+
+# ==========================================
+# Python 缓存 / 序列化
+# ==========================================
+__pycache__/
+*.pt
+*.pkl
+*.pyc
+
+# ==========================================
+# 日志 / 输出 / 压缩包
+# ==========================================
+*.out*
+nohup.out
+*.log*
+*.tar.gz
+
+# ==========================================
+# 模型权重 / 大文件
+# ==========================================
+*.safetensors
+*.pth
+*.ckpt
+
+# ==========================================
+# 环境 / 备份
+# ==========================================
+env.txt
+*.backup
+sitecustomize.py
+
+# ==========================================
+# 本地 Agent / AI 协作文档
+# ==========================================
+/docs/handoffs/
+
+# ==========================================
+# 根目录生成的 CSV 数据
+# ==========================================
+/*.csv
+
+# ==========================================
+# 临时数据转换文件（已归档到本地）
+# ==========================================
+/foreign_dataset_files_to_convert/
+
+# ==========================================
+# final/ 实验产出（只保留代码，排除数据）
+# ==========================================
+final/**/*.csv
+final/**/*.pdf
+final/**/*.png
+final/**/*.svg
+final/**/*.jpg
+final/**/*.json
+final/**/*.md
+final/**/*.txt
+final/**/*.log
+
+# ==========================================
+# 实验对比结果 / 分析结果
+# ==========================================
+/comparison_results/
+/analysis_results/
+/detailed_analysis/
+/agg/
+/tests/
+/sbatch_scripts/
+*.tex
+
+# ==========================================
+# hyperopt 代码保留，运行产物忽略
+# ==========================================
+/hyperopt/*
+!/hyperopt/README.md
+!/hyperopt/__init__.py
+!/hyperopt/scripts/
+/hyperopt/scripts/*
+!/hyperopt/scripts/__init__.py
+!/hyperopt/scripts/*.py
+!/hyperopt/journal/
+/hyperopt/journal/*
+!/hyperopt/journal/.gitkeep
+!/hyperopt/results/
+/hyperopt/results/*
+!/hyperopt/results/.gitkeep
+
+# ==========================================
+# 历史遗留单文件排除
+# ==========================================
+analyze_gte_exploration_results.py
+consistency_analysis_summary.png
+create_summary_visualization.py
+detailed_visualization_analysis.py
+gte_exploration_results.csv
+key_findings_summary.png
+
+# ==========================================
+# bpe_for_images 子项目（保留代码，排除数据/输出/缓存）
+# ==========================================
+bpe_for_images/**/mnist_data/
+bpe_for_images/checkpoints/
+bpe_for_images/results/
+bpe_for_images/__pycache__/
+bpe_for_images/**/__pycache__/
+bpe_for_images/bpe/build/
+bpe_for_images/bpe/*.so
