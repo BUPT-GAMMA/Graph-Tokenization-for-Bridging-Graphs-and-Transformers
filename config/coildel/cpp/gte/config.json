@@ -1,0 +1,198 @@
+{
+  "system": {
+    "seed": 42,
+    "device": "auto",
+    "num_workers": 1,
+    "persistent_workers": true,
+    "log_style": "offline"
+  },
+  "repeat_runs": 1,
+  "paths": {
+    "project_root": "..",
+    "data_dir": "data/",
+    "cache_dir": "cache/",
+    "processed_dir": "data/processed",
+    "model_dir": "model",
+    "log_dir": "log"
+  },
+  "dataset": {
+    "name": "coildel",
+    "limit": null,
+    "use_cache": true,
+    "splits": {
+      "train": 0.8,
+      "val": 0.1,
+      "test": 0.1
+    }
+  },
+  "serialization": {
+    "method": "cpp",
+    "multiple_sampling": {
+      "enabled": true,
+      "num_realizations": 100
+    },
+    "bpe": {
+      "enabled": true,
+      "num_merges": 2000,
+      "min_frequency": 2,
+      "engine": {
+        "train_backend": "cpp",
+        "encode_backend": "cpp",
+        "encode_rank_mode": "none",
+        "encode_rank_k": null,
+        "encode_rank_min": null,
+        "encode_rank_max": null,
+        "encode_rank_dist": "uniform"
+      }
+    }
+  },
+  "encoding": {
+    "backend": "cpp",
+    "threads": {
+      "omp_num_threads": 1,
+      "mkl_num_threads": 1
+    }
+  },
+  "encoder": {
+    "type": "gte",
+    "reset_weights": true
+  },
+  "bert": {
+    "architecture": {
+      "vocab_size": null,
+      "hidden_size": 512,
+      "num_attention_heads": 4,
+      "num_hidden_layers": 4,
+      "intermediate_size": 2048,
+      "max_seq_length": 8096,
+      "max_len_policy": "max",
+      "max_len_sigma_k": 3,
+      "layer_norm_eps": 1e-12,
+      "hidden_dropout_prob": 0.1,
+      "attention_probs_dropout_prob": 0.1,
+      "max_position_embeddings": 576,
+      "type_vocab_size": 2,
+      "initializer_range": 0.02,
+      "pooling_method": "mean",
+      "task_head": {
+        "hidden_ratio": 0.5,
+        "activation": "relu",
+        "dropout": 0.1
+      }
+    },
+    "pretraining": {
+      "epochs": 200,
+      "batch_size": 32,
+      "learning_rate": 0.0001,
+      "mask_prob": 0.09,
+      "weight_decay": 0.1,
+      "warmup_ratio": 0.12,
+      "max_grad_norm": 2,
+      "save_steps": 1000,
+      "eval_steps": 500,
+      "vocab_min_freq": 1,
+      "max_vocab_size": 5000,
+      "early_stopping_patience": 20,
+      "use_graph_level_sampling": true,
+      "graph_variant_selection": "random",
+      "apply_graph_level_to_val": true,
+      "mlm_augmentation_methods": [
+        "random_swap"
+      ],
+      "augmentation_config": {
+        "random_deletion_probability": 0.3,
+        "random_swap_probability": 0.5,
+        "random_truncation_probability": 0.2,
+        "random_deletion_ratio": 0.1,
+        "random_swap_ratio": 0.1,
+        "random_truncation_min_ratio": 0.7,
+        "swap_window_size": 3,
+        "use_consistency_regularization": false,
+        "consistency_alpha": 1.0,
+        "use_gaussian_noise": true,
+        "gaussian_noise_std": 0.01,
+        "gaussian_noise_probability": 0.3,
+        "use_feature_mixup": false,
+        "feature_mixup_alpha": 0.2,
+        "feature_mixup_probability": 0.2
+      }
+    },
+    "finetuning": {
+      "epochs": 100,
+      "batch_size": 32,
+      "learning_rate": 7.798220090071223e-05,
+      "weight_decay": 0.01571683148135696,
+      "warmup_ratio": 0.04736513251552543,
+      "head_lr_multiplier": 1.8653811360898707,
+      "early_stopping_patience": 12,
+      "use_layered_lr": false,
+      "max_grad_norm": 0.41209346813953346,
+      "save_models": false,
+      "regression_augmentation_methods": [
+        "random_swap",
+        "sequence_masking"
+      ],
+      "use_graph_level_sampling": true,
+      "graph_variant_selection": "random",
+      "apply_graph_level_to_val": true,
+      "apply_graph_level_to_test": false,
+      "enable_learned_val_selection": false,
+      "learned_aggregator_config": null,
+      "augmentation_config": {
+        "random_deletion_probability": 0.3,
+        "random_swap_probability": 0.4,
+        "random_truncation_probability": 0.3,
+        "sequence_masking_probability": 0.3,
+        "random_deletion_ratio": 0.1,
+        "random_swap_ratio": 0.05,
+        "random_truncation_min_ratio": 0.7,
+        "sequence_masking_ratio": 0.05,
+        "swap_window_size": 3,
+        "use_consistency_regularization": true,
+        "consistency_alpha": 1.0,
+        "use_gaussian_noise": true,
+        "gaussian_noise_std": 0.01,
+        "gaussian_noise_probability": 0.3,
+        "use_feature_mixup": false,
+        "feature_mixup_alpha": 0.2,
+        "feature_mixup_probability": 0.2
+      }
+    }
+  },
+  "task": {
+    "type": "classification",
+    "target_property": "label",
+    "normalization": "standard",
+    "loss_config": null
+  },
+  "logging": {
+    "use_tensorboard": true,
+    "tensorboard_log_dir": "logs/tensorboard",
+    "use_wandb": false,
+    "wandb_project": "tokenizerGraph",
+    "wandb_entity": null,
+    "wandb_offline": true
+  },
+  "special_tokens": {
+    "pad": "[PAD]",
+    "unk": "[UNK]",
+    "mask": "[MASK]",
+    "cls": "[CLS]",
+    "sep": "[SEP]",
+    "node_start": "[NODE_START]",
+    "node_end": "[NODE_END]",
+    "component_sep": "[COMP_SEP]",
+    "ids": {
+      "pad": 0,
+      "unk": 1,
+      "mask": 2,
+      "cls": 3,
+      "sep": 4,
+      "node_start": 5,
+      "node_end": 6,
+      "component_sep": 7
+    }
+  },
+  "experiment_name": "search_coildel_none_ft_cpp-raw_013",
+  "experiment_group": "hyperopt_finetune_coildel_none_focus_gte_cppraw_v1"
+}
